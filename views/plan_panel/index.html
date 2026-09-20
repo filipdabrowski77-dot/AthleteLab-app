@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#fbfbf9;font-family:'Archivo',system-ui,sans-serif;color:#1c1b18}
+  a{color:#3d63c9;text-decoration:none} a:hover{color:#274aa8;text-decoration:underline}
+  input,button,textarea{font-family:'Archivo',system-ui,sans-serif}
+  input:focus{outline:none} ::placeholder{color:#c3c0b8}
+  .wrap{width:100%;max-width:1400px;box-sizing:border-box;margin:0 auto;padding:36px 40px 60px}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#8a867c}
+  .title{font-size:32px;font-weight:800;letter-spacing:-.01em;border:none;background:transparent;padding:0;color:#1c1b18;width:420px}
+  .seg{display:flex;align-items:center;border:1px solid #d8d5cc;border-radius:5px;overflow:hidden}
+  .seg button{border:none;background:#fff;color:#6f6b61;font-size:13px;font-weight:600;padding:8px 18px;cursor:pointer}
+  .seg button+button{border-left:1px solid #d8d5cc}
+  .seg button.on{background:#1c1b18;color:#fff}
+  .seg.pill{border-radius:999px}
+  .sec-title{font-size:13px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:32px 0 8px}
+  .card{background:#fff;border:1px solid #d8d5cc;border-radius:4px}
+  table{width:100%;border-collapse:collapse;table-layout:fixed}
+  th{position:sticky;top:0;z-index:2;text-align:left;font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#a09c92;padding:8px 12px;border-bottom:1px solid #eeece6}
+  th+th,td+td{border-left:1px solid #f2f1ec}
+  tbody tr{border-bottom:1px solid #f2f1ec} tbody tr:hover{background:#fbfaf7}
+  /* height:1px + height:100% na dziecku to standardowy trik dla tabel:
+     pole rozciaga sie na caly wiersz, wiec klik ponizej tekstu tez trafia
+     (Filip 2026-09-03: przy rozpisanych seriach wiersz jest wyzszy i nie
+     dalo sie wejsc w numer cwiczenia) */
+  td{padding:0;vertical-align:top;height:1px}
+  td input.slot,td input.name{height:100%}
+  /* to samo dla komorek tygodnia i tempa — w wysokim wierszu klikniecie
+     ponizej tekstu trafialo w pustke (pomiar: wiersz 94 px, pole 32 px) */
+  td textarea.week,td textarea.tempo{height:100%}
+  td .serie-widok{min-height:100%}
+  td input{width:100%;border:none;background:transparent;padding:7px 12px;font-size:14px;color:#1c1b18}
+  td input.slot{font-size:13px;font-weight:600;color:#8a867c}
+  td input.name{font-weight:600;text-overflow:ellipsis}
+  td input.name:focus{text-overflow:clip}
+  td textarea.week{width:100%;box-sizing:border-box;display:block;border:none;
+    background:transparent;padding:7px 12px;font-family:inherit;font-size:14px;
+    line-height:1.3;color:#1c1b18;resize:none;overflow:hidden;min-height:31px;
+    white-space:pre-wrap;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+  td textarea.week:focus{background:#fdf9ee;box-shadow:inset 0 0 0 2px #e8c96a;outline:none}
+  td input.tempo,td input.dose{font-size:13px;color:#6f6b61}
+  /* Tempo: waska kolumna (120px), dluzszy tekst ("3 sec ecc, 2 sec pauza na gorze")
+     zawija sie w kolejne linie zamiast poszerzac kolumne */
+  td textarea.tempo{width:100%;box-sizing:border-box;display:block;border:none;background:transparent;
+    padding:7px 12px 6px;font-family:inherit;font-size:13px;line-height:1.3;color:#6f6b61;resize:none;
+    overflow:hidden;min-height:31px;white-space:pre-wrap;overflow-wrap:anywhere}
+  td input.dose{text-align:center;font-size:14px;color:#1c1b18;font-variant-numeric:tabular-nums}
+  .hbtns{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  th.wk{padding-left:8px;padding-right:6px}
+  .ico{border:none;background:transparent;color:#c9c5bb;font-size:13px;cursor:pointer;padding:0;line-height:1}
+  .ico:hover{color:#1c1b18}
+  .chip{border:1px solid #ddd9d0;background:#fff;color:#6f6b61;font-size:12px;font-weight:700;cursor:pointer;padding:1px 6px;border-radius:6px;line-height:1.3}
+  .chip:hover{background:#f2f1ec;color:#1c1b18}
+  .chip.del{color:#c9c5bb} .chip.del:hover{background:#fdf3f2;color:#c0392b;border-color:#e5c3bd}
+  .cellcopy{border:none;background:transparent;color:#e2dfd7;font-size:12px;cursor:pointer;padding:2px 6px 2px 0;line-height:1;flex-shrink:0}
+  .cellcopy:hover{color:#1c1b18}
+  .note-btn{border:none;background:transparent;cursor:pointer;font-size:15px;padding:6px 10px;line-height:1}
+  .note-pop{position:fixed;z-index:9998;width:300px;background:#fff;border:1px solid #ddd9d0;border-radius:12px;box-shadow:0 8px 28px rgba(28,27,24,.15);padding:12px;text-align:left}
+  .note-pop textarea{width:100%;border:1px solid #e6e3db;border-radius:8px;padding:8px 10px;font-size:13px;color:#1c1b18;resize:vertical;background:#fbfaf7}
+  .film{font-size:12px;font-weight:700;letter-spacing:.05em;white-space:nowrap;line-height:1}
+  td.lnk,th.lnk{padding-left:6px;padding-right:6px}
+  td.lnk{white-space:nowrap;line-height:1}
+  .film{display:inline-block;vertical-align:middle}
+  .film-input{border:1px dashed #d9b8b3;background:#fdf7f6;border-radius:6px;font-size:12px;color:#8a867c;padding:3px 8px;width:100%;box-sizing:border-box}
+  .rowdel{border:none;background:transparent;color:#c9c5bb;font-size:15px;cursor:pointer;padding:4px 3px;line-height:1}
+  .rowdel:hover{color:#c0392b}
+  .foot{padding:10px 0;display:flex;gap:8px;align-items:center}
+  .add{border:1px dashed #c9c5bb;background:transparent;color:#8a867c;font-size:13px;font-weight:600;padding:7px 14px;border-radius:4px;cursor:pointer}
+  .add:hover{background:#f2f1ec;color:#1c1b18;border-color:#a09c92}
+  .base{border:1px solid #c9c5bb;background:#e7e4dc;color:#4f4b42;font-size:13px;font-weight:600;padding:7px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+  .base:hover{background:#dbd7cd;color:#1c1b18}
+  .base i{width:11px;height:11px;border-radius:3px;background:#8a867c;display:inline-block}
+  /* podglądy */
+  .pv-wrap{display:flex;flex-direction:column;align-items:center;gap:20px;margin-top:24px}
+  .hint{font-size:13px;color:#8a867c}
+  .phone{width:390px;background:#1c1b18;border-radius:48px;padding:12px;box-shadow:0 24px 60px -24px rgba(28,27,24,.45)}
+  .screen{background:#fff;border-radius:38px;overflow:hidden}
+  .status{display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px}
+  .notch{width:110px;height:26px;background:#1c1b18;border-radius:999px}
+  .pv-list{height:560px;overflow-y:auto;padding:4px 22px 28px;border-top:1px solid #f2f1ec}
+  .badge{font-size:12px;font-weight:600;color:#6f6b61;background:#f2f1ec;border-radius:999px;padding:5px 13px}
+  .wkpill{border:1px solid #e6e3db;background:#fff;color:#6f6b61;font-size:12px;font-weight:600;padding:6px 13px;border-radius:999px;cursor:pointer}
+  .wkpill.on{background:#1c1b18;color:#fff}
+  .pv-row{display:flex;gap:12px;align-items:flex-start;border-bottom:1px solid #f5f4f0;padding-bottom:14px;margin-bottom:16px}
+  .pv-slot{width:32px;height:32px;border-radius:999px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+  .pv-name{border:none;background:transparent;padding:0;font-size:16px;font-weight:700;color:#3d63c9;text-align:left;cursor:pointer}
+  .pv-dose{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+  .pv-intent{font-size:12px;font-weight:600;color:oklch(.5 .13 60);background:oklch(.96 .04 75);border-radius:6px;padding:2px 8px}
+  .pv-det{display:flex;flex-direction:column;gap:6px;background:#f8f7f4;border-radius:10px;padding:10px 12px;margin-top:4px}
+  .sheet{width:1000px;background:#fff;border:1px solid #ddd9d0;box-shadow:0 18px 44px -20px rgba(28,27,24,.3);padding:44px 48px 56px}
+  .sheet-head{display:flex;align-items:baseline;justify-content:space-between;border-bottom:3px solid #1c1b18;padding-bottom:12px}
+  .legend{display:flex;gap:28px;padding:16px 0 4px;border-bottom:1px solid #eeece6;font-size:12px;color:#6f6b61;line-height:1.55}
+  .sheet table th{position:static;border-bottom:2px solid #1c1b18;font-size:10.5px;padding:6px 8px}
+  .sheet table td{padding:8px;font-size:12.5px;border-bottom:1px solid #f2f1ec;color:#1c1b18}
+  .savebar{display:flex;gap:10px;align-items:center;margin-top:34px;padding-top:18px;border-top:1px solid #eeece6}
+  .primary{border:none;background:#1c1b18;color:#fff;font-size:13px;font-weight:600;padding:9px 20px;border-radius:6px;cursor:pointer}
+  .ghost{border:1px solid #d8d5cc;background:#fff;color:#6f6b61;font-size:13px;font-weight:600;padding:9px 20px;border-radius:6px;cursor:pointer}
+
+/* lista podpowiedzi pod polem nazwy — ok. 4 pozycje, dalej scroll */
+.ac{position:fixed;z-index:9999;background:#fff;border:1px solid #d8d5cc;border-radius:8px;
+  box-shadow:0 10px 26px rgba(0,0,0,.14);max-height:150px;overflow-y:auto;padding:4px}
+.acit{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;
+  border:0;background:none;text-align:left;padding:6px 8px;border-radius:5px;cursor:pointer;
+  font:inherit;font-size:12.5px;color:#1c1b18}
+.acit:hover,.acit.on{background:#f0efe9}
+.acit em{font-style:normal;font-size:10px;color:#8a867c;flex:0 0 auto;text-transform:uppercase;
+  letter-spacing:.04em}
+.acit b{font-weight:600}
+
+.filmedit{border:none;background:transparent;color:#b8b4aa;cursor:pointer;font-size:11px;
+  padding:0 0 0 6px;line-height:1}
+.filmedit:hover{color:#1c1b18}
+
+/* od ~6 tygodni tabela nie miesci sie w oknie — suwak zamiast ucinania */
+.card.przewijana{overflow-x:auto;overflow-y:visible;max-width:100%}
+.card.przewijana::-webkit-scrollbar{height:10px}
+.card.przewijana::-webkit-scrollbar-thumb{background:#d8d5cc;border-radius:5px}
+.card.przewijana::-webkit-scrollbar-thumb:hover{background:#b8b4aa}
+.card.przewijana::-webkit-scrollbar-track{background:#f6f5f1;border-radius:5px}
+
+/* metody rozpisania obciążenia (Main Strength) */
+.metbtn{border:none;background:transparent;color:#c3c0b8;cursor:pointer;font-size:14px;
+  line-height:1;padding:0 2px;flex:0 0 auto;border-radius:4px}
+.metbtn:hover{background:#f0efe9;color:#1c1b18}
+.met{position:fixed;z-index:9999;background:#fff;border:1px solid #d8d5cc;border-radius:9px;
+  box-shadow:0 12px 30px rgba(28,27,24,.16);width:340px;padding:6px;font-size:12.5px}
+.met h4{margin:6px 8px 8px;font-size:10.5px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:#8a867c}
+.met .poz{display:block;width:100%;border:0;background:none;text-align:left;padding:8px 9px;
+  border-radius:6px;cursor:pointer;font:inherit;font-size:13px;color:#1c1b18}
+.met .poz:hover{background:#f0efe9}
+.met .poz small{display:block;color:#8a867c;font-size:11px;margin-top:2px}
+.met .pola{padding:2px 8px 8px}
+.met .pola label{display:block;font-size:11px;color:#8a867c;margin:8px 0 3px}
+.met .pola input{width:100%;box-sizing:border-box;border:1px solid #e6e3db;border-radius:6px;
+  padding:7px 9px;font:inherit;font-size:13px;background:#fdfdfb}
+.met .stopka{display:flex;gap:6px;padding:10px 8px 4px}
+.met .stopka button{flex:1;border-radius:6px;padding:8px;font:inherit;font-size:12.5px;
+  font-weight:600;cursor:pointer;border:1px solid #d8d5cc;background:#fff}
+.met .stopka .ok{background:#1c1b18;color:#fff;border-color:#1c1b18}
+.met .podglad{margin:10px 8px 0;padding:8px 10px;background:#f6f5f1;border-radius:6px;
+  font-size:12px;color:#54514a;word-break:break-word}
+
+/* rozpisywanie seria po serii */
+.met .poz.glowna{background:#f6f5f1;font-weight:600;margin-bottom:2px}
+.met .poz.glowna:hover{background:#eeece6}
+.met-sep{height:1px;background:#eeece6;margin:6px 8px}
+.met .serie{padding:2px 8px 0}
+.met .serie-glowa{display:grid;grid-template-columns:18px .7fr .7fr .7fr 1.5fr 20px;gap:4px;
+  font-size:10px;color:#a09c92;text-transform:uppercase;letter-spacing:.06em;padding:0 0 4px}
+.met .serie-w{display:grid;grid-template-columns:18px .7fr .7fr .7fr 1.5fr 20px;gap:4px;
+  align-items:center;margin-bottom:5px}
+.met .serie-nr{font-size:11.5px;color:#a09c92;font-variant-numeric:tabular-nums}
+.met .serie-w input{width:100%;box-sizing:border-box;border:1px solid #e6e3db;border-radius:6px;
+  padding:6px 7px;font:inherit;font-size:12.5px;text-align:center;background:#fdfdfb}
+.met .serie-x{border:none;background:transparent;color:#c9c5bb;cursor:pointer;font-size:14px;
+  line-height:1;padding:2px}
+.met .serie-x:hover{color:#c0392b}
+.met .serie-dodaj{display:block;width:calc(100% - 16px);margin:2px 8px 0;border:1px dashed #d8d5cc;
+  background:#fff;border-radius:6px;padding:7px;font:inherit;font-size:12px;color:#6f6b61;cursor:pointer}
+.met .serie-dodaj:hover{background:#faf9f6;color:#1c1b18}
+
+/* rozpisane serie w komorce tygodnia — kafelek na serie */
+.serie-widok{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;border:none;
+  background:transparent;cursor:pointer;padding:6px 8px;text-align:left;font:inherit;
+  border-radius:6px}
+.serie-widok:hover{background:#f6f5f1}
+.serie-widok .sk{display:grid;grid-template-columns:14px auto 1fr;
+  grid-template-areas:"nr dawka rpe" ". kg kg";align-items:baseline;gap:2px 6px;
+  background:#f2f5fa;border:1px solid #e2e8f2;border-radius:5px;padding:3px 7px;line-height:1.25}
+.serie-widok .sk i{grid-area:nr;font-style:normal;font-size:9.5px;color:#a3aec2;
+  font-variant-numeric:tabular-nums}
+.serie-widok .sk b{grid-area:dawka;font-size:12.5px;font-weight:600;color:#1c1b18;
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.serie-widok .sk em{grid-area:rpe;font-style:normal;font-size:10.5px;font-weight:600;
+  color:#5b7aa8;justify-self:end;white-space:nowrap}
+.serie-widok .sk u{grid-area:kg;text-decoration:none;font-size:10.5px;color:#8a867c;
+  justify-self:start;white-space:nowrap}
+
+/* tydzień testowy — złote tło, żeby był widoczny z drugiego końca tabeli */
+td textarea.week.test{background:#fdf3d4;box-shadow:inset 0 0 0 1px #e8c96a;
+  border-radius:6px;font-weight:600;color:#7a5b16}
+td textarea.week.test:focus{background:#fdf9ee}
+
+/* szybki wybór liczby powtórzeń w teście siły */
+.szybkie{display:flex;gap:5px;margin:5px 0 2px}
+.rmchip{flex:1;padding:5px 0;border:1px solid #e2e0d8;border-radius:7px;background:#fff;
+  font:inherit;font-size:11.5px;font-weight:650;color:#6b6859;cursor:pointer}
+.rmchip:hover{background:#faf9f6;border-color:#d3d0c6}
+.rmchip.on{background:#fdf3d4;border-color:#e8c96a;color:#7a5b16}
+
+/* Usuń trening — do tej pory dodanie treningu było nieodwracalne
+   (Filip 2026-09-05). Ciemny, po prawej, obok przełącznika widoku. */
+.usun-trening{background:#1c1b18;color:#fff;border:1px solid #1c1b18;border-radius:9px;
+  padding:9px 15px;font:inherit;font-size:13px;font-weight:650;cursor:pointer;
+  white-space:nowrap;transition:background .12s}
+.usun-trening:hover{background:#000}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+/* ---------------------------------------------------------------- protokół Streamlit
+   Plain-JS component: nie wymaga Node ani buildu. Komunikacja przez postMessage. */
+let SEQ = 0;
+// identyfikator instancji iframe: po zamknieciu/otwarciu dialogu SEQ startuje od 0,
+// a Python pamieta ostatni seq — bez IID pierwsza akcja po reopen bylaby zignorowana
+const IID = (Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4));
+let LAST_SENT = null;   // seq ostatniego SEND — Python odsyla go jako args.ack
+const FP = (plan, workout, png) => JSON.stringify([plan, workout, !!png, (png || "").length]);
+const SEND = (value, opts) => {
+  // „dirty" = model rozni sie od tego, co zapisane; Python pokazuje wtedy
+  // ostrzezenie przy wyjsciu z edytora (Filip 2026-09-02: zmiany nie moga
+  // przepadac po cichu). opts.sync = wysylka stanu bez edycji (przelaczenie
+  // Edytor/Podglad) — nie brudzi; inaczej samo obejrzenie podgladu konczylo
+  // sie pytaniem o zapis (audyt 2026-09-05).
+  if (value && value.action === "save") S.dirty = false;
+  else if (value && value.workout && !(opts && opts.sync)) S.dirty = true;
+  value = Object.assign({}, value, { dirty: !!S.dirty });
+  const seq = IID + "-" + (++SEQ);
+  LAST_SENT = seq;
+  // echo tego stanu z Pythona ma byc pominiete (fokus w inputach zostaje)
+  S.lastArgs = FP(S.plan, S.workout, S.pdfPng);
+  parent.postMessage({
+  isStreamlitMessage: true, type: "streamlit:setComponentValue",
+  value: { ...value, seq, ui: { view: S.view, pvMode: S.pvMode } },
+  dataType: "json"
+}, "*");
+};
+const READY = () => parent.postMessage({ isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 }, "*");
+const SETH = (h) => parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: h }, "*");
+
+/* ---------------------------------------------------------------- stan */
+const SECTIONS = [
+  { key: "Prep",         title: "Movement Prep", accent: "oklch(0.58 0.13 155)", tint: "oklch(0.97 0.02 155)", simple: true,  tempo: false },
+  { key: "Plyo & Power", title: "Plyo & Power",  accent: "oklch(0.58 0.13 60)",  tint: "oklch(0.97 0.02 60)",  simple: false, tempo: false },
+  { key: "Main",         title: "Main Strength", accent: "oklch(0.58 0.13 255)", tint: "oklch(0.97 0.02 255)", simple: false, tempo: true  },
+];
+const MINW = 1, MAXW = 8;
+
+/* Rozpiski klubowe mają sekcje spoza schematu („Conditioning", „Prep 2").
+   Bez tego 26 pozycji było w danych, ale nie do zobaczenia ani edycji
+   w edytorze (audyt 2026-09-06). Dokładamy je tylko wtedy, gdy są w treningu. */
+function sekcje(){
+  const znane = SECTIONS.map(x => x.key);
+  const dodatkowe = [];
+  for (const e of (S.workout.exercises || [])) {
+    const k = (e.section || "").trim();
+    if (k && !znane.includes(k) && !dodatkowe.includes(k)) dodatkowe.push(k);
+  }
+  return SECTIONS.concat(dodatkowe.map(k => ({
+    key: k, title: k, accent: "oklch(0.55 0.02 90)", tint: "oklch(0.97 0.005 90)",
+    simple: false, tempo: false })));
+}
+
+/* podpowiedzi nazw z Bazy ćwiczeń (Filip 2026-09-02) */
+let EXLIST = [];
+
+/* metody rozpisania obciążenia — tylko Main Strength (Filip 2026-09-03).
+   Trzy kropki przy komórce tygodnia wstawiają gotowy zapis dawki. */
+let MET = null;   // {id, w, wybrana}
+const AC = { box: null, items: [], idx: -1, id: "" };
+
+let S = {
+  plan: { athlete: "", name: "" },
+  workout: { name: "", date: "", weeks: 4, exercises: [] },
+  view: "edytor", pvMode: "mobile", pvWeek: 0, noteOpen: null, pvOpen: null,
+  pdfPng: "", pdfErr: "", lastArgs: "", dirty: false,
+  weekOps: [],          // insert/remove tygodni od ostatniego zapisu (dla innych treningow planu)
+};
+const planLabel = () => [S.plan.athlete, S.plan.name].filter(Boolean).join(" · ");
+
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const weeksN = () => Math.max(MINW, Math.min(MAXW, +(S.workout.weeks || 4)));
+const rowsOf = (key) => S.workout.exercises.filter(e => e.section === key);
+
+/* dawka: {"1":{sets_n,reps,intent}} <-> "3 x 6 @ rpe 8" */
+function doseToText(wk) {
+  if (!wk) return "";
+  const s = (wk.sets_n || "").trim(), r = (wk.reps || "").trim(), i = (wk.intent || "").trim();
+  const core = s && r ? s + " x " + r : (s || r);
+  return i ? (core + " @ " + i).trim() : core;
+}
+const DOSE_RE = /^(\d+(?:\s*-\s*\d+)?)\s*[x×X]\s*(.+)$/;          // "3 x 8-10"
+const DOSE_AT_RE = /^(\d+(?:\s*-\s*\d+)?\s*[x×X][^@]*?)\s*@\s*(.+)$/;  // "3 x 8 @ rpe 7"
+function textToDose(t) {
+  t = (t || "").trim(); if (!t) return null;
+  // "@" dzieli tylko dawke "N x reps @ intent"; inne teksty ("30 sek max",
+  // "ostatnio: @150 / 0,55 VBT", "1 set x12-15") ida w calosci do reps
+  const mi = t.match(DOSE_AT_RE);
+  const core = mi ? mi[1].trim() : t, intent = mi ? mi[2].trim() : "";
+  const m = core.match(DOSE_RE);
+  return m ? { sets_n: m[1].replace(/\s+/g, ""), reps: m[2].trim(), intent }
+           : { sets_n: "", reps: core, intent };
+}
+const rawDose = (ex, w) => doseToText((ex.weeks || {})[String(w)]);
+function effDose(ex, w) { for (let i = w; i >= 1; i--) { const t = rawDose(ex, i); if (t) return t; } return ""; }
+function setDose(ex, w, text) {
+  ex.weeks = ex.weeks || {};
+  const k = String(w), prev = ex.weeks[k] || {}, p = textToDose(text);
+  // edytor dotyka TYLKO rozpiski; wykonanie zawodnika zostaje (invariant merge)
+  const exec = {};
+  for (const f of ["load", "sets_done", "session_note", "sets"]) if (prev[f]) exec[f] = prev[f];
+  if (p) ex.weeks[k] = { ...exec, sets_n: p.sets_n, reps: p.reps, intent: p.intent, rest: prev.rest || "" };
+  else if (Object.keys(exec).length) ex.weeks[k] = { ...exec, sets_n: "", reps: "", intent: "", rest: "" };
+  else delete ex.weeks[k];
+}
+function splitIntent(t) {
+  const mi = (t || "").match(DOSE_AT_RE);
+  const c = mi ? mi[1] : (t || ""), r = mi ? mi[2] : "";
+  return [c.trim().replace(/^(\d+(?:\s*-\s*\d+)?)\s*[x×X]\s*/, "$1 × "), r.trim()];
+}
+
+/* ---------------------------------------------------------------- mutacje */
+function shiftWeeks(fn) {   // fn(mapa tygodni) -> nowa mapa
+  S.workout.exercises.forEach(ex => { ex.weeks = fn(ex.weeks || {}); });
+}
+function insertWeek(at) {   // at = numer tygodnia, po którym wstawiamy (1-based)
+  const n = weeksN(); if (n >= MAXW) return;
+  shiftWeeks(w => { const o = {}; for (const k in w) { const i = +k; o[i > at ? i + 1 : i] = w[k]; } return o; });
+  S.workout.weeks = n + 1; S.weekOps.push({ op: "insert", at }); commit();
+}
+function removeWeek(at) {
+  const n = weeksN(); if (n <= MINW) return;
+  shiftWeeks(w => { const o = {}; for (const k in w) { const i = +k; if (i === at) continue; o[i > at ? i - 1 : i] = w[k]; } return o; });
+  S.workout.weeks = n - 1; S.weekOps.push({ op: "remove", at }); commit();
+}
+function copyWeek(key, from) {
+  rowsOf(key).forEach(ex => { const v = rawDose(ex, from); if (v) setDose(ex, from + 1, v); });
+  commit();
+}
+function addRow(key) {
+  S.workout.exercises.push({ section: key, slot: "", exercise: "", note: "", tempo: "", film: "", weeks: {} });
+  commit();
+}
+function delRow(ex) {
+  S.workout.exercises.splice(S.workout.exercises.indexOf(ex), 1); commit();
+}
+function commit() { S.pdfPng = ""; render(); SEND({ workout: S.workout }); }
+function growTempo(el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+document.addEventListener("input", (e) => {
+  if (e.target.matches && e.target.matches("textarea.tempo")) { growTempo(e.target); SETH(document.body.scrollHeight + 40); }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches && e.target.matches("textarea.tempo")) { e.preventDefault(); e.target.blur(); }
+});
+let RT = 0;
+addEventListener("resize", () => {
+  const a = document.activeElement;
+  if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) return;
+  clearTimeout(RT); RT = setTimeout(render, 150);
+});
+
+/* ---------------------------------------------------------------- edytor */
+function editorSection(sec) {
+  const n = weeksN(), rows = rowsOf(sec.key);
+  // kolumny Week: 138px jak w projekcie; gdy tygodni jest wiecej niz miesci
+  // ramka (5-8), zwezaj do min. 112px zamiast wypychac tabele poza dialog
+  // Filip 2026-09-03: nazwa cwiczenia o ~28% wezsza, zwolnione miejsce idzie
+  // do kolumn tygodni — dluzsze zapisy (rozpisane serie, cluster) maja sie
+  // miescic bez ucinania
+  const nazwaW = sec.simple ? 0 : 336;
+  const fixed = (sec.tempo ? 778 - 24 : 658) + 18 - 132 + 12;
+  // .wrap ma max-width 1400 i po 40 px paddingu z kazdej strony — licząc
+  // z szerokosci okna zawyzalismy budzet o ~280 px i suwak pojawial sie
+  // przedwczesnie (pomiar: kod widzial 1600, karta miala 1318)
+  const okno = document.documentElement.clientWidth || 1600;
+  const avail = Math.min(okno, 1400) - 82;
+  const wk = sec.simple ? 138 : Math.max(132, Math.min(240, Math.floor((avail - fixed) / n)));
+  const weekCols = sec.simple ? "" : Array.from({ length: n }, (_, i) => {
+    const w = i + 1;
+    return `<th class="wk" style="width:${wk}px;background:${sec.tint};color:${sec.accent}">
+      <span class="hbtns">Week ${w}
+        ${w < n ? `<button class="ico" data-act="cpw" data-sec="${esc(sec.key)}" data-w="${w}" title="Kopiuj cały tydzień w prawo">⧉</button>` : ""}
+        ${n < MAXW ? `<button class="chip" data-act="addw" data-w="${w}" title="Dodaj tydzień">+</button>` : ""}
+        ${n > MINW ? `<button class="chip del" data-act="delw" data-w="${w}" title="Usuń ten tydzień">×</button>` : ""}
+      </span></th>`;
+  }).join("");
+
+  const head = `<tr>
+    ${sec.simple ? "" : `<th style="width:46px;background:${sec.tint}">Nr</th>`}
+    <th style="width:${sec.simple ? "auto" : nazwaW + "px"};background:${sec.tint}">Ćwiczenie</th>
+    ${weekCols}
+    ${sec.simple ? `<th style="width:220px;background:${sec.tint};color:${sec.accent};text-align:center">Sets × reps</th>` : ""}
+    ${sec.tempo ? `<th style="width:96px;background:${sec.tint}">Tempo</th>` : ""}
+    <th style="width:82px;background:${sec.tint};text-align:center">Uwagi</th>
+    <th class="lnk" style="width:54px;background:${sec.tint}">Link</th>
+    <th style="width:26px;background:${sec.tint}"></th></tr>`;
+
+  const body = rows.map((ex, ri) => {
+    const id = sec.key + "|" + ri;
+    const weekCells = sec.simple ? "" : Array.from({ length: n }, (_, i) => {
+      const w = i + 1, raw = rawDose(ex, w), inh = effDose(ex, w);
+      const kropki = sec.key === "Main"
+        ? `<button class="metbtn" data-act="metoda" data-id="${esc(id)}" data-w="${w}"
+                   title="Metoda rozpisania obciążenia">⋯</button>` : "";
+      // rozpisane serie (2+) pokazujemy jako kafelki jeden pod drugim — klik
+      // otwiera je do poprawy; zwykla dawka zostaje zwyklym polem tekstowym
+      // test siły ma rzucać się w oczy — to jedyny tydzień, w którym
+      // zawodnik sprawdza maksa (Filip 2026-09-03)
+      const test = /\btest\b/i.test(raw) ? " test" : "";
+      const serie = sec.key === "Main" ? serieCzytaj(raw) : null;
+      if (serie && serie.length >= 2) {
+        return `<td><div style="display:flex;align-items:flex-start;gap:2px">
+          <button class="serie-widok" data-act="metoda" data-tryb="serie"
+                  data-id="${esc(id)}" data-w="${w}" title="Kliknij, żeby poprawić serie">
+            ${serie.map((x, k) => `<span class="sk">
+              <i>${k + 1}</i><b>${esc(x.ile)} × ${esc(x.reps)}</b>${
+                x.rpe ? `<em>RPE ${esc(x.rpe)}</em>` : ""}${
+                x.kg ? `<u>${esc(x.kg)}</u>` : ""}</span>`).join("")}
+          </button>${kropki}
+        </div></td>`;
+      }
+      return `<td><div style="display:flex;align-items:flex-start;gap:2px">
+        <textarea class="week${test}" rows="1" data-f="week" data-id="${esc(id)}" data-w="${w}"
+                  >${esc(raw)}</textarea>${kropki}
+      </div></td>`;
+    }).join("");
+    const film = (ex.film || "").trim();
+    const open = S.noteOpen === id;
+    return `<tr>
+      ${sec.simple ? "" : `<td><input class="slot" data-f="slot" data-id="${esc(id)}" value="${esc(ex.slot)}"></td>`}
+      <td><input class="name" data-f="exercise" data-id="${esc(id)}"
+                 value="${esc(ex.exercise)}" title="${esc(ex.exercise)}"></td>
+      ${weekCells}
+      ${sec.simple ? `<td><input class="dose" data-f="dose1" data-id="${esc(id)}" value="${esc(rawDose(ex, 1))}"></td>` : ""}
+      ${sec.tempo ? `<td><textarea class="tempo" rows="1" data-f="tempo" data-id="${esc(id)}">${esc(ex.tempo)}</textarea></td>` : ""}
+      <td style="text-align:center;position:relative">
+        <button class="note-btn" data-act="note" data-id="${esc(id)}" title="${esc(ex.note)}"
+                style="color:${(ex.note || "").trim() ? sec.accent : "#d0ccc2"}">✎</button>
+        ${open ? `<div class="note-pop">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span class="eyebrow" style="font-size:11px;letter-spacing:.07em">Uwagi — ${esc(ex.exercise)}</span>
+            <button class="ico" data-act="note" data-id="${esc(id)}">×</button></div>
+          <textarea rows="4" data-f="note" data-id="${esc(id)}" >${esc(ex.note)}</textarea>
+        </div>` : ""}
+      </td>
+      <td class="lnk" style="padding:4px 6px">${film
+        ? `<a class="film" href="${esc(film)}" target="_blank">FILM</a>`
+          + `<button class="filmedit" data-act="filmedit" data-id="${esc(id)}" title="Zmień lub usuń link">✎</button>`
+        : `<input class="film-input" data-f="film" data-id="${esc(id)}" value="${esc(ex.film || "")}" title="Wklej link do filmu">`}</td>
+      <td style="text-align:center"><button class="rowdel" data-act="delrow" data-id="${esc(id)}" title="Usuń">×</button></td>
+    </tr>`;
+  }).join("");
+
+  const minw = sec.simple ? 0 : fixed + n * wk;
+  return `<div class="sec-title" style="color:${sec.accent}">${esc(sec.title)}</div>
+    <div class="card${sec.simple ? "" : " przewijana"}" style="border-top:3px solid ${sec.accent}">
+      <table style="min-width:${minw}px"><thead>${head}</thead><tbody>${body}</tbody></table>
+    </div>
+    <div class="foot">
+      <button class="add" data-act="addrow" data-sec="${esc(sec.key)}">＋ Dodaj ćwiczenie</button>
+      <button class="base" data-act="library" data-sec="${esc(sec.key)}">Baza ćwiczeń</button>
+    </div>`;
+}
+
+/* ---------------------------------------------------------------- podgląd mobilny */
+function mobileHTML() {
+  const week = Math.min(S.pvWeek, weeksN() - 1) + 1;
+  const secs = sekcje().map(sec => {
+    const rows = rowsOf(sec.key).filter(e => (e.exercise || "").trim());
+    if (!rows.length) return "";
+    const items = rows.map((ex, i) => {
+      const [dose, intent] = splitIntent(sec.simple ? rawDose(ex, 1) : effDose(ex, week));
+      const id = sec.key + "|" + i, open = S.pvOpen === id;
+      const film = (ex.film || "").trim(), note = (ex.note || "").trim(), tempo = (ex.tempo || "").trim();
+      let det = "";
+      if (film) det += `<a href="${esc(film)}" target="_blank" style="font-size:13px;font-weight:700">▶ Zobacz film</a>`;
+      if (tempo) det += `<span style="font-size:13px;color:#6f6b61">Tempo: ${esc(tempo)}</span>`;
+      if (note) det += `<span style="font-size:13px;color:#6f6b61">${esc(note)}</span>`;
+      if (!det) det = `<span style="font-size:13px;color:#c3c0b8">Brak filmu i uwag</span>`;
+      return `<div class="pv-row">
+        <span class="pv-slot" style="background:${sec.tint};color:${sec.accent}">${esc(ex.slot || (sec.simple ? "P" + (i + 1) : i + 1))}</span>
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:0;flex:1">
+          <button class="pv-name" data-act="pvopen" data-id="${esc(id)}">${esc(ex.exercise)}</button>
+          <span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span class="pv-dose">${esc(dose || "—")}</span>
+            ${intent ? `<span class="pv-intent">${esc(intent)}</span>` : ""}</span>
+          ${open ? `<div class="pv-det">${det}</div>` : ""}
+        </div></div>`;
+    }).join("");
+    return `<div style="margin-top:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <span style="width:4px;height:15px;border-radius:2px;background:${sec.accent}"></span>
+        <span style="font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:${sec.accent}">${esc(sec.title)}</span>
+      </div>${items}</div>`;
+  }).join("");
+
+  const pills = Array.from({ length: weeksN() }, (_, i) =>
+    `<button class="wkpill ${i === S.pvWeek ? "on" : ""}" data-act="pvweek" data-w="${i}">Week ${i + 1}</button>`).join("");
+
+  return `<div class="pv-wrap">
+    <div class="hint">Podgląd planu — tak zobaczy go zawodnik na telefonie</div>
+    <div style="display:flex;gap:8px">${pills}</div>
+    <div class="phone"><div class="screen">
+      <div class="status"><span style="font-size:14px;font-weight:700">9:41</span><span class="notch"></span><span style="font-size:12px">▮▮▮</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 22px 4px">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:21px;font-weight:800">${esc(S.workout.name)}</span>
+          <span style="font-size:13px;color:#8a867c">${esc(planLabel())}</span></div>
+        <span class="badge">Zaplanowany</span></div>
+      <div style="display:flex;gap:6px;padding:12px 22px 16px">${pills}</div>
+      <div class="pv-list">${secs}</div>
+    </div></div></div>`;
+}
+
+/* ---------------------------------------------------------------- podgląd PDF */
+function pdfHTML() {
+  // zasada: nie imitowac pliku — pokazywac plik (obraz strony z generatora)
+  if (S.pdfPng) {
+    return `<div class="pv-wrap">
+      <div class="hint">Podgląd PDF — dokładnie ten plik, który pobierzesz</div>
+      <img src="${S.pdfPng}" alt="PDF" style="width:1000px;max-width:100%;display:block;
+           border:1px solid #ddd9d0;box-shadow:0 18px 44px -20px rgba(28,27,24,.3);background:#fff">
+    </div>`;
+  }
+  if (S.pdfErr) {
+    return `<div class="pv-wrap"><div class="hint">Nie udało się wygenerować PDF — ${esc(S.pdfErr)}</div></div>`;
+  }
+  return `<div class="pv-wrap"><div class="hint">Generuję PDF…</div></div>`;
+}
+
+/* ---------------------------------------------------------------- render */
+function render() {
+  // innerHTML wymienia karty, wiec poziome przewiniecie tabeli przepadalo
+  // przy KAZDEJ edycji dawki — trener przewijal do 6. tygodnia i wracal na
+  // poczatek po wpisaniu jednej liczby (zmierzone: 126 px -> 0)
+  const przewiniecia = [...document.querySelectorAll(".card.przewijana")]
+    .map(k => k.scrollLeft);
+  const ed = S.view === "edytor";
+  // fokus przezywa podmiane DOM: zapamietaj pole po data-f/data-id/data-w
+  const fa = document.activeElement, keep = (fa && fa.dataset && fa.dataset.f)
+    ? { f: fa.dataset.f, id: fa.dataset.id || "", w: fa.dataset.w || "",
+        s: fa.selectionStart, e: fa.selectionEnd } : null;
+  document.getElementById("root").innerHTML = `<div class="wrap">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="eyebrow">${esc(planLabel())}</div>
+        <input class="title" data-f="wname" value="${esc(S.workout.name)}">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="seg">
+          <button class="${ed ? "on" : ""}" data-act="view" data-v="edytor">Edytor</button>
+          <button class="${ed ? "" : "on"}" data-act="view" data-v="podglad">Podgląd</button>
+        </div>
+        <button class="usun-trening" data-act="usun_trening">Usuń trening</button>
+      </div>
+    </div>
+    ${ed ? `<div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin:18px 0 10px">
+      <label style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#6f6b61">Data rozpiski
+        <input type="date" data-f="wdate" value="${esc(S.workout.date)}"
+               style="border:1px solid #ddd9d0;border-radius:8px;padding:8px 12px;font-size:14px;background:#fff;color:#1c1b18"></label>
+    </div>
+    ${sekcje().map(editorSection).join("")}
+    <div class="savebar">
+      <button class="primary" data-act="save">Zapisz</button>
+      <button class="ghost" data-act="library" data-sec="Main">Szukaj w Bazie ćwiczeń</button>
+    </div>`
+    : `<div class="pv-wrap"><div class="seg pill">
+        <button class="${S.pvMode === "mobile" ? "on" : ""}" data-act="pvmode" data-v="mobile">Mobile app</button>
+        <button class="${S.pvMode === "pdf" ? "on" : ""}" data-act="pvmode" data-v="pdf">PDF</button>
+      </div></div>
+      ${S.pvMode === "mobile" ? mobileHTML() : pdfHTML()}`}
+  </div>`;
+  if (keep) {
+    const el = [...document.querySelectorAll("[data-f]")].find(x =>
+      x.dataset.f === keep.f && (x.dataset.id || "") === keep.id && (x.dataset.w || "") === keep.w);
+    if (el) { el.focus(); try { el.setSelectionRange(keep.s, keep.e); } catch (_) {} }
+  }
+  document.querySelectorAll("textarea.tempo").forEach(growTempo);
+  SETH(document.body.scrollHeight + 40);
+  // obraz PDF laduje sie asynchronicznie — po jego wczytaniu wysokosc
+  // ramki liczona jeszcze raz (inaczej podglad jest uciety)
+  document.querySelectorAll("img").forEach(im => {
+    im.addEventListener("load", () => SETH(document.body.scrollHeight + 40));
+  });
+  // karta ma overflow:auto (poziomy suwak), wiec absolutny popup byl przez
+  // nia scinany — jest fixed i sadzamy go w widocznym pasie ekranu
+  const pop = document.querySelector(".note-pop");
+  if (pop && S.noteOpen) {
+    const kotw = document.querySelector(`[data-act="note"][data-id="${S.noteOpen}"]`);
+    if (kotw) ustawWPasie(pop, kotw, 300);
+  }
+  [...document.querySelectorAll(".card.przewijana")].forEach((k, i) => {
+    if (przewiniecia[i]) k.scrollLeft = przewiniecia[i];
+  });
+  document.querySelectorAll("textarea.week").forEach(dopasujWysokosc);
+  setTimeout(() => SETH(document.body.scrollHeight + 40), 400);
+}
+
+function dopasujWysokosc(el) {
+  if (!el) return;
+  el.style.height = "auto";
+  const trzeba = Math.max(31, el.scrollHeight);
+  const komorka = el.closest("td");
+  // pole ma wypelnic komorke, zeby caly wiersz lapal klikniecie
+  const wiersz = komorka ? Math.round(komorka.getBoundingClientRect().height) : 0;
+  el.style.height = Math.max(trzeba, wiersz) + "px";
+}
+
+/* ------------------------------------------------- metody rozpisania (Main) */
+const METODY = [
+  { id: "test",    nazwa: "Test siły (RM)",
+    opis: "sprawdzenie maksimum na zadaną liczbę powtórzeń",
+    pola: [["rm", "Ile powtórzeń (RM) — 1, 3, 5, 8…", "3"],
+           ["kg", "Spodziewany ciężar (opcjonalnie)", "150-160 kg"]] },
+  { id: "topset",  nazwa: "Top set / back-off",
+    opis: "jedna cięższa seria, potem lżejsze",
+    pola: [["top", "Top set", "1 x 3"], ["rpeTop", "RPE top setu", "9"],
+           ["kgTop", "Ciężar top setu (opcjonalnie)", "140-155 kg"],
+           ["back", "Back-off", "2 x 5"], ["rpeBack", "RPE back-off", "7"],
+           ["kgBack", "Ciężar back-offu (opcjonalnie)", "120-130 kg"]] },
+  { id: "cluster", nazwa: "Cluster set",
+    opis: "serie z krótkimi przerwami wewnątrz",
+    pola: [["opis", "Zapis klastra", "3 x (3 x 1) / 20 s"]] },
+  { id: "amrap",   nazwa: "AMRAP",
+    opis: "as many reps as possible — maksymalna liczba powtórzeń",
+    pola: [["zakres", "Orientacyjny zakres powtórzeń", "8-12"],
+           ["ciezar", "Orientacyjny ciężar", "70 kg"]] },
+];
+
+function metZapis(m, v) {
+  if (m.id === "test") return `test ${(v.rm || "3").trim()}RM`
+    + ((v.kg || "").trim() ? ` (${v.kg.trim()})` : "");
+  if (m.id === "topset") {
+    // RPE osobno dla top setu i dla back-offu (Filip 2026-09-03)
+    const t = (v.top || "").trim()
+      + ((v.rpeTop || "").trim() ? ` @ rpe ${v.rpeTop.trim()}` : "")
+      + ((v.kgTop || "").trim() ? ` (${v.kgTop.trim()})` : "");
+    const bo = (v.back || "").trim()
+      + ((v.rpeBack || "").trim() ? ` @ rpe ${v.rpeBack.trim()}` : "")
+      + ((v.kgBack || "").trim() ? ` (${v.kgBack.trim()})` : "");
+    return "top set " + [t, bo].filter(x => x.trim()).join(" + ");
+  }
+  if (m.id === "cluster") return `cluster ${(v.opis || "").trim()}`.trim();
+  if (m.id === "amrap") {
+    const z = (v.zakres || "").trim();
+    // gdy ktoś sam wpisał „AMRAP …", nie dokładaj drugiego
+    const tresc = /^amrap/i.test(z) ? z : `AMRAP ${z}`.trim();
+    return tresc + (v.ciezar ? ` @ ${v.ciezar.trim()}` : "");
+  }
+  return "";
+}
+
+/* iframe komponentu bywa wyzszy niz okno przegladarki, wiec „srodek ekranu"
+   liczony wewnatrz iframe wypada poza kadr. Ta funkcja zwraca pas, ktory
+   czytelnik naprawde widzi, w ukladzie wspolrzednych iframe. */
+function widocznyPas() {
+  try {
+    const r = frameElement.getBoundingClientRect();      // pozycja iframe w oknie
+    // przeliczamy okno rodzica na uklad wspolrzednych iframe:
+    // widac od max(0, -top) do min(wysokosc iframe, wysokosc okna - top)
+    const gora = Math.max(0, -r.top);
+    const dol = Math.min(r.height, parent.innerHeight - r.top);
+    if (dol - gora > 80) return { gora, dol };
+  } catch (_) {}
+  return { gora: 0, dol: window.innerHeight || 800 };
+}
+
+function metKotwica() {
+  if (!MET) return null;
+  const swiezy = document.querySelector(
+    `[data-act=metoda][data-id="${CSS.escape(MET.id)}"][data-w="${CSS.escape(String(MET.w))}"]`);
+  if (swiezy) { MET.rect = swiezy.getBoundingClientRect(); return swiezy; }
+  return null;
+}
+
+function ustawWPasie(box, kotwica, szer) {
+  const pas = widocznyPas();
+  // element mógł zniknąć przy przerysowaniu — wtedy bierzemy zapamiętane miejsce
+  let r = kotwica && kotwica.getBoundingClientRect
+        ? kotwica.getBoundingClientRect() : null;
+  if ((!r || (!r.width && !r.height)) && MET && MET.rect) r = MET.rect;
+  if (!r) r = { top: 80, bottom: 100, left: 80, width: 24 };
+  const h = box.getBoundingClientRect().height || 260;
+  const w = szer || box.getBoundingClientRect().width || 300;
+  let top = r.bottom + 4;
+  if (top + h > pas.dol - 8) top = Math.max(pas.gora + 8, r.top - h - 4);
+  if (top + h > pas.dol - 8) top = Math.max(pas.gora + 8, pas.dol - h - 8);
+  let left = r.left - w + r.width;
+  left = Math.max(8, Math.min(left, (window.innerWidth || 1200) - w - 8));
+  box.style.top = Math.round(top) + "px";
+  box.style.left = Math.round(left) + "px";
+}
+
+function metZamknij() {
+  const el = document.querySelector(".met");
+  if (el) el.remove();
+  MET = null;
+}
+
+/* „Rozpisz serie" — kazda seria osobno, z wlasnym RPE.
+   Zapis w notacji Filipa: 1 x 6 @ rpe 8 + 1 x 5 @ rpe 9 */
+function serieZapis(serie) {
+  return serie
+    .filter(x => (x.reps || "").trim())
+    .map(x => {
+      const ile = (x.ile || "1").trim() || "1";
+      const rpe = (x.rpe || "").trim();
+      const kg = (x.kg || "").trim();      // orientacyjny ciezar, opcjonalny
+      return `${ile} x ${x.reps.trim()}`
+        + (rpe ? ` @ rpe ${rpe}` : "")
+        + (kg ? ` (${kg})` : "");
+    })
+    .join(" + ");
+}
+
+function serieCzytaj(tekst) {
+  // odtworzenie z komorki, zeby dalo sie poprawic wczesniejszy rozpis
+  const czesci = String(tekst || "").split("+").map(x => x.trim()).filter(Boolean);
+  const out = [];
+  for (const c of czesci) {
+    const m = c.match(
+      /^(\d+)\s*[x×]\s*([^@(]+?)\s*(?:@\s*rpe\s*([\d.,\-\/]+))?\s*(?:\(([^)]*)\))?$/i);
+    if (!m) return null;
+    out.push({ ile: m[1], reps: m[2].trim(), rpe: (m[3] || "").trim(),
+               kg: (m[4] || "").trim() });
+  }
+  return out.length ? out : null;
+}
+
+function metRysuj(kotwica) {
+  metZamknij.el = null;
+  let box = document.querySelector(".met");
+  if (!box) { box = document.createElement("div"); box.className = "met";
+              document.body.appendChild(box); }
+  if (MET.wybrana === "serie") {
+    const serie = MET.serie || [{ ile: "1", reps: "", rpe: "" }];
+    box.innerHTML = `<h4>Rozpisz serię po serii</h4>
+      <div class="serie">
+        <div class="serie-glowa"><span></span><span>serie</span><span>powt.</span><span>RPE</span><span>ciężar</span><span></span></div>
+        ${serie.map((x, i) => `<div class="serie-w">
+          <span class="serie-nr">${i + 1}.</span>
+          <input data-seria="${i}" data-pole="ile"  value="${esc(x.ile || "")}"  placeholder="1">
+          <input data-seria="${i}" data-pole="reps" value="${esc(x.reps || "")}" placeholder="6">
+          <input data-seria="${i}" data-pole="rpe"  value="${esc(x.rpe || "")}"  placeholder="8">
+          <input data-seria="${i}" data-pole="kg"   value="${esc(x.kg || "")}"   placeholder="140-155 kg">
+          <button class="serie-x" data-seria-usun="${i}" title="Usuń serię">×</button>
+        </div>`).join("")}
+      </div>
+      <button class="serie-dodaj" data-seria-dodaj="1">＋ Dodaj serię</button>
+      <div class="podglad">${esc(serieZapis(serie)) || "—"}</div>
+      <div class="stopka"><button class="ok" data-met-ok="1">Wstaw</button>
+        <button data-met-wroc="1">Wstecz</button></div>`;
+    ustawWPasie(box, kotwica, 340);
+    return;
+  }
+  const m = MET.wybrana ? METODY.find(x => x.id === MET.wybrana) : null;
+  if (!m) {
+    box.innerHTML = `<h4>Metoda rozpisania</h4>`
+      + `<button class="poz glowna" data-met="serie">Rozpisz serię po serii`
+      + `<small>każda seria osobno, z własnym RPE — np. 1 x 6 @ rpe 8, potem 1 x 5 @ rpe 9</small></button>`
+      + `<div class="met-sep"></div>`
+      + METODY.map(x =>
+      `<button class="poz" data-met="${x.id}">${esc(x.nazwa)}<small>${esc(x.opis)}</small></button>`
+    ).join("");
+  } else {
+    const v = MET.wartosci || {};
+    box.innerHTML = `<h4>${esc(m.nazwa)}</h4><div class="pola">`
+      + m.pola.map(([k, etykieta, hint]) => {
+          const szybkie = k === "rm"
+            ? `<div class="szybkie">` + [1, 3, 5, 8, 10].map(n =>
+                `<button class="rmchip${String(v[k] || "3") === String(n) ? " on" : ""}" `
+                + `data-rm="${n}">${n}RM</button>`).join("") + `</div>`
+            : "";
+          return `<label>${esc(etykieta)}</label>
+           <input data-pole="${k}" value="${esc(v[k] || "")}" placeholder="${esc(hint)}">${szybkie}`;
+        }).join("")
+      + `</div><div class="podglad">${esc(metZapis(m, v)) || "—"}</div>`
+      + `<div class="stopka"><button class="ok" data-met-ok="1">Wstaw</button>`
+      + `<button data-met-wroc="1">Wstecz</button></div>`;
+  }
+  ustawWPasie(box, kotwica, 340);
+}
+
+document.addEventListener("click", (e) => {
+  const poz = e.target.closest(".met .poz");
+  if (poz && MET) {
+    MET.wybrana = poz.dataset.met; MET.wartosci = {};
+    if (MET.wybrana === "serie") {
+      const ex = exById(MET.id);
+      MET.serie = (ex && serieCzytaj(rawDose(ex, MET.w)))
+                  || [{ ile: "1", reps: "", rpe: "" }];
+    }
+    metRysuj(metKotwica()); return; }
+  const chip = e.target.closest("[data-rm]");
+  if (chip && MET) {
+    MET.wartosci = MET.wartosci || {};
+    MET.wartosci.rm = chip.dataset.rm;
+    metRysuj(metKotwica()); return; }
+  if (e.target.closest("[data-met-wroc]") && MET) {
+    MET.wybrana = null; metRysuj(metKotwica()); return; }
+  if (e.target.closest("[data-met-ok]") && MET) {
+    const ex = exById(MET.id);
+    if (MET.wybrana === "serie") {
+      if (ex) { setDose(ex, MET.w, serieZapis(MET.serie || [])); commit(); }
+    } else {
+      const m = METODY.find(x => x.id === MET.wybrana);
+      if (m && ex) { setDose(ex, MET.w, metZapis(m, MET.wartosci || {})); commit(); }
+    }
+    metZamknij(); return; }
+  if (e.target.closest("[data-seria-dodaj]") && MET) {
+    MET.serie = (MET.serie || []).concat([{ ile: "1", reps: "", rpe: "" }]);
+    metRysuj(metKotwica()); return; }
+  const usun = e.target.closest("[data-seria-usun]");
+  if (usun && MET) {
+    const i = +usun.dataset.seriaUsun;
+    MET.serie = (MET.serie || []).filter((_, k) => k !== i);
+    if (!MET.serie.length) MET.serie = [{ ile: "1", reps: "", rpe: "" }];
+    metRysuj(metKotwica()); return; }
+  if (MET && !e.target.closest(".met") && !e.target.closest("[data-act=metoda]")) metZamknij();
+});
+document.addEventListener("input", (e) => {
+  if (e.target.dataset && e.target.dataset.f === "week") dopasujWysokosc(e.target);
+  const seria = e.target.closest(".met [data-seria]");
+  if (seria && MET) {
+    const i = +seria.dataset.seria;
+    MET.serie = MET.serie || [];
+    if (MET.serie[i]) MET.serie[i][seria.dataset.pole] = seria.value;
+    const pod = document.querySelector(".met .podglad");
+    if (pod) pod.textContent = serieZapis(MET.serie) || "—";
+    return;
+  }
+  const pole = e.target.closest(".met [data-pole]");
+  if (!pole || !MET) return;
+  MET.wartosci = MET.wartosci || {};
+  MET.wartosci[pole.dataset.pole] = pole.value;
+  const m = METODY.find(x => x.id === MET.wybrana);
+  const pod = document.querySelector(".met .podglad");
+  if (m && pod) pod.textContent = metZapis(m, MET.wartosci) || "—";
+});
+window.addEventListener("scroll", () => MET && metZamknij(), true);
+
+/* ---------------------------------------------------------------- zdarzenia */
+function exById(id) {
+  const [key, ri] = id.split("|");
+  return rowsOf(key)[+ri];
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act, id = b.dataset.id, w = +b.dataset.w;
+  if (act === "view")     { S.view = b.dataset.v; S.noteOpen = null;
+                            if (S.view !== "edytor" && S.pvMode === "pdf" && !S.pdfPng) S.pdfPending = true;
+                            render(); SEND({ workout: S.workout }, { sync: true }); }
+  else if (act === "pvmode") { S.pvMode = b.dataset.v;
+                            if (S.pvMode === "pdf" && !S.pdfPng) S.pdfPending = true;
+                            render(); SEND({ workout: S.workout }, { sync: true }); }
+  else if (act === "pvweek") { S.pvWeek = w; render(); }
+  else if (act === "pvopen") { S.pvOpen = S.pvOpen === id ? null : id; render(); }
+  else if (act === "note")   { S.noteOpen = S.noteOpen === id ? null : id; render(); }
+  else if (act === "addrow") addRow(b.dataset.sec);
+  else if (act === "metoda") {
+    const przycisk = b;
+    if (MET && MET.id === id && MET.w === w) { metZamknij(); }
+    else {
+      MET = { id, w, wybrana: null, wartosci: {},
+              rect: przycisk.getBoundingClientRect() };
+      if (b.dataset.tryb === "serie") {          // klik prosto w kafelki
+        const ex = exById(id);
+        MET.wybrana = "serie";
+        MET.serie = (ex && serieCzytaj(rawDose(ex, w)))
+                    || [{ ile: "1", reps: "", rpe: "" }];
+      }
+      metRysuj(przycisk);
+    } }
+  else if (act === "filmedit") { const ex = exById(id); if (ex) { ex.film = ""; render();
+                            const pole = document.querySelector(`[data-f="film"][data-id="${id}"]`);
+                            if (pole) pole.focus(); SEND({ workout: S.workout }); } }
+  else if (act === "delrow") delRow(exById(id));
+  else if (act === "addw")   insertWeek(w);
+  else if (act === "delw") {
+    if (confirm("Usunąć Week " + w + " z CAŁEGO planu?\n\nZniknie w każdym "
+              + "treningu tego planu, także w tych, których teraz nie widzisz.\n"
+              + "Tej operacji nie da się cofnąć."))
+      removeWeek(w);
+  }
+  else if (act === "cpw") {
+    const cel = w + 1;
+    const zajete = (S.workout.items || []).some(ex =>
+      (ex.section === b.dataset.sec) && rawDose(ex, cel));
+    if (!zajete || confirm("Week " + cel + " ma już wpisane dawki w tej sekcji.\n"
+                         + "Nadpisać je tym, co jest w Week " + w + "?"))
+      copyWeek(b.dataset.sec, w);
+  }
+  else if (act === "cpc")    { const ex = exById(id); const v = rawDose(ex, w); if (v) { setDose(ex, w + 1, v); commit(); } }
+  else if (act === "save")   { SEND({ workout: S.workout, action: "save", weekOps: S.weekOps }); S.weekOps = []; }
+  else if (act === "usun_trening") {
+    // kasuje całą rozpiskę — pytamy i mówimy, ile przepadnie
+    // pozycje leżą w S.workout.exercises z polem section — nie pod kluczem sekcji
+    const ile = (S.workout.exercises || []).filter(x => (x.exercise || "").trim()).length;
+    const co = ile ? `Przepadnie ${ile} ćwiczeń z rozpiską.` : "Ten trening jest pusty.";
+    if (confirm(`Usunąć „${S.workout.name || "ten trening"}" z planu?\n\n${co}`)) {
+      SEND({ action: "usun_trening" });
+    }
+  }
+  else if (act === "library") { SEND({ workout: S.workout, action: "library", section: b.dataset.sec, weekOps: S.weekOps }); S.weekOps = []; }
+});
+
+/* ---------------------------------------------------------------- podpowiedzi nazw */
+function acClose(){
+  if (AC.box) { AC.box.remove(); AC.box = null; }
+  AC.items = []; AC.idx = -1; AC.id = "";
+}
+
+function acHi(){
+  if (!AC.box) return;
+  [...AC.box.children].forEach((b, i) => b.classList.toggle("on", i === AC.idx));
+  const akt = AC.box.children[AC.idx];
+  if (akt) akt.scrollIntoView({ block: "nearest" });
+}
+
+function acPick(i){
+  const it = AC.items[i], ex = exById(AC.id), id = AC.id;
+  acClose();
+  if (!it || !ex) return;
+  // render() usuwa z DOM pole, ktore ma fokus — przegladarka emituje wtedy
+  // `change` z wpisanym fragmentem („hip"), a handler change nadpisywal nim
+  // wybrana nazwe. Najpierw wiec podmieniamy wartosc w samym polu, potem
+  // w modelu: gdyby change jednak poleсial, niesie juz wlasciwa nazwe.
+  const pole = document.querySelector(`[data-f="exercise"][data-id="${id}"]`);
+  if (pole) { pole.value = it.name; pole.blur(); }
+  ex.exercise = it.name;
+  if (it.url && !(ex.film || "").trim()) ex.film = it.url;  // film prosto z Bazy
+  S.pdfPng = "";
+  render();
+  SEND({ workout: S.workout });
+}
+
+function acOpen(input){
+  const q = input.value.trim().toLowerCase();
+  if (q.length < 2 || !EXLIST.length) { acClose(); return; }
+  const trafione = EXLIST.filter(e => (e.name || "").toLowerCase().includes(q));
+  trafione.sort((a, b) => {
+    const an = a.name.toLowerCase(), bn = b.name.toLowerCase();
+    return (an.startsWith(q) ? 0 : 1) - (bn.startsWith(q) ? 0 : 1)
+        || an.localeCompare(bn, "pl");
+  });
+  AC.items = trafione.slice(0, 40);
+  AC.id = input.dataset.id;
+  if (!AC.items.length) { acClose(); return; }
+  if (!AC.box) { AC.box = document.createElement("div"); AC.box.className = "ac";
+                 document.body.appendChild(AC.box); }
+  const r = input.getBoundingClientRect();
+  const szer = Math.round(Math.max(260, r.width));
+  AC.box.style.width = szer + "px";
+  const pas = widocznyPas();
+  const h = AC.box.getBoundingClientRect().height || 150;
+  let top = r.bottom + 2;
+  if (top + h > pas.dol - 8) top = Math.max(pas.gora + 8, r.top - h - 2);
+  AC.box.style.left = Math.round(Math.max(8, Math.min(r.left,
+                        (window.innerWidth || 1200) - szer - 8))) + "px";
+  AC.box.style.top = Math.round(top) + "px";
+  AC.box.innerHTML = AC.items.map((e, i) => {
+    const n = e.name, k = n.toLowerCase().indexOf(q);
+    const tekst = k < 0 ? esc(n)
+      : esc(n.slice(0, k)) + "<b>" + esc(n.slice(k, k + q.length)) + "</b>" + esc(n.slice(k + q.length));
+    return `<button type="button" class="acit${i === AC.idx ? " on" : ""}" data-i="${i}">`
+         + `<span>${tekst}</span><em>${esc(e.cat || "")}</em></button>`;
+  }).join("");
+}
+
+document.addEventListener("input", (e) => {
+  if (e.target.dataset && e.target.dataset.f === "exercise") { AC.idx = -1; acOpen(e.target); }
+});
+document.addEventListener("keydown", (e) => {
+  // w komorce tygodnia Enter konczy edycje (a nie dokleja pusta linie)
+  if (e.key === "Enter" && !e.shiftKey && e.target.dataset
+      && e.target.dataset.f === "week") { e.preventDefault(); e.target.blur(); return; }
+  if (!AC.box || !e.target.dataset || e.target.dataset.f !== "exercise") return;
+  if (e.key === "ArrowDown")      { e.preventDefault(); AC.idx = Math.min(AC.idx + 1, AC.items.length - 1); acHi(); }
+  else if (e.key === "ArrowUp")   { e.preventDefault(); AC.idx = Math.max(AC.idx - 1, 0); acHi(); }
+  else if (e.key === "Enter" && AC.idx >= 0) { e.preventDefault(); acPick(AC.idx); }
+  else if (e.key === "Escape")    { acClose(); }
+  else if (e.key === "Tab")       { acClose(); }
+});
+// mousedown zabralby fokus polu i odpalil change ze stara wartoscia
+document.addEventListener("mousedown", (e) => {
+  if (AC.box && AC.box.contains(e.target)) { e.preventDefault(); return; }
+  if (!(e.target.dataset && e.target.dataset.f === "exercise")) acClose();
+});
+document.addEventListener("click", (e) => {
+  const b = AC.box && e.target.closest(".acit");
+  if (b) acPick(+b.dataset.i);
+});
+window.addEventListener("scroll", acClose, true);
+window.addEventListener("resize", acClose);
+
+document.addEventListener("change", (e) => {
+  const el = e.target, f = el.dataset.f; if (!f) return;
+  if (f === "wname") { S.workout.name = el.value; SEND({ workout: S.workout }); return; }
+  if (f === "wdate") { S.workout.date = el.value; SEND({ workout: S.workout }); return; }
+  const ex = exById(el.dataset.id); if (!ex) return;
+  if (f === "week")       setDose(ex, +el.dataset.w, el.value);
+  else if (f === "dose1") setDose(ex, 1, el.value);
+  else if (f === "film")  ex.film = el.value.trim();
+  else                    ex[f] = el.value;     // slot | exercise | note | tempo
+  S.pdfPng = "";
+  // render dopiero po przeniesieniu fokusu przez Tab (synchroniczny render
+  // w change usuwa z DOM pole, do ktorego wlasnie idzie kursor)
+  if (f === "week" || f === "dose1" || f === "film") setTimeout(render, 0);
+  SEND({ workout: S.workout });
+});
+
+/* ---------------------------------------------------------------- wejście z Pythona */
+window.addEventListener("message", (ev) => {
+  const d = ev.data; if (!d || d.type !== "streamlit:render") return;
+  const args = d.args || {};
+  if (Array.isArray(args.exlist)) EXLIST = args.exlist;
+  // echo starszego stanu (np. dwa szybkie klikniecia): Python odeslal ack != LAST_SENT —
+  // nie nadpisuj lokalnych zmian, kolejny przebieg przyniesie aktualny stan
+  if (LAST_SENT !== null && args.ack !== LAST_SENT) return;
+  if (LAST_SENT === null && args.ui && args.ui.view) {
+    S.view = args.ui.view; S.pvMode = args.ui.pvMode || S.pvMode;
+  }
+  const fp = FP(args.plan, args.workout, args.pdf_png);
+  if (fp === S.lastArgs) return;          // ten sam stan — nie zabieraj fokusu
+  S.lastArgs = fp;
+  if (args.plan) S.plan = args.plan;
+  if (args.workout) {
+    S.workout = args.workout;
+    S.workout.exercises = S.workout.exercises || [];
+    S.workout.weeks = S.workout.weeks || 4;
+  }
+  S.pdfPng = args.pdf_png || "";
+  S.pdfErr = args.pdf_err || "";
+  S.pdfPending = !S.pdfPng && !S.pdfErr && S.view !== "edytor" && S.pvMode === "pdf";
+  render();
+});
+READY(); render();
+</script>
+</body>
+</html>
