@@ -17,6 +17,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+st.write("BOOT 1: streamlit + pandas OK")
+
 from vald.metrics import (
     ASYM_GREEN,
     ASYM_YELLOW,
@@ -26,6 +28,7 @@ from vald.metrics import (
     match_column,
     resolve_metrics,
 )
+st.write("BOOT 2: vald.metrics OK")
 from vald.library import (
     LIBRARY_DIR,
     LIBRARY_PATH,
