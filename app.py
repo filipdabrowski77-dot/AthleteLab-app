@@ -16,10 +16,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-st.set_page_config(page_title="BOOT-0 streamlit ok")
-st.write("BOOT 0: streamlit + pandas")
 
-st.write("BOOT 1: przed vald.metrics")
 from vald.metrics import (
     ASYM_GREEN,
     ASYM_YELLOW,
@@ -29,7 +26,6 @@ from vald.metrics import (
     match_column,
     resolve_metrics,
 )
-st.write("BOOT 2: przed vald.library")
 from vald.library import (
     LIBRARY_DIR,
     LIBRARY_PATH,
@@ -45,7 +41,6 @@ from vald.library import (
     rename_athlete,
     save_to_library,
 )
-st.write("BOOT 3: przed vald.profiles")
 from vald.profiles import (
     coach_of,
     delete_profile,
@@ -56,7 +51,6 @@ from vald.profiles import (
     save_profile,
     save_test_note,
 )
-st.write("BOOT 4: przed vald.parser")
 from vald.parser import (
     ATHLETE_CANDIDATES,
     DATE_CANDIDATES,
@@ -65,7 +59,6 @@ from vald.parser import (
     detect_test_type_df,
     find_column,
 )
-st.write("BOOT 5: przed vald.viz")
 from vald.viz import (
     FLAG_COLORS,
     asymmetry_bipolar_trend,
@@ -646,7 +639,6 @@ KEY_TIMELINE_METRICS: dict[str, list[str]] = {
 }
 
 
-st.write('BOOT 9: wszystkie importy OK, tu byl set_page_config')
 st.set_page_config(
     page_title="Athletic Performance Hub",
     page_icon="🏋️",
