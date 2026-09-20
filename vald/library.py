@@ -33,12 +33,12 @@ def _workspace_dir():
         w = ""
     if not w:
         return None
-    d = _REPO_DIR / f"ws_{w}"
-    try:
-        d.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        return None
-    return d
+    # Sama ścieżka, BEZ mkdir: to leci przy imporcie modułu, a na Streamlit
+    # Cloud w instancji gościa (brak data/ w repo, mount aplikacji) start
+    # zawisał zanim cokolwiek się wyrenderowało (2026-09-20). Katalog
+    # tworzy każdy zapis sam (`LIBRARY_DIR.mkdir` w _atomic_to_parquet,
+    # `PLANS_PATH.parent.mkdir` w training itd.).
+    return _REPO_DIR / f"ws_{w}"
 
 
 _WS_DIR = _workspace_dir()

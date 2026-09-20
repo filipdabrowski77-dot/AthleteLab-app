@@ -17,8 +17,6 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-st.write("BOOT 1: streamlit + pandas OK")
-
 from vald.metrics import (
     ASYM_GREEN,
     ASYM_YELLOW,
@@ -28,7 +26,6 @@ from vald.metrics import (
     match_column,
     resolve_metrics,
 )
-st.write("BOOT 2: vald.metrics OK")
 from vald.library import (
     LIBRARY_DIR,
     LIBRARY_PATH,
@@ -62,7 +59,6 @@ from vald.parser import (
     detect_test_type_df,
     find_column,
 )
-from vald.report import build_report_pdf
 from vald.viz import (
     FLAG_COLORS,
     asymmetry_bipolar_trend,
@@ -4006,6 +4002,9 @@ def _report_dialog(name: str) -> None:
                 "n_days": int(dts.dt.date.nunique()) if not dts.empty else None,
                 "tests": " · ".join(selections.keys()),
             }
+            # import tutaj, nie na górze: ciągnie matplotlib (kilka sekund
+            # na zimnym cache fontów), a raport i tak powstaje po kliknięciu
+            from vald.report import build_report_pdf
             pdf_bytes = build_report_pdf(name, meta, sections)
             st.session_state["_rpt_pdf"] = pdf_bytes
             st.session_state["_rpt_fname"] = (
