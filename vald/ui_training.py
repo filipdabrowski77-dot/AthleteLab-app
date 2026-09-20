@@ -590,11 +590,16 @@ def _pv_sekcja_kolory(section: str) -> tuple[str, str]:
 
 
 def _pv_slot_label(it: dict, idx: int, section: str) -> str:
-    """Treść kółka: slot z rozpiski; Prep bez slotu → P1, P2…; reszta → numer."""
+    """Treść kółka: slot z rozpiski; Prep zawsze P1, P2…; reszta → numer.
+
+    W Prep slot NIE oznacza superserii — służy tylko do odstępu między
+    blokami w PDF (zielony szablon grupuje wiersze po numerze). Gdyby kółko
+    brało go wprost, cała rozgrzewka miałaby „1" i wyglądała jak jedna
+    superseria (Filip 2026-09-20, plan Michała 2.0)."""
+    if _PV_SEKCJE.get(section, (0, 0, 0, False))[3]:
+        return f"P{idx + 1}"
     slot = str(it.get("slot", "") or "").strip()
-    if slot:
-        return slot
-    return f"P{idx + 1}" if _PV_SEKCJE.get(section, (0, 0, 0, False))[3] else str(idx + 1)
+    return slot or str(idx + 1)
 
 
 def _pv_dawka(it: dict, wk: int) -> tuple[str, str]:
