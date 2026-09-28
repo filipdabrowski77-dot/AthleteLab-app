@@ -124,8 +124,15 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 .startkafel:hover{border-color:#c9c5bb;background:#fdfdfb}
 .startkafel.ciemny{background:var(--ink);border-color:var(--ink);color:#fff}
 .startkafel.ciemny:hover{background:#333029}
-.konczy{flex-wrap:wrap}
-.konczy .dni{font-size:12px;font-weight:700;color:var(--amber-fg);background:var(--amber-bg);border-radius:4px;padding:2px 7px;white-space:nowrap}
+.kon{display:flex;align-items:center;gap:11px;width:100%;border:none;border-bottom:1px solid var(--hair2);
+  background:transparent;padding:12px 16px;cursor:pointer;font:inherit;color:inherit;text-align:left}
+.kon:last-child{border-bottom:0}
+.kon:hover{background:var(--hover)}
+.kon .sw{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.kon .sw.czerw{background:#d6453d;box-shadow:0 0 0 3px rgba(214,69,61,.18)}
+.kon .sw.pom{background:#e8962e;box-shadow:0 0 0 3px rgba(232,150,46,.2)}
+.kon b{flex:1;min-width:0;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kon .ile{font-size:13px;font-weight:700;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:20px;margin-top:24px;align-items:start}
 .cols>div{min-width:0}
 .addrow{display:flex;flex-wrap:wrap;gap:8px;padding:12px;border-bottom:1px solid var(--hair2)}
@@ -583,15 +590,12 @@ function odm(n, poj, kilka, wiele){
 function screenStart(){
   // plany kończące się w ciągu 7 dni — czas rozpisać kolejny (Filip 2026-09-29)
   const kon = D.konczace || [];
+  // tylko osoba, ile dni i światełko: czerwone 0–2 dni, pomarańczowe 3–7 (Filip 2026-09-29)
   const konczy = kon.length ? `
-    <div class="eyebrow" style="margin:26px 0 8px">Kończy się plan · najbliższe 7 dni</div>
-    <div class="card">${kon.map(k=>`<div class="qrow konczy">
-        <span class="d">${esc(k.koniec)}</span><span class="n">${esc(k.athlete)}</span>
-        <span class="p">${esc(k.plan)}</span>
-        <span class="dni">${k.dni===0?"ostatni dzień":k.dni===1?"jutro koniec":"za "+esc(k.dni)+" dni"}</span>
-        <button class="btn xs" data-act="open_plan" data-id="${esc(k.id)}">Plan</button>
-        <button class="btn xs primary" data-act="nowy_dla" data-name="${esc(k.athlete)}">Rozpisz kolejny</button>
-      </div>`).join("")}</div>` : "";
+    <div class="eyebrow" style="margin:26px 0 8px">Kończy się plan</div>
+    <div class="card">${kon.map(k=>`<button class="kon" data-act="open_plan" data-id="${esc(k.id)}">
+        <i class="sw ${k.dni<=2?"czerw":"pom"}"></i><b>${esc(k.athlete)}</b>
+        <span class="ile">${k.dni===0?"dziś":k.dni===1?"1 dzień":esc(k.dni)+" dni"}</span></button>`).join("")}</div>` : "";
 
   const queue = D.queue.length
     ? D.queue.map((q,i)=>`<div class="qrow">
@@ -1600,11 +1604,6 @@ document.addEventListener("click", e=>{
     case "tryb_trenera":
       act("tryb_trenera", {plan_id: b.dataset.id || ""}); break;
     case "new_plan_start":
-      S.screen = "plans"; S.planTab = "nowy"; S.share = false; S.menu = false;
-      render(); act("navigate",{to:"plans"}); break;
-    case "nowy_dla":
-      // „Rozpisz kolejny" przy kończącym się planie: formularz z wybraną osobą
-      FORM["np.athlete"] = b.dataset.name || ""; FORM["np.new_athlete"] = ""; FORM["np.name"] = "";
       S.screen = "plans"; S.planTab = "nowy"; S.share = false; S.menu = false;
       render(); act("navigate",{to:"plans"}); break;
     case "plantab": S.planTab = b.dataset.v; render(); break;

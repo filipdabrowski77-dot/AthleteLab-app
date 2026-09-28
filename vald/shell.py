@@ -557,7 +557,6 @@ def build_data(screen: str) -> dict:
                for q in moje_plany):
             continue
         konczace.append({"id": p["id"], "athlete": p.get("athlete", ""),
-                         "plan": p.get("name", ""), "koniec": f"{koniec:%d.%m}",
                          "dni": (koniec - dzis).days, "_k": koniec})
     konczace.sort(key=lambda k: k.pop("_k"))
     data["konczace"] = konczace
