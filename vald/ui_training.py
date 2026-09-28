@@ -1350,6 +1350,7 @@ _TRK_CSS = """<style>
             padding-left: 14px !important; }
         .stApp [class*="st-key-trk_z_"] button p { text-align: left;
             font-size: 15px; }
+        .stApp .st-key-trk_pop { display: none !important; }
         </style>"""
 
 
@@ -1840,11 +1841,46 @@ def _render_gym_mode() -> None:
     # w środku i pierwsza reguła każdego kolejnego bloku przepada
     for _css in (_GYM_CSS, _PV_CSS, _TRK_CSS):
         st.markdown(_css, unsafe_allow_html=True)
+    _trk_wstecz()
     _trk_konsumuj()
     try:
         _trk_widok()
     except (RuntimeError, OSError) as e:
         _trk_bez_magazynu(e)
+
+
+def _trk_wstecz() -> None:
+    """Wstecz/Dalej przeglądarki w trybie trenera. Wybór siedzi w adresie
+    (&p, &t, &w), ale Wstecz zmieniał tylko adres, a ekran stał (audyt
+    2026-09-28). Po popstate skrypt klika ukryty przycisk: przebieg bierze
+    tydzień i trening z adresu, a adres bez ?mode=gym wraca na Start."""
+    import streamlit.components.v1 as components
+    with st.container(key="trk_pop"):
+        if st.button("wstecz", key="trk_popstate"):
+            if st.query_params.get("mode") != "gym":
+                st.session_state["app_mode"] = "home"
+            for k in [k for k in st.session_state
+                      if str(k).startswith(("gym_wk_", "gym_sess_"))]:
+                st.session_state.pop(k, None)
+            st.rerun()
+        components.html("""<script>
+        try {
+          const P = window.parent;
+          if (P.__aphGymPop) P.removeEventListener("popstate", P.__aphGymPop);
+          P.__aphGymPop = () => {
+            // wpisy pośrednie (plan bez tygodnia/treningu) powstają przy
+            // zapisie adresu; przebieg dopisałby brakujące pole i Wstecz
+            // kręciłby się w miejscu — przeskakujemy je
+            const q = new URLSearchParams(P.location.search);
+            if (q.get("mode") === "gym" && q.get("p") && !(q.get("w") && q.get("t"))) {
+              P.history.back(); return;
+            }
+            const b = P.document.querySelector(".st-key-trk_popstate button");
+            if (b) b.click();
+          };
+          P.addEventListener("popstate", P.__aphGymPop);
+        } catch (e) {}
+        </script>""", height=0)
 
 
 def _trk_bez_magazynu(e: Exception) -> None:

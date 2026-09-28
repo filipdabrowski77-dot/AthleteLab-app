@@ -109,6 +109,7 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
   border-left:none;border-right:none;border-top:none;background:transparent;cursor:pointer;font:inherit;color:inherit}
 .trow:hover{background:var(--hover)}
 .trow.static{cursor:default}
+.trow>.in,.trow>.filminput{min-width:0;width:100%}
 .num{font-variant-numeric:tabular-nums}
 .badge{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   border-radius:4px;padding:3px 7px;justify-self:start}
@@ -190,7 +191,8 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 .modal .mh b{font-size:16px;font-weight:700}
 .modal .mb{padding:20px;display:flex;flex-direction:column;gap:14px}
 .modal .mf{display:flex;align-items:center;gap:9px;padding:14px 20px;border-top:1px solid var(--hair2);background:#fdfdfb}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.grid2 .field .in{min-width:0;width:100%}
 /* Instrukcja obsługi (Filip 2026-09-28: prosto, najważniejsze opcje, bez ściany tekstu) */
 .brakpt{margin:12vh auto 0;max-width:760px;text-align:center;font-size:38px;line-height:1.25;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
 @media (max-width:700px){.brakpt{font-size:26px;margin-top:8vh}}
@@ -201,7 +203,7 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 .hcard ol{margin:0;padding-left:18px;font-size:13.5px;line-height:1.55;color:var(--ink)}
 .hclaude .btn{margin-top:10px}
 .hclaude .instr{display:block;width:100%;box-sizing:border-box;margin-top:8px;height:74px;resize:vertical;font:12px/1.4 ui-monospace,Menlo,monospace;color:var(--dim);background:var(--bg,transparent);border:1px solid var(--line2);border-radius:8px;padding:6px 8px}
-.hcard code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:var(--fill);border-radius:4px;padding:1px 5px}
+.hcard code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:var(--fill);border-radius:4px;padding:1px 5px;white-space:nowrap}
 .hdawki{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;margin:0}
 .hdawki dt{color:var(--dim)}
 .hdawki dd{margin:0}
@@ -321,7 +323,8 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
   font-variant-numeric:tabular-nums}
 .planrow b{font-size:13.5px;font-weight:650;color:#1c1b18;flex:1;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.planrow .pmeta{flex:none;font-size:12px;color:#a5a294}
+.planrow b{flex:1 0 160px}
+.planrow .pmeta{flex:0 1 auto;min-width:0;white-space:normal;font-size:12px;color:#a5a294}
 .planrow .strzalka{flex:none;color:#c3c0b3;font-size:18px}
 
 /* testy siłowe — kafelki w katalogu */
@@ -645,7 +648,7 @@ function screenPlans(){
     if(S.grp!=="Wszystkie")   return p.group===S.grp;
     return q ? true : p.in_base === true;
   });
-  const GRID = "grid-template-columns:96px 1fr 170px 150px 96px 30px 26px;min-width:800px";
+  const GRID = "grid-template-columns:86px minmax(140px,1fr) minmax(110px,170px) minmax(90px,150px) 96px 30px 26px;min-width:680px";
   const wybrany = grps.includes(S.grp);
   const segs = `<div class="segs">` +
     ["Wszystkie"].concat(grps, grps.length?["Bez folderu"]:[]).map(g=>
@@ -887,7 +890,7 @@ function screenExercises(){
     const wszyscy = [...new Set((D.ex_trenerzy||[]).map(e=>e.dodal))];
     const kto = wszyscy.includes(S.exTrener) ? S.exTrener : "Wszyscy";
     const rows = (D.ex_trenerzy||[]).filter(e=>kto==="Wszyscy"||e.dodal===kto);
-    const GRID = "grid-template-columns:44px minmax(190px,.6fr) 1fr 190px 130px;min-width:760px";
+    const GRID = "grid-template-columns:44px minmax(160px,.6fr) minmax(100px,1fr) minmax(90px,140px) 130px;min-width:620px";
     body = `
       <div class="segs" style="margin-top:18px">${["Wszyscy"].concat(wszyscy).map(c=>
         `<button class="seg${kto===c?" on":""}" data-act="extrener" data-v="${esc(c)}">${esc(c)}</button>`).join("")}</div>
@@ -932,7 +935,7 @@ function screenExercises(){
           const opcje = (wyb, zajete, pusty) => `<option value="">${pusty}</option>`
             + KATY.filter(c=>!zajete.includes(c.name))
                   .map(c=>`<option${wyb===c.name?" selected":""}>${esc(c.name)}</option>`).join("");
-          return `<div class="trow static" style="grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) 148px 148px 92px 34px;min-width:820px">
+          return `<div class="trow static" style="grid-template-columns:minmax(130px,1.3fr) minmax(130px,1.3fr) minmax(100px,1fr) minmax(100px,1fr) 80px 34px;min-width:640px">
           <input class="in sm" style="min-width:0;font-weight:600;background:#fff"
                  data-f="nfname.${esc(k)}" value="${esc(n)}" title="Popraw nazwę ćwiczenia">
           <input class="filminput" data-f="film.${esc(k)}" value="${esc(FORM["film."+k]||"")}"
@@ -959,7 +962,7 @@ function screenExercises(){
           const opcje = (wyb, zajete) => `<option value="">${zajete.length?"—":"wybierz kategorię…"}</option>`
             + CATS.filter(c=>!zajete.includes(c.name))
                   .map(c=>`<option${wyb===c.name?" selected":""}>${esc(c.name)}</option>`).join("");
-          return `<div class="trow static" style="grid-template-columns:1fr 172px 172px 172px 92px 34px;min-width:860px">
+          return `<div class="trow static" style="grid-template-columns:minmax(150px,1.4fr) repeat(3,minmax(100px,1fr)) 80px 34px;min-width:660px">
           <input class="in sm" style="min-width:0;font-weight:600;background:#fff"
                  data-f="ncname.${esc(k)}" value="${esc(n)}" title="Popraw nazwę ćwiczenia">
           <select class="in" style="padding:7px 10px;font-size:13px" data-f="cat.${esc(k)}">${opcje(c1,[])}</select>

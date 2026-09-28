@@ -2946,6 +2946,13 @@ st.markdown(
         min-width: 0;
         white-space: pre-line;
       }
+      /* wąskie okno (1024 z panelem Streamlit): 4 kafle po ~160 px, a obok
+         inicjałów zostawało 64 px na nazwisko, łamane w środku słowa
+         (audyt 2026-09-28) — nazwisko pod inicjałami */
+      @media (max-width: 1150px) {
+        .aph-v2-athlete-card-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+        .aph-v2-athlete-name { font-size: 15px; }
+      }
       .aph-v2-athlete-meta {
         display: flex;
         flex-direction: column;
@@ -4471,7 +4478,7 @@ def main() -> None:
             min-height:34px!important;height:34px!important;padding:0 12px!important;
             border-radius:9px!important;border:1px solid var(--aph-line)!important;
             background:#fff!important;font-size:13px!important;font-weight:600!important;
-            color:var(--aph-ink)!important}
+            color:var(--aph-ink)!important;white-space:nowrap!important}
             .stApp .st-key-pt_back_home button:hover{border-color:#a09c92!important;
             background:#f4f2ee!important}</style>""",
             unsafe_allow_html=True)
