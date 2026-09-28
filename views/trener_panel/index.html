@@ -28,7 +28,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .pvslot{width:32px;height:32px;border-radius:999px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .pvname{font-size:16px;font-weight:700;color:#1c1b18;overflow-wrap:anywhere}
 .pvdose{font-size:15px;font-weight:700;color:#1c1b18;font-variant-numeric:tabular-nums}
-.pvintent{font-size:12px;font-weight:600;color:oklch(.5 .13 60);background:oklch(.96 .04 75);border-radius:6px;padding:2px 8px;vertical-align:1px;margin-left:2px}
+.pvintent{white-space:nowrap;display:inline-block;font-size:12px;font-weight:600;color:oklch(.5 .13 60);background:oklch(.96 .04 75);border-radius:6px;padding:2px 8px;vertical-align:1px;margin-left:2px}
 .pvcol{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
 .pvsec{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px}
 .pvsec i{display:inline-block;width:4px;height:15px;border-radius:2px;flex-shrink:0}
@@ -367,12 +367,13 @@ function htmlEdycja(k) {
   const ed = S.ed[k];
   if (!ed) return "";
   const dk = `data-k="${esc(k)}"`;
-  return `<div class="edycja"><div class="tyt">Zamień na · dawka od W${esc(S.ctx.wk)}</div>`
+  // „puste = bez zmian" w tytule: w podpowiedzi pola ucinało się na telefonie (audyt 2026-09-28)
+  return `<div class="edycja"><div class="tyt">Zamień na · dawka od W${esc(S.ctx.wk)} (puste = bez zmian)</div>`
     + `<input class="edp" ${dk} data-ed="nowe" list="nazwy" type="text" autocomplete="off"`
     + ` autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="80"`
     + ` placeholder="Nazwa ćwiczenia" value="${esc(ed.nowe)}">`
     + `<input class="edp" ${dk} data-ed="dawka" type="text" autocomplete="off" maxlength="40"`
-    + ` placeholder="Dawka, np. 3 x 8 @ rpe 8 (puste = bez zmian)" value="${esc(ed.dawka)}">`
+    + ` placeholder="Dawka, np. 3 x 8 @ rpe 8" value="${esc(ed.dawka)}">`
     + `<div class="edbtn"><button type="button" class="glowny" data-act="zamien" ${dk}>Zamień</button>`
     + `<button type="button" class="usun${ed.pewny ? " pewny" : ""}" data-act="usun" ${dk}>`
     + (ed.pewny ? "Na pewno usuń" : "Usuń z planu") + `</button>`
