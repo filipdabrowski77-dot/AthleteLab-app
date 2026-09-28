@@ -148,22 +148,6 @@ def _pominiete() -> list[str]:
     return [str(x) for x in (d.get("names") or []) if str(x).strip()]
 
 
-def _pominiete_save(names: list[str]) -> None:
-    from . import store
-    czyste, widziane = [], set()
-    for n in names:
-        n = " ".join(str(n).split())
-        if n and n.lower() not in widziane:
-            widziane.add(n.lower())
-            czyste.append(n)
-    if store.enabled():
-        store.kv_put(_POMINIETE_KEY, {"names": czyste})
-    else:
-        POMINIETE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        json.dump({"names": czyste}, open(POMINIETE_PATH, "w", encoding="utf-8"),
-                  ensure_ascii=False)
-
-
 def _groups_save(names: list[str]) -> None:
     from . import store
     czyste, widziane = [], set()
@@ -321,20 +305,6 @@ def _przypisz_zawodnika(name: str) -> None:
             set_coach(name, coaches.current())
     else:
         save_profile(name, coach=coaches.current())
-
-
-def _braki_filmow(plans: list[dict], yt: dict) -> dict[str, list[str]]:
-    """nazwa ćwiczenia bez filmu → plany, w których występuje."""
-    braki: dict[str, list[str]] = {}
-    for p in plans:
-        for s in (p.get("sessions") or []):
-            for it in (s.get("items") or []):
-                n = (it.get("exercise") or "").strip()
-                if n and not yt.get(n.lower()):
-                    lst = braki.setdefault(n, [])
-                    if p["name"] not in lst:
-                        lst.append(p["name"])
-    return braki
 
 
 # ---------------------------------------------------------------- dane
@@ -534,7 +504,6 @@ def build_data(screen: str) -> dict:
     plans = get_all_plans()
     yt = exlib.url_map()
     exs = exlib.exercises()
-    braki = _braki_filmow(plans, yt)
     # raz na render — wcześniej _pominiete() leciało w pętli po każdej nazwie
     pominiete = {n.lower() for n in _pominiete()}
 
@@ -575,12 +544,23 @@ def build_data(screen: str) -> dict:
     # wspólna — tam widać wszystko.
     moi = set(_all_names())
     moje_plany = [p for p in plans if p.get("athlete", "") in moi]
-    data["stats"] = {
-        "plans": len(moje_plany),
-        "plans_active": sum(1 for p in moje_plany if is_current(p)),
-        "athletes": len(moi),
-        "no_film": len([n for n in braki if n.lower() not in pominiete]),
-    }
+    # plany kończące się w ciągu 7 dni (Filip 2026-09-29: „wypisz mi tę
+    # osobę") — bez tych, którzy mają już rozpisany następny plan
+    dzis = date.today()
+    konczace = []
+    for p in moje_plany:
+        koniec = plan_end(p)
+        if not (koniec and is_current(p) and (koniec - dzis).days <= 7):
+            continue
+        if any(q.get("athlete") == p.get("athlete")
+               and (q.get("start_date") or "") > koniec.isoformat()[:10]
+               for q in moje_plany):
+            continue
+        konczace.append({"id": p["id"], "athlete": p.get("athlete", ""),
+                         "plan": p.get("name", ""), "koniec": f"{koniec:%d.%m}",
+                         "dni": (koniec - dzis).days, "_k": koniec})
+    konczace.sort(key=lambda k: k.pop("_k"))
+    data["konczace"] = konczace
     data["queue"] = [{
         "id": t["id"],
         "date": _d(t.get("due"), "%d.%m") if t.get("due") else "—",
@@ -705,11 +685,6 @@ def build_data(screen: str) -> dict:
     } for e in exlib.dodatki_trenerow()]
     # plany podajemy tylko po to, żeby pytanie przed usunięciem ćwiczenia
     # mówiło, z czego dokładnie zniknie (Filip 2026-09-05)
-    data["no_film"] = [{"name": n, "plany": braki[n]}
-                       for n in sorted(braki, key=str.lower)
-                       if n.lower() not in pominiete]
-    data["no_film_total"] = len(data["no_film"])
-    data["no_film_skipped"] = sorted(_pominiete(), key=str.lower)
     bezkat = [e for e in exs if e.get("cat") == "Nieprzypisane"]
     uzycia: dict[str, list[str]] = {}
     for pl in plans:
@@ -1292,84 +1267,6 @@ def handle_action(ev: dict) -> None:
         pick = ss.pop("exlib_pick", None)
         ss.pop("exlib_pick_n", None)
         _wroc_do_rozpiski(pick)
-        st.rerun()
-
-    elif a == "save_film":
-        stara = (ev.get("name") or "").strip()
-        nazwa = " ".join((ev.get("newname") or "").split()) or stara
-        u = (ev.get("url") or "").strip()
-        kat = (ev.get("cat") or "").strip()
-        kat2 = (ev.get("cat2") or "").strip()
-        kat = kat if kat in exlib.CATEGORIES else ""
-        kat2 = kat2 if (kat2 in exlib.CATEGORIES and kat2 != kat) else ""
-        if not stara or (nazwa == stara and not u and not kat):
-            st.toast("Wklej link, wybierz kategorię albo popraw nazwę.")
-            st.rerun()
-
-        czesci = []
-        if nazwa.lower() != stara.lower() or nazwa != stara:
-            ile, info = _zmien_nazwe_cwiczenia(stara, nazwa)
-            czesci.append(f'„{stara}” → „{nazwa}”'
-                          + (f" ({ile} w rozpiskach)" if ile else ""))
-            if info:
-                czesci.append(info)
-        if u or kat:
-            ist = next((e for e in exlib.exercises()
-                        if e["name"].strip().lower() == nazwa.lower()), None)
-            if ist:
-                e2 = dict(ist)
-                if u:
-                    e2["url"] = u
-                if kat:
-                    e2["cat"], e2["cat2"] = kat, kat2
-                exlib.upsert_exercise(e2)
-            elif u:
-                # bez filmu do Bazy nie wchodzimy (reguła Filipa 2026-09-05)
-                exlib.add_exercise(nazwa, kat or "Nieprzypisane", "", u)
-                if kat2:
-                    nowy = next((e for e in exlib.exercises()
-                                 if e["name"].strip().lower() == nazwa.lower()), None)
-                    if nowy:
-                        nowy = dict(nowy)
-                        nowy["cat2"] = kat2
-                        exlib.upsert_exercise(nowy)
-            else:
-                # nazwa mogła się już zmienić w rozpiskach — powiedz o tym,
-                # zamiast zgubić komunikat przed rerunem (2026-09-06)
-                czesci.append("kategoria czeka na link — bez filmu wpis "
-                              "nie wchodzi do Bazy")
-                st.toast(" · ".join(czesci), icon="⚠️")
-                st.rerun()
-            if u:
-                czesci.append("film zapisany")
-            if kat:
-                czesci.append(" + ".join([kat] + ([kat2] if kat2 else [])))
-        st.toast(" · ".join(czesci), icon="✅")
-        st.rerun()
-
-    elif a == "pomin_film":
-        # „nie dodam do tego filmu" — nazwa znika z katalogu, rozpiski zostają
-        nazwa = (ev.get("name") or "").strip()
-        if nazwa:
-            _pominiete_save(_pominiete() + [nazwa])
-            st.toast(f'„{nazwa}” — już nie w katalogu Bez filmu', icon="✅")
-        st.rerun()
-
-    elif a == "pomin_film_wszystkie":
-        yt2 = exlib.url_map()
-        byly = _pominiete()
-        znane = {n.lower() for n in byly}
-        nowe = {n for p in get_all_plans() for sesja in (p.get("sessions") or [])
-                for it in (sesja.get("items") or [])
-                if (n := (it.get("exercise") or "").strip())
-                and not yt2.get(n.lower()) and n.lower() not in znane}
-        _pominiete_save(byly + sorted(nowe))
-        st.toast(f"Katalog Bez filmu wyczyszczony ({len(nowe)} pozycji)", icon="✅")
-        st.rerun()
-
-    elif a == "przywroc_film":
-        nazwa = (ev.get("name") or "").strip()
-        _pominiete_save([n for n in _pominiete() if n.lower() != nazwa.lower()])
         st.rerun()
 
     elif a == "usun_cwiczenie":

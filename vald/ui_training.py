@@ -128,8 +128,7 @@ def _tr_dyktando_dialog() -> None:
     by znać składnię `=> Nazwa`, a tego nie da się zgadnąć."""
     from . import dyktando as dk
     from . import exlib as _ex
-    st.caption("Wklej albo nadyktuj rozpiskę. Dawki przeliczę ze słów "
-               "(„dwa x dziesięć rpe dziewięć”), nazwy dopasuję do Bazy.")
+    st.caption("Wklej albo nadyktuj rozpiskę — dawki i nazwy dopasuję do Bazy.")
     tekst = st.text_area("Dyktando", height=240, key="dykt_tekst",
                          placeholder=_DYKT_WZOR, label_visibility="collapsed")
     with st.expander("Format — wzór do skopiowania"):
@@ -1345,11 +1344,18 @@ _TRK_ELEMENT_LISTY = re.compile(r"^\d+(?:\s*[+\-–]\s*\d+)?$")
 _TRK_N_X_R = re.compile(r"(\d+)\s*[x×]\s*(\d+(?:\s*-\s*\d+)?)?", re.I)
 
 _TRK_CSS = """<style>
-        .stApp [class*="st-key-trk_z_"] button { min-height: 52px !important;
-            justify-content: flex-start !important; text-align: left !important;
-            padding-left: 14px !important; }
-        .stApp [class*="st-key-trk_z_"] button p { text-align: left;
-            font-size: 15px; }
+        /* podopieczni jako kafelki, trzy obok siebie (Filip 2026-09-29):
+           siatka na kontenerze, bo st.columns na telefonie idą pod siebie */
+        .stApp .st-key-trk_kafle, .stApp .st-key-trk_kafle_reszta {
+            display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px !important; }
+        .stApp .st-key-trk_kafle > div, .stApp .st-key-trk_kafle_reszta > div {
+            width: auto !important; min-width: 0; }
+        .stApp [class*="st-key-trk_z_"] button { min-height: 76px !important;
+            height: 100%; padding: 8px 6px !important; white-space: normal !important;
+            border-radius: 14px !important; }
+        .stApp [class*="st-key-trk_z_"] button p { text-align: center;
+            font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; }
         .stApp .st-key-trk_pop { display: none !important; }
         </style>"""
 
@@ -1812,22 +1818,23 @@ def _trk_lista_zawodnikow(plans: list) -> None:
         return
 
     def _przycisk(ath: str, plan: dict) -> None:
-        wk = current_week_of(plan)
-        lbl = " · ".join(x for x in (ath, plan.get("name", ""),
-                                     f"W{wk}" if wk else "") if x)
+        # kafelek = imię i nazwisko; plan (aktualny albo ostatni) otwiera się
+        # po stuknięciu, starszy wybiera się już w środku (Filip 2026-09-29)
         klucz = "trk_z_" + hashlib.md5(ath.encode("utf-8")).hexdigest()[:10]
-        if st.button(lbl, key=klucz, use_container_width=True):
+        if st.button(ath, key=klucz, use_container_width=True):
             st.query_params["p"] = plan["id"]
             for k in ("t", "w"):
                 st.query_params.pop(k, None)
             st.rerun()
 
-    for ath, plan in teraz:
-        _przycisk(ath, plan)
+    with st.container(key="trk_kafle"):
+        for ath, plan in teraz:
+            _przycisk(ath, plan)
     if reszta:
         with st.expander(f"Pozostali ({len(reszta)})"):
-            for ath, plan in reszta:
-                _przycisk(ath, plan)
+            with st.container(key="trk_kafle_reszta"):
+                for ath, plan in reszta:
+                    _przycisk(ath, plan)
 
 
 def _render_gym_mode() -> None:

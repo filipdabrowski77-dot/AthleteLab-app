@@ -4350,7 +4350,7 @@ def _start_auto_refresh_daemon() -> bool:
 
 
 def _ikonka_trenera() -> None:
-    """Ikonka „APH Trener" na ekranie początkowym telefonu (Safari →
+    """Ikonka „APH" na ekranie początkowym telefonu (Safari →
     Udostępnij → „Do ekranu początkowego" na adresie z ?mode=gym).
     Streamlit oddaje pliki .html ze static/ jako text/plain, więc osobna
     strona-ikonka pokazywała się jako kod, a własnego <head> apka nie ma —
@@ -4371,9 +4371,9 @@ def _ikonka_trenera() -> None:
       };
       dodaj("link", {rel: "apple-touch-icon", href: u("app/static/aph-trener-180.png")});
       dodaj("link", {rel: "manifest", href: u("app/static/manifest.json")});
-      dodaj("meta", {name: "apple-mobile-web-app-title", content: "APH Trener"});
+      dodaj("meta", {name: "apple-mobile-web-app-title", content: "APH"});
       dodaj("meta", {name: "apple-mobile-web-app-capable", content: "yes"});
-      dodaj("meta", {name: "theme-color", content: "#1c1b18"});
+      dodaj("meta", {name: "theme-color", content: "#000000"});
     } catch (e) {}
     </script>""", height=0)
 
