@@ -883,7 +883,7 @@ document.addEventListener("click", (e) => {
   }
   else if (act === "cpw") {
     const cel = w + 1;
-    const zajete = (S.workout.items || []).some(ex =>
+    const zajete = (S.workout.exercises || []).some(ex =>
       (ex.section === b.dataset.sec) && rawDose(ex, cel));
     if (!zajete || confirm("Week " + cel + " ma już wpisane dawki w tej sekcji.\n"
                          + "Nadpisać je tym, co jest w Week " + w + "?"))

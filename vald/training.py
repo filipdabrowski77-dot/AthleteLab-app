@@ -39,6 +39,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import uuid
 from datetime import date, timedelta
 
@@ -59,7 +60,11 @@ _STORE_KEY = "training_plans"
 # zapis trenera cofał serie odklikane w międzyczasie na telefonie — a tego
 # trener nie odtworzy, bo sam tego nie wpisywał (audyt 2026-09-20).
 _WYKONANIE_SESJI = ("done_weeks", "started_weeks", "done_date")
-_baza_wykonania: dict = {}      # snapshot pól wykonania sprzed moich zmian
+# snapshot pól wykonania sprzed moich zmian — osobno dla każdego wątku.
+# Telefon zawodnika i panel trenera to wątki JEDNEGO procesu Streamlit;
+# wspólny słownik nadpisywał odczyt panelu w trakcie zapisu z telefonu
+# i scalanie kasowało wykonanie z innego urządzenia (audyt 2026-09-24).
+_watek = threading.local()
 
 
 def _klucz_itemu(it: dict, i: int) -> str:
@@ -95,7 +100,7 @@ def _scal_plany(swieze: dict, moje: dict) -> dict:
     takie samo jak w bazie, a w świeżej inne — ktoś je zmienił po moim odczycie
     i to jego wartość zostaje.
     """
-    baza = _baza_wykonania
+    baza = getattr(_watek, "baza", {})
     swieze_w = _zbierz_wykonanie(swieze)
     moje_id = {p.get("id") for p in moje.get("plans", [])}
     wynik = []
@@ -139,8 +144,7 @@ def _load_all() -> dict:
         if not (isinstance(data, dict) and isinstance(data.get("plans"), list)):
             raise RuntimeError(
                 "Dane planów w magazynie mają nieoczekiwaną strukturę.")
-        _baza_wykonania.clear()
-        _baza_wykonania.update(_zbierz_wykonanie(data))
+        _watek.baza = _zbierz_wykonanie(data)
         return data
     # Tryb plikowy (lokalny dev / offline) — bez zmian.
     if not PLANS_PATH.exists():
@@ -377,6 +381,30 @@ def _load_z_serii(sets_done: list) -> str:
     return " / ".join(k or "—" for k in kgs) if any(kgs) else ""
 
 
+def load_tekstowy(params: dict) -> str:
+    """Load wpisany tekstem, a nie wyliczony z serii („80 80 80", „BW",
+    „20, 20, BW" — stare wpisy bez sets_done). "" gdy Load jest z serii."""
+    load = str((params or {}).get("load") or "").strip()
+    serie = [s if isinstance(s, dict) else {}
+             for s in ((params or {}).get("sets_done") or [])]
+    return load if load and load != _load_z_serii(serie) else ""
+
+
+def _ustaw_load(params: dict, done: list) -> None:
+    """Load po zmianie serii (params jeszcze ze STARYMI sets_done).
+    Load z serii liczy się od nowa; Load tekstowy zostaje, dopóki nowe serie
+    nie dadzą ciężaru — sama notatka albo ✓ bez kg nie może go skasować
+    (recenzja 2026-09-27: 12 takich wpisów w training_plans.json)."""
+    tekst = load_tekstowy(params)
+    load = _load_z_serii(done)
+    if load:
+        params["load"] = load
+    elif tekst:
+        params["load"] = tekst
+    else:
+        params.pop("load", None)
+
+
 def ustaw_serie(plan: dict, sess_id: str, item_i: int, wk: int, si: int,
                 stan: str, reps: str = "", kg: str = "") -> dict:
     """Odklikanie jednej serii w trakcie treningu (zawodnik, telefon).
@@ -399,21 +427,89 @@ def ustaw_serie(plan: dict, sess_id: str, item_i: int, wk: int, si: int,
     nowy = {"reps": (reps or "").strip() or (stare.get("reps") or ""),
             "kg": (kg or "").strip() or (stare.get("kg") or ""),
             "stan": stan if stan in (SERIA_OK, SERIA_SKIP) else ""}
+    # RPE wpisuje trener (tryb trenera) — klik zawodnika go nie kasuje
+    if (stare.get("rpe") or "").strip():
+        nowy["rpe"] = stare["rpe"]
     if not nowy["stan"]:
         nowy["tkniete"] = True   # cofnięcie: liczby zostają, stan pusty
     done[si] = nowy
     while done and not (done[-1].get("reps") or done[-1].get("kg")
                         or stan_serii(done[-1])):
         done.pop()
+    _ustaw_load(params, done)
     params["sets_done"] = done
-    load = _load_z_serii(done)
-    if load:
-        params["load"] = load
-    else:
-        params.pop("load", None)
     it["weeks"] = dict(item_weeks(it))
     it["weeks"][str(wk)] = params
     return plan
+
+
+def przecinek_dziesietny(x) -> str:
+    """„82.5" → „82,5" (UI po polsku); tekst bez liczb zostaje bez zmian."""
+    return re.sub(r"(?<=\d)\.(?=\d)", ",", str(x if x is not None else "").strip())
+
+
+def zapisz_cwiczenie(plan: dict, sess_id: str, item_i: int, wk: int,
+                     serie: list, notatka: str | None = None,
+                     exercise: str = "") -> bool:
+    """Pełny stan JEDNEGO ćwiczenia w tygodniu wk — tryb trenera (telefon).
+
+    serie: [{"kg","reps","rpe","stan": "ok"|"skip"|""}] — każda seria ma
+    własne liczby, niezależne od rozpiski (cięższe serie, falowanie).
+    Wiersz z liczbami, ale bez ✓, dostaje stan "" + tkniete (jak cofnięcie
+    u zawodnika) i nie liczy się do Load. notatka: None = bez zmian,
+    "" = usuń, tekst = session_note tego tygodnia. Load wpisany tekstem
+    (stary wpis bez serii) zostaje, dopóki serie nie dadzą ciężaru.
+
+    Ćwiczenie szukane po indeksie i nazwie, potem po samej nazwie (trener
+    mógł w międzyczasie przestawić rozpiskę na komputerze). Nie ma go —
+    False i plan bez zmian. Zapis do magazynu robi wołający."""
+    sess = next((s for s in ensure_sessions(plan) if s["id"] == sess_id), None)
+    if sess is None:
+        return False
+    items = sess.get("items") or []
+    nazwa = (exercise or "").strip().lower()
+
+    def _nazwa(x: dict) -> str:
+        return (x.get("exercise") or "").strip().lower()
+
+    if 0 <= item_i < len(items) and (not nazwa or _nazwa(items[item_i]) == nazwa):
+        it = items[item_i]
+    else:
+        pasujace = [j for j, x in enumerate(items) if nazwa and _nazwa(x) == nazwa]
+        if not pasujace:
+            return False
+        it = items[min(pasujace, key=lambda j: abs(j - item_i))]
+
+    done = []
+    for s in serie or []:
+        s = s if isinstance(s, dict) else {}
+        stan = s.get("stan") if s.get("stan") in (SERIA_OK, SERIA_SKIP) else ""
+        nowy = {"reps": str(s.get("reps") or "").strip(),
+                "kg": przecinek_dziesietny(s.get("kg")), "stan": stan}
+        rpe = przecinek_dziesietny(s.get("rpe"))
+        if rpe:
+            nowy["rpe"] = rpe
+        if not stan and (nowy["reps"] or nowy["kg"] or rpe):
+            nowy["tkniete"] = True
+        done.append(nowy)
+    while done and not (done[-1]["reps"] or done[-1]["kg"]
+                        or done[-1].get("rpe") or done[-1]["stan"]):
+        done.pop()
+
+    wlasny = str(wk) in item_weeks(it)
+    params = dict(week_params(it, wk))
+    _ustaw_load(params, done)
+    params["sets_done"] = done
+    if notatka is not None:
+        if notatka.strip():
+            params["session_note"] = notatka.strip()
+        else:
+            params.pop("session_note", None)
+    if not wlasny and not any(params.get(k) for k in _EXEC_FIELDS):
+        return True       # nic do zapisania — dziedziczenie rozpiski zostaje żywe
+    it["weeks"] = dict(item_weeks(it))
+    it["weeks"][str(wk)] = params
+    return True
 
 
 def oznacz_start(plan: dict, sess_id: str, wk: int) -> dict:
@@ -434,11 +530,104 @@ def oznacz_koniec(plan: dict, sess_id: str, wk: int) -> dict:
     return plan
 
 
+# ── zmiany rozpiski z telefonu (tryb trenera, Filip 2026-09-28: „usunąć,
+#    dodać, zamienić" w trakcie treningu) ────────────────────────────────────
+def rozpiska_z_tekstu(dawka: str, inh: dict | None = None) -> dict:
+    """„3 x 6 @ rpe 8" → {sets_n, reps, intent} — ta sama składnia co komórka
+    siatki (apply_grid). Bez „@" intent dziedziczy z inh, pusty tekst → inh."""
+    inh = inh or {}
+    cell = (dawka or "").strip()
+    if not cell:
+        return {k: inh.get(k, "") for k in ("sets_n", "reps", "intent", "rest")}
+    intent = inh.get("intent", "")
+    if "@" in cell:
+        cell, _int = cell.split("@", 1)
+        intent = _int.strip()
+    s, r = split_dose(cell.strip())
+    return {"sets_n": s, "reps": r, "intent": intent, "rest": inh.get("rest", "")}
+
+
+def _znajdz_item(sess: dict, item_i: int, exercise: str) -> int:
+    """Indeks ćwiczenia po pozycji i nazwie, potem po samej nazwie (jak
+    w zapisz_cwiczenie). -1 = nie ma."""
+    items = sess.get("items") or []
+    nazwa = (exercise or "").strip().lower()
+
+    def _nazwa(x: dict) -> str:
+        return (x.get("exercise") or "").strip().lower()
+
+    if 0 <= item_i < len(items) and (not nazwa or _nazwa(items[item_i]) == nazwa):
+        return item_i
+    pasujace = [j for j, x in enumerate(items) if nazwa and _nazwa(x) == nazwa]
+    return min(pasujace, key=lambda j: abs(j - item_i)) if pasujace else -1
+
+
+def usun_cwiczenie(plan: dict, sess_id: str, item_i: int, exercise: str = "") -> bool:
+    """Ćwiczenie znika z planu (wszystkie tygodnie); z wpisami zawodnika →
+    removed_items, tak jak przy usunięciu w edytorze. Numery porządkuje
+    normalize_slots (samotne „1a" → „1")."""
+    sess = next((s for s in ensure_sessions(plan) if s["id"] == sess_id), None)
+    if sess is None:
+        return False
+    j = _znajdz_item(sess, item_i, exercise)
+    if j < 0:
+        return False
+    it = sess["items"].pop(j)
+    if item_has_content(it):
+        sess["removed_items"] = list(sess.get("removed_items") or []) + [it]
+    normalize_slots(sess["items"])
+    return True
+
+
+def dodaj_cwiczenie(plan: dict, sess_id: str, section: str, exercise: str,
+                    dawka: str = "", wk: int = 1, slot: str = "") -> bool:
+    """Nowe ćwiczenie na końcu sekcji; rozpiska od tygodnia wk (wcześniejsze
+    tygodnie puste — nie dopisuję wstecz). Bez slotu dostaje kolejny numer."""
+    sess = next((s for s in ensure_sessions(plan) if s["id"] == sess_id), None)
+    nazwa = (exercise or "").strip()
+    if sess is None or not nazwa:
+        return False
+    items = sess.setdefault("items", [])
+    section = section or "Main"
+    if not slot:
+        numery = [int(m.group(1)) for x in items if x.get("section") == section
+                  for m in [re.match(r"^\s*(\d+)", str(x.get("slot") or ""))] if m]
+        slot = str(max(numery) + 1 if numery else 1)
+    nowy = {"slot": slot, "exercise": nazwa, "section": section, "note": "",
+            "weeks": {str(max(int(wk), 1)): rozpiska_z_tekstu(dawka)}}
+    ostatni = max((j for j, x in enumerate(items) if x.get("section") == section),
+                  default=-1)
+    items.insert(ostatni + 1, nowy)
+    return True
+
+
+def zamien_cwiczenie(plan: dict, sess_id: str, item_i: int, exercise: str,
+                     nowe: str, dawka: str = "", wk: int = 1) -> bool:
+    """Inne ćwiczenie w tym samym miejscu (cały plan, numer i sekcja
+    zostają). Nowa dawka — od tygodnia wk; wpisy tygodnia (kg/serie/
+    notatka) zostają. Bez dawki rozpiska bez zmian."""
+    sess = next((s for s in ensure_sessions(plan) if s["id"] == sess_id), None)
+    nazwa = (nowe or "").strip()
+    if sess is None or not nazwa:
+        return False
+    j = _znajdz_item(sess, item_i, exercise)
+    if j < 0:
+        return False
+    it = sess["items"][j]
+    it["exercise"] = nazwa
+    if (dawka or "").strip():
+        params = dict(week_params(it, wk))
+        params.update(rozpiska_z_tekstu(dawka, params))
+        it["weeks"] = dict(item_weeks(it))
+        it["weeks"][str(wk)] = params
+    return True
+
+
 def wykonanie_sesji(sess: dict, wk: int) -> list[dict]:
     """Co zawodnik odklikał w tygodniu wk — dla panelu trenera.
 
     Zwraca po jednym wpisie na ćwiczenie, które ma jakikolwiek ślad:
-    [{"exercise","slot","section","serie":[{"nr","stan","reps","kg"}],
+    [{"exercise","slot","section","serie":[{"nr","stan","reps","kg","rpe"}],
       "zrobione","pominiete","note"}]."""
     out = []
     for it in (sess.get("items") or []):
@@ -446,9 +635,10 @@ def wykonanie_sesji(sess: dict, wk: int) -> list[dict]:
         done = p.get("sets_done") or []
         serie = [{"nr": i + 1, "stan": stan_serii(s),
                   "reps": (s.get("reps") or "").strip(),
-                  "kg": (s.get("kg") or "").strip()}
+                  "kg": (s.get("kg") or "").strip(),
+                  "rpe": (s.get("rpe") or "").strip()}
                  for i, s in enumerate(done) if stan_serii(s) or s.get("reps")
-                 or s.get("kg")]
+                 or s.get("kg") or s.get("rpe")]
         if not serie and not (p.get("session_note") or "").strip():
             continue
         out.append({
@@ -661,10 +851,9 @@ def duplicate_as_next_block(plan: dict) -> dict:
                     break
             w1 = {f: last.get(f, "") for f in
                   ("sets_n", "reps", "intent", "rest")}
-            items.append({"section": it.get("section", ""),
-                          "slot": it.get("slot", ""),
-                          "exercise": it.get("exercise", ""),
-                          "note": it.get("note", ""),
+            # wszystkie pola pozycji (tempo, dwie_kg…) — bez pól wykonania
+            items.append({**{k: v for k, v in it.items()
+                             if k not in _EXEC_FIELDS},
                           "weeks": {"1": {**w1, "sets": []}}
                           if any(w1.values()) else {}})
         new["sessions"].append({"id": new_id(),
@@ -688,8 +877,8 @@ def _clean_weeks_execution(weeks: dict) -> dict:
 def duplicate_session(sess: dict, title_suffix: str = " (kopia)") -> dict:
     """Kopia treningu w ramach planu: pełna rozpiska (wszystkie tygodnie),
     wyczyszczone wykonanie i done_date."""
-    items = [{"section": it.get("section", ""), "slot": it.get("slot", ""),
-              "exercise": it.get("exercise", ""), "note": it.get("note", ""),
+    # wszystkie pola pozycji (tempo, dwie_kg…) — bez pól wykonania
+    items = [{**{k: v for k, v in it.items() if k not in _EXEC_FIELDS},
               "weeks": _clean_weeks_execution(item_weeks(it))}
              for it in (sess.get("items") or [])]
     title = (sess.get("title") or "").strip()

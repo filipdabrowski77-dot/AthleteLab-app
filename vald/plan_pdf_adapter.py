@@ -6,6 +6,7 @@ jeden trening = jedna strona, klikalne FILM, auto-skalowanie).
 Mapowanie sekcji na bloki szablonu:
   Prep          → blok „MOVEMENT PREP" w układzie prostym
                   (Ćwiczenie | Serie × powtórzenia | FILM)
+  Prep 2        → blok „MOVEMENT PREP 2" z kolumnami WEEK 1..N
   Plyo & Power  → blok „PLYO & POWER" z kolumnami WEEK 1..N
   Main          → blok „MAIN STRENGTH" z kolumnami WEEK 1..N
 """
@@ -138,7 +139,10 @@ def _legenda(prep_rows=None, cond_rows=None):
                       {"tytul": "INTENSYWNOŚĆ SKOKÓW",
                        "tabela": _int_tabela()}]}]
 
+# Prep 2 (rozpiski klubowe) — własny blok z tygodniami, bo edytor rozpisuje
+# go per tydzień; wykluczony z Main, więc bez tej linii znikał z PDF-u
 _SEC_BLOKI = (("Prep", "MOVEMENT PREP", True),
+              ("Prep 2", "MOVEMENT PREP 2", False),
               ("Plyo & Power", "PLYO & POWER", False),
               ("Main", "MAIN STRENGTH", False))
 _LITERY = "ABCDEFGH"
@@ -157,7 +161,7 @@ def _dawka(it: dict, wk: int) -> str:
 def _sec_items(items: list, section: str) -> list:
     if section == "Main":
         return [it for it in items
-                if it.get("section") not in ("Prep", "Plyo & Power",
+                if it.get("section") not in ("Prep", "Prep 2", "Plyo & Power",
                                              "Conditioning")]
     return [it for it in items if it.get("section") == section]
 

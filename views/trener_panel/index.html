@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<!-- w ramce Streamlita szerokość i tak daje iframe; meta przydaje się,
+     gdy plik otwiera test na emulowanym telefonie (inaczej układ 980 px) -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* ten sam adres co w app.py — arkusz fontu jest już w pamięci przeglądarki */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Archivo:wght@400;500;600;700;900&display=swap');
+/* Tryb trenera na telefonie — serie do wpisania. Wygląd kółek i sekcji jak
+   w widoku zawodnika (vald/ui_training.py → _PV_CSS), BEZ linków do filmów:
+   „mogą być te kółka, tylko nie musisz mieć linków" (Filip 2026-09-27).
+   Bez position:fixed/sticky i bez vh — ramka ma wysokość treści
+   (setFrameHeight), więc „ekran" wewnątrz niej nie istnieje (CLAUDE.md). */
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;padding:0;background:transparent;color:#1c1b18;
+  font-family:'Archivo',-apple-system,"Segoe UI",system-ui,sans-serif;
+  -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;
+  touch-action:manipulation}
+button,input,textarea{font-family:inherit;color:inherit;margin:0}
+button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none}
+/* flow-root: marginesy dzieci liczą się do wysokości ramki (setFrameHeight) */
+#root{display:flow-root;padding:0 max(0px,env(safe-area-inset-right)) 12px max(0px,env(safe-area-inset-left))}
+
+/* kółko, nazwa, dawka — rozmiary 1:1 z _PV_CSS (pilnuje test_kontrakt_ui) */
+.pvslot{width:32px;height:32px;border-radius:999px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.pvname{font-size:16px;font-weight:700;color:#1c1b18;overflow-wrap:anywhere}
+.pvdose{font-size:15px;font-weight:700;color:#1c1b18;font-variant-numeric:tabular-nums}
+.pvintent{font-size:12px;font-weight:600;color:oklch(.5 .13 60);background:oklch(.96 .04 75);border-radius:6px;padding:2px 8px;vertical-align:1px;margin-left:2px}
+.pvcol{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.pvsec{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px}
+.pvsec i{display:inline-block;width:4px;height:15px;border-radius:2px;flex-shrink:0}
+.sektyt,.sekbtn{display:inline-flex;align-items:center;gap:8px;min-height:44px}
+.sekbtn{border:0;background:transparent;padding:0 8px 0 0;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit}
+.chev{font-size:11px;opacity:.7}
+.wszystko{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid currentColor;background:#fff;font-size:14px;font-weight:700;letter-spacing:0;text-transform:none;color:inherit;white-space:nowrap}
+
+/* karta ćwiczenia */
+.karta{background:#fff;border:1px solid #ebe9e2;border-radius:14px;padding:12px 12px 10px;margin:0 0 10px}
+.glowa{display:flex;gap:12px;align-items:flex-start}
+.ost{font-size:13px;color:#54514a;font-variant-numeric:tabular-nums}
+.det{font-size:12.5px;color:#8a867c}
+.kropka{font-size:11.5px;font-weight:600;color:#a09c92;white-space:nowrap;padding-top:3px}
+.kropka.ok{color:oklch(.5 .12 155)}
+.kropka:empty{display:none}
+.zwin{min-width:44px;min-height:44px;border:0;background:transparent;color:#a09c92;font-size:15px;margin:-10px -10px 0 0;padding:0}
+
+/* serie: nr | kg | powt. | RPE | ✓ | ✕ — pola 44 px, font 16 px (Safari
+   powiększa stronę przy fokusie w polu z mniejszą czcionką) */
+.serie{margin-top:10px}
+.sh,.sr{display:grid;grid-template-columns:18px minmax(0,1.15fr) minmax(0,1fr) minmax(0,.8fr) 44px 44px;gap:6px;align-items:center}
+.sh{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#a09c92;padding:0 0 4px}
+.sh span{text-align:center}
+.sr{margin-bottom:6px}
+.nr{font-size:13px;font-weight:700;color:#8a867c;text-align:center;font-variant-numeric:tabular-nums}
+.pole{display:block;width:100%;height:44px;border:1px solid #e3e0d8;border-radius:10px;background:#fdfdfb;font-size:16px;font-weight:600;text-align:center;padding:0 4px;font-variant-numeric:tabular-nums;-webkit-appearance:none;appearance:none;outline:none}
+.pole:focus{border-color:#e8c96a;box-shadow:0 0 0 2px #f6e8bd;background:#fff}
+.pole::placeholder{color:#c3c0b8;font-weight:500}
+.btn-ok,.btn-nie{width:44px;height:44px;border-radius:10px;border:1px solid #d8d5cc;background:#fff;font-size:19px;font-weight:700;padding:0;display:inline-flex;align-items:center;justify-content:center;color:#6f6b61}
+.sr.ok .btn-ok{background:#1c1b18;border-color:#1c1b18;color:#fff}
+.sr.ok .pole{border-color:#cfccc3;background:#fff}
+.sr.skip .btn-nie{background:#fdf3f2;border-color:#e5c3bd;color:#c0392b}
+.sr.skip .pole{opacity:.45}
+.akcje{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.akcja{min-height:44px;padding:0 14px;border:1px dashed #d8d5cc;border-radius:10px;background:transparent;font-size:14px;font-weight:600;color:#6f6b61}
+.nota{display:block;width:100%;margin-top:8px;min-height:44px;border:1px solid #e3e0d8;border-radius:10px;background:#fdfdfb;font-size:16px;padding:10px 12px;resize:none;overflow:hidden;line-height:1.35;outline:none}
+.nota:focus{border-color:#e8c96a;box-shadow:0 0 0 2px #f6e8bd;background:#fff}
+.odrz{margin-top:8px;font-size:13px;font-weight:600;color:#a33b2c;background:#fdf3f2;border-radius:8px;padding:8px 10px}
+/* zmiana rozpiski z telefonu: zamień / usuń / + ćwiczenie (Filip 2026-09-28) */
+.wiecej{min-width:44px;min-height:44px;margin-left:auto;padding:0 10px;border:1px dashed #d8d5cc;border-radius:10px;background:transparent;font-size:18px;font-weight:700;color:#6f6b61;letter-spacing:.1em}
+.edycja{margin-top:8px;padding:10px;border:1px solid #ebe9e2;border-radius:12px;background:#faf9f6}
+.edycja .tyt{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#a09c92;margin:0 0 6px}
+.edp{display:block;width:100%;height:44px;border:1px solid #e3e0d8;border-radius:10px;background:#fff;font-size:16px;padding:0 12px;margin-bottom:6px;-webkit-appearance:none;appearance:none;outline:none}
+.edp:focus{border-color:#e8c96a;box-shadow:0 0 0 2px #f6e8bd}
+.edp::placeholder{color:#c3c0b8}
+.edbtn{display:flex;gap:6px;flex-wrap:wrap}
+.edbtn button{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid #d8d5cc;background:#fff;font-size:14px;font-weight:700;color:#1c1b18}
+.edbtn .glowny{background:#1c1b18;border-color:#1c1b18;color:#fff}
+.edbtn .usun{color:#c0392b;border-color:#e5c3bd}
+.edbtn .usun.pewny{background:#c0392b;border-color:#c0392b;color:#fff}
+.edbtn .anuluj{border-style:dashed;color:#6f6b61}
+.dodajcw{width:100%;min-height:44px;margin:0 0 10px;border:1px dashed #d8d5cc;border-radius:12px;background:transparent;font-size:14px;font-weight:600;color:#6f6b61}
+
+/* zwinięta sekcja (Prep, Plyo): jeden wiersz na ćwiczenie */
+.mini{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;background:#fff;border:1px solid #ebe9e2;border-radius:14px;padding:9px 12px;margin:0 0 8px;text-align:left}
+.mdose{font-size:13px;font-weight:600;color:#6f6b61;font-variant-numeric:tabular-nums}
+.licz{font-size:13px;font-weight:700;color:#8a867c;white-space:nowrap;font-variant-numeric:tabular-nums}
+.licz.pelny{color:oklch(.5 .12 155)}
+
+.pasek{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;font-weight:600;border-radius:12px;padding:4px 4px 4px 12px;margin:4px 0 8px;background:#fdf6e3;color:#7a5b16;border:1px solid #ecdfc4}
+.pasek.blad{background:#fdf3f2;color:#a33b2c;border-color:#e5c3bd}
+.pasek button{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid currentColor;background:#fff;color:inherit;font-weight:700;font-size:14px}
+.stopka{margin:18px 0 4px}
+.zakoncz{width:100%;min-height:52px;border:0;border-radius:999px;background:#1c1b18;color:#fff;font-size:16px;font-weight:700}
+.zakoncz[disabled]{opacity:.55}
+.zapisany{font-size:15px;font-weight:700;text-align:center;color:oklch(.45 .12 155);padding:8px 0 2px}
+.maly{font-size:12.5px;color:#8a867c;text-align:center}
+.pusto{font-size:14px;color:#8a867c;padding:12px 0}
+#lista.czeka{pointer-events:none;opacity:.5}
+@media (max-width:340px){
+  .karta{padding:10px 8px}
+  .sh,.sr{gap:4px;grid-template-columns:14px minmax(0,1.15fr) minmax(0,1fr) minmax(0,.8fr) 44px 44px}
+}
+</style>
+</head>
+<body>
+<div id="root"><div id="pasek" class="pasek" hidden></div><div id="lista"></div><div id="stopka" class="stopka"></div></div>
+<script>
+/* ---------------------------------------------------------------- protokół Streamlit
+   Plain-JS component (bez Node i buildu). Kontrakt argumentów i operacji:
+   views/trener_panel.py. Python: vald/ui_training.py → _trk_konsumuj
+   (wartość konsumowana PRZED renderem) → _trk_zastosuj → _TRK_OPY.
+
+   Każda wysyłka niesie WSZYSTKIE niepotwierdzone operacje (kolejka), a
+   operacja „cwiczenie" to PEŁNY stan jednego ćwiczenia w tygodniu — więc
+   ponowienie niczego nie psuje. Python odsyła `ack` (id zapisanych); do tego
+   czasu karta trzyma stan z telefonu i echo nie nadpisuje świeżych wpisów. */
+// IID: po przeładowaniu ramki licznik startuje od zera, a Python pamięta
+// ostatni seq — bez IID pierwsza wysyłka nowej ramki zostałaby pominięta
+const IID = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+let N = 0;
+const nowyId = () => IID + "-" + (++N);
+const POST = (m) => parent.postMessage(Object.assign({ isStreamlitMessage: true }, m), "*");
+const READY = () => POST({ type: "streamlit:componentReady", apiVersion: 1 });
+const SETH = (h) => POST({ type: "streamlit:setFrameHeight", height: h });
+
+const LS = "aph.trk.outbox";      // kolejka przeżywa zablokowany telefon i restart serwera
+const TTL = 12 * 3600 * 1000;     // starszych wpisów nie wysyłam (mogłyby nadpisać nowsze)
+const ZAPISANE_MS = 2500;         // jak długo karta pokazuje „✓ zapisane"
+const PASEK_MS = 1500;            // pasek „czeka na zapis" dopiero po tym czasie
+const PONOW_MS = 10000;           // ponowienie niepotwierdzonej kolejki
+const ZWLOKA_MS = 600;            // wysyłka poprawki pola po jego opuszczeniu
+
+const S = {
+  ctx: null, sekcje: [], karty: [], status: {},
+  fp: null, odlozone: null, gotowy: false,
+  stan: {},      // klucz karty → {serie:[{kg,reps,rpe,stan}], notatka, notZm}
+  meta: {},      // klucz karty → karta z Pythona (także z innego treningu/tygodnia)
+  metaCtx: {},   // klucz karty → ctx, z którego pochodzi
+  brudne: {},    // klucz karty → wpisane, jeszcze nie w kolejce
+  ile: {},       // klucz karty → liczba wierszy ustawiona przez + / − seria
+  otwarte: {}, sekOtw: {}, notOtw: {},
+  nazwy: [],     // Baza ćwiczeń — podpowiedzi przy zamianie / dodaniu
+  ed: {},        // klucz karty → {nowe, dawka, pewny} (formularz zamiany)
+  dod: {},       // sekcja → {nowe, dawka} (formularz „+ ćwiczenie")
+  odrzSek: {},   // sekcja → powód odrzucenia dodania
+  kolejka: {},   // miejsce („c|plan|sesja|tydz|i", „k|plan|sesja|tydz") → operacja
+  zapisane: {}, odrz: {}, odrzKoniec: "", blad: "",
+  wcisniety: false, ostWys: 0, tWys: null,
+};
+const root = document.getElementById("root");
+
+/* ---------------------------------------------------------------- pomocnicze */
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const txt = (v) => String(v == null ? "" : v).trim();
+const ctxKlucz = (c) => (c ? `${c.plan_id}|${c.sess_id}|${c.wk}` : "");
+const kl = (karta) => ctxKlucz(S.ctx) + "|" + karta.i;
+const miejsceOp = (op) => op.typ === "usun" || op.typ === "dodaj" || op.typ === "zamien"
+  ? miejsceEd(op)
+  : (op.typ === "koniec" ? "k|" : "c|") + ctxKlucz(op) + (op.typ === "koniec" ? "" : "|" + op.i);
+const kartaOp = (op) => ctxKlucz(op) + "|" + op.i;
+const oczekujace = () => Object.keys(S.kolejka).length;
+const TYPY = new Set(["cwiczenie", "koniec", "usun", "dodaj", "zamien"]);
+const EDYCJE = new Set(["usun", "dodaj", "zamien"]);
+// zmiana rozpiski tego treningu czeka na zapis — do potwierdzenia lista jest
+// zablokowana: klucz karty to indeks, a po zapisie indeksy się przesuwają,
+// więc wpis zrobiony w międzyczasie trafiłby do innego ćwiczenia (przegląd 2026-09-28)
+const edycjaCzeka = () => !!S.ctx && Object.values(S.kolejka).some(
+  (op) => EDYCJE.has(op.typ) && ctxKlucz(op) === ctxKlucz(S.ctx));
+// zmiana rozpiski: własne miejsce w kolejce (nie zastępuje wpisów serii)
+const miejsceEd = (op) => "e|" + op.id;
+
+function kopiaSerii(serie) {
+  return (serie || []).map((s) => ({ kg: txt(s && s.kg), reps: txt(s && s.reps),
+    rpe: txt(s && s.rpe), stan: (s && s.stan) || "" }));
+}
+function zSerwera(karta) {
+  return { serie: kopiaSerii(karta.serie), notatka: txt(karta.notatka), notZm: false };
+}
+function zOp(op, karta) {
+  return { serie: kopiaSerii(op.serie),
+    notatka: op.notatka == null ? txt(karta.notatka) : String(op.notatka),
+    notZm: op.notatka != null };
+}
+function seria(st, si) {
+  while (st.serie.length <= si) st.serie.push({ kg: "", reps: "", rpe: "", stan: "" });
+  return st.serie[si];
+}
+function przytnij(st) {
+  const pusta = (s) => !(txt(s.kg) || txt(s.reps) || txt(s.rpe) || s.stan);
+  while (st.serie.length && pusta(st.serie[st.serie.length - 1])) st.serie.pop();
+}
+// wierszy: tyle, ile rozpisał trener (albo ustawił + / −), nigdy mniej niż wpisanych
+function ileWierszy(k) {
+  const karta = S.meta[k], st = S.stan[k];
+  const n0 = S.ile[k] != null ? S.ile[k] : Math.max(+karta.n_plan || 1, 1);
+  return Math.max(n0, st.serie.length, 1);
+}
+const stanW = (st, si) => (st.serie[si] || {}).stan || "";
+function ileOk(k) {
+  const st = S.stan[k], n = ileWierszy(k);
+  let o = 0;
+  for (let si = 0; si < n; si++) if (stanW(st, si) === "ok") o++;
+  return o;
+}
+function rozstrzygnieta(k) {
+  const st = S.stan[k], n = ileWierszy(k);
+  for (let si = 0; si < n; si++) if (!stanW(st, si)) return false;
+  return true;
+}
+function poprzednia(st, si, f) {
+  for (let j = si - 1; j >= 0; j--) {
+    const s = st.serie[j];
+    if (s && s.stan !== "skip" && txt(s[f])) return txt(s[f]);
+  }
+  return "";
+}
+// powtórzenia do jednego stuknięcia ✓: z rozpiski, gdy jednoznaczna („7",
+// „6, 6, 6" — Python daje je w reps_plan), inaczej z poprzedniej serii;
+// przy „8-12" bez poprzedniej — puste (dolna granica byłaby zmyślona)
+function repsDoWstawienia(k, si) {
+  const karta = S.meta[k];
+  return txt((karta.reps_plan || [])[si]) || poprzednia(S.stan[k], si, "reps");
+}
+// jedno stuknięcie ✓: powt. jak wyżej, kg z poprzedniej serii tej karty
+// (pierwszą trener wpisuje sam), RPE nigdy samo. Drugie ✓ cofa — liczby zostają.
+function odhacz(k, si) {
+  const s = seria(S.stan[k], si);
+  if (s.stan === "ok") { s.stan = ""; return; }
+  s.stan = "ok";
+  if (!txt(s.reps)) s.reps = repsDoWstawienia(k, si);
+  if (!txt(s.kg)) s.kg = poprzednia(S.stan[k], si, "kg");
+}
+function pomin(k, si) {
+  const s = seria(S.stan[k], si);
+  s.stan = s.stan === "skip" ? "" : "skip";
+}
+// podpowiedź powtórzeń w polu: element listy dla tej serii („5+5, 5+5" → „5+5");
+// długi opis („last week: @ 70, …", „25-30 sec ISO") zostaje tylko w dawce nad
+// seriami — w polu 50–70 px byłby uciętym „last wee"
+function hintReps(karta, si) {
+  const r = txt(karta.reps_hint), czesci = r.split(",").map(txt);
+  const h = czesci.length > 1 ? (czesci[si] || "") : r;
+  return h.length <= 7 ? h : "";
+}
+// szare podpowiedzi = to, co wstawi ✓; kg pierwszej serii i zakres powtórzeń
+// to tylko przypomnienie. W serii odhaczonej pusto znaczy pusto.
+function podpowiedzi(k, si) {
+  const karta = S.meta[k], st = S.stan[k], s = st.serie[si] || {};
+  if (s.stan) return { kg: "", reps: "", rpe: "" };
+  return { kg: si === 0 ? txt(karta.kg_hint) : poprzednia(st, si, "kg"),
+    reps: repsDoWstawienia(k, si) || hintReps(karta, si), rpe: "" };
+}
+function wpisy(n) {
+  const d = n % 10, s = n % 100;
+  if (n === 1) return "1 wpis czeka na zapis";
+  if (d >= 2 && d <= 4 && !(s >= 12 && s <= 14)) return `${n} wpisy czekają na zapis`;
+  return `${n} wpisów czeka na zapis`;
+}
+
+/* ---------------------------------------------------------------- kolejka i wysyłka */
+function zapiszLS() {
+  try {
+    const ops = Object.values(S.kolejka);
+    if (ops.length) localStorage.setItem(LS, JSON.stringify(ops));
+    else localStorage.removeItem(LS);
+  } catch (e) { /* prywatne okno / blokada — kolejka zostaje w pamięci */ }
+}
+function wczytajLS() {
+  try {
+    const ops = JSON.parse(localStorage.getItem(LS) || "[]"), teraz = Date.now();
+    if (!Array.isArray(ops)) return;
+    for (const op of ops) {
+      if (op && op.id && TYPY.has(op.typ)
+          && teraz - (+op.t || 0) < TTL) S.kolejka[miejsceOp(op)] = op;
+    }
+  } catch (e) { /* uszkodzony wpis — pomijam */ }
+}
+function kolejkuj(k) {
+  const karta = S.meta[k], st = S.stan[k], c = S.metaCtx[k];
+  if (!karta || !st || !c) return;
+  const op = { id: nowyId(), typ: "cwiczenie", t: Date.now(),
+    plan_id: c.plan_id, sess_id: c.sess_id, wk: c.wk,
+    i: karta.i, exercise: karta.exercise || "",
+    serie: kopiaSerii(st.serie),
+    // null = notatki nie ruszam (nie nadpisuję wpisu zawodnika starszą wersją)
+    notatka: st.notZm ? String(st.notatka || "") : null };
+  S.kolejka[miejsceOp(op)] = op;   // nowsza wersja ćwiczenia zastępuje starszą
+  S.brudne[k] = false;
+  zapiszLS();
+  aktualizujKropki();
+}
+function splucz() {
+  let jest = false;
+  for (const k of Object.keys(S.brudne)) if (S.brudne[k]) { kolejkuj(k); jest = true; }
+  return jest;
+}
+function SEND() {
+  clearTimeout(S.tWys);
+  const ops = Object.values(S.kolejka);
+  if (!ops.length || !S.gotowy) return;
+  S.ostWys = Date.now();
+  POST({ type: "streamlit:setComponentValue",
+    value: { seq: nowyId(), iid: IID, ops }, dataType: "json" });
+  aktualizujPasek();
+  setTimeout(aktualizujPasek, PASEK_MS + 50);
+}
+function planujWysylke() {
+  clearTimeout(S.tWys);
+  S.tWys = setTimeout(SEND, ZWLOKA_MS);
+}
+
+/* ---------------------------------------------------------------- rysowanie */
+function htmlSlot(k, sek) {
+  const pelne = ileOk(k) === ileWierszy(k);
+  const styl = pelne ? `background:${sek.acc};color:#fff` : `background:${sek.tint};color:${sek.acc}`;
+  const karta = S.meta[k];
+  return `<span class="pvslot" style="${esc(styl)}">${esc(karta.slot)}</span>`;
+}
+function pole(a, f, v, ph, tryb, max, etyk) {
+  return `<input class="pole" ${a} data-f="${f}" type="text" inputmode="${tryb}"`
+    + ` enterkeyhint="next" autocomplete="off" autocorrect="off" autocapitalize="off"`
+    + ` spellcheck="false" maxlength="${max}" aria-label="${etyk}"`
+    + ` value="${esc(v)}" placeholder="${esc(ph)}">`;
+}
+function htmlKarta(k, sek, wZwinietej) {
+  const karta = S.meta[k], st = S.stan[k], n = ileWierszy(k), dk = `data-k="${esc(k)}"`;
+  let h = `<div class="karta" data-karta="${esc(k)}"><div class="glowa">${htmlSlot(k, sek)}`
+    + `<div class="pvcol"><span class="pvname">${esc(karta.exercise)}</span>`
+    + `<span class="pvdose">${esc(karta.dawka)}`
+    + (karta.intent ? ` <span class="pvintent">${esc(karta.intent)}</span>` : "") + `</span>`
+    + (karta.ostatnio ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "")
+    + (karta.det ? `<span class="det">${esc(karta.det)}</span>` : "")
+    + `</div><span class="kropka" data-kropka="${esc(k)}"></span>`
+    + (wZwinietej ? `<button type="button" class="zwin" data-act="zwin" ${dk} aria-label="Zwiń">▴</button>` : "")
+    + `</div><div class="serie"><div class="sh" aria-hidden="true"><span></span>`
+    + `<span>kg</span><span>powt.</span><span>RPE</span><span></span><span></span></div>`;
+  for (let si = 0; si < n; si++) {
+    const s = st.serie[si] || {}, p = podpowiedzi(k, si), a = `${dk} data-si="${si}"`;
+    h += `<div class="sr${s.stan ? " " + s.stan : ""}"><span class="nr">${si + 1}</span>`
+      + pole(a, "kg", s.kg, p.kg, "decimal", 12, "kg")
+      + pole(a, "reps", s.reps, p.reps, "numeric", 12, "powtórzenia")
+      + pole(a, "rpe", s.rpe, p.rpe, "decimal", 5, "RPE")
+      + `<button type="button" class="btn-ok" data-act="ok" ${a} aria-pressed="${s.stan === "ok"}"`
+      + ` aria-label="Seria ${si + 1} zrobiona">✓</button>`
+      + `<button type="button" class="btn-nie" data-act="nie" ${a} aria-pressed="${s.stan === "skip"}"`
+      + ` aria-label="Seria ${si + 1} niezrobiona">✕</button></div>`;
+  }
+  const nota = S.notOtw[k] || txt(st.notatka);
+  h += `</div><div class="akcje"><button type="button" class="akcja" data-act="plus" ${dk}>+ seria</button>`
+    + (n > 1 ? `<button type="button" class="akcja" data-act="minus" ${dk}>− seria</button>` : "")
+    + (nota ? "" : `<button type="button" class="akcja" data-act="notatka" ${dk}>+ notatka</button>`)
+    + `<button type="button" class="wiecej" data-act="wiecej" ${dk} aria-label="Zamień lub usuń ćwiczenie">⋯</button>`
+    + `</div>` + htmlEdycja(k)
+    + (nota ? `<textarea class="nota" ${dk} data-f="notatka" rows="1" maxlength="500"`
+      + ` placeholder="Notatka do ćwiczenia">${esc(st.notatka)}</textarea>` : "")
+    + (S.odrz[k] ? `<div class="odrz">${esc(S.odrz[k])}</div>` : "")
+    + `</div>`;
+  return h;
+}
+// formularz zamiany / usunięcia: inne ćwiczenie w tym miejscu (cały plan),
+// nowa dawka od tego tygodnia; usunięcie po drugim stuknięciu
+function htmlEdycja(k) {
+  const ed = S.ed[k];
+  if (!ed) return "";
+  const dk = `data-k="${esc(k)}"`;
+  return `<div class="edycja"><div class="tyt">Zamień na · dawka od W${esc(S.ctx.wk)}</div>`
+    + `<input class="edp" ${dk} data-ed="nowe" list="nazwy" type="text" autocomplete="off"`
+    + ` autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="80"`
+    + ` placeholder="Nazwa ćwiczenia" value="${esc(ed.nowe)}">`
+    + `<input class="edp" ${dk} data-ed="dawka" type="text" autocomplete="off" maxlength="40"`
+    + ` placeholder="Dawka, np. 3 x 8 @ rpe 8 (puste = bez zmian)" value="${esc(ed.dawka)}">`
+    + `<div class="edbtn"><button type="button" class="glowny" data-act="zamien" ${dk}>Zamień</button>`
+    + `<button type="button" class="usun${ed.pewny ? " pewny" : ""}" data-act="usun" ${dk}>`
+    + (ed.pewny ? "Na pewno usuń" : "Usuń z planu") + `</button>`
+    + `<button type="button" class="anuluj" data-act="anuluj" ${dk}>Anuluj</button></div></div>`;
+}
+function htmlDodaj(sek) {
+  const d = S.dod[sek.key], ds = `data-s="${esc(sek.key)}"`;
+  let h = S.odrzSek[sek.key] ? `<div class="odrz">${esc(S.odrzSek[sek.key])}</div>` : "";
+  if (!d) return h + `<button type="button" class="dodajcw" data-act="dodaj_otworz" ${ds}>+ ćwiczenie</button>`;
+  return h + `<div class="edycja" style="margin:0 0 10px"><div class="tyt">Nowe ćwiczenie · ${esc(sek.tytul)}</div>`
+    + `<input class="edp" ${ds} data-ed="nowe" list="nazwy" type="text" autocomplete="off"`
+    + ` autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="80"`
+    + ` placeholder="Nazwa ćwiczenia" value="${esc(d.nowe)}">`
+    + `<input class="edp" ${ds} data-ed="dawka" type="text" autocomplete="off" maxlength="40"`
+    + ` placeholder="Dawka, np. 3 x 8 @ rpe 8" value="${esc(d.dawka)}">`
+    + `<div class="edbtn"><button type="button" class="glowny" data-act="dodaj" ${ds}>Dodaj</button>`
+    + `<button type="button" class="anuluj" data-act="dodaj_anuluj" ${ds}>Anuluj</button></div></div>`;
+}
+function htmlNazwy() {
+  return `<datalist id="nazwy">` + S.nazwy.map((n) => `<option value="${esc(n)}"></option>`).join("") + `</datalist>`;
+}
+function htmlMini(k, sek) {
+  const karta = S.meta[k], n = ileWierszy(k), o = ileOk(k);
+  return `<button type="button" class="mini" data-act="otworz" data-k="${esc(k)}">${htmlSlot(k, sek)}`
+    + `<span class="pvcol"><span class="pvname">${esc(karta.exercise)}</span>`
+    + `<span class="mdose">${esc(karta.dawka)}${karta.intent ? " · " + esc(karta.intent) : ""}</span></span>`
+    + `<span class="kropka" data-kropka="${esc(k)}"></span>`
+    + `<span class="licz${o === n ? " pelny" : ""}">${o}/${n} ✓</span></button>`;
+}
+function wszystkoZrobione(ks) {
+  return ks.every(rozstrzygnieta) && ks.some((k) => ileOk(k) > 0);
+}
+function htmlSekcja(sek, ks, zwinieta) {
+  const tyt = `<i style="background:${esc(sek.acc)}"></i>${esc(sek.tytul)}`;
+  let h = `<div class="pvsec" style="color:${esc(sek.acc)}">`;
+  if (sek.zwinieta) {
+    h += `<button type="button" class="sekbtn" data-act="sekcja" data-s="${esc(sek.key)}"`
+      + ` aria-expanded="${!zwinieta}">${tyt}<span class="chev">${zwinieta ? "▸" : "▾"}</span></button>`
+      + `<button type="button" class="wszystko" data-act="wszystko" data-s="${esc(sek.key)}">`
+      + (wszystkoZrobione(ks) ? "Cofnij wszystko" : "✓ Wszystko") + `</button>`;
+  } else {
+    h += `<span class="sektyt">${tyt}</span>`;
+  }
+  return h + `</div>`;
+}
+function render() {
+  let h = "";
+  for (const sek of S.sekcje) {
+    const karty = S.karty.filter((karta) => karta.section === sek.key);
+    if (!karty.length && !S.dod[sek.key]) continue;
+    const ks = karty.map(kl), zwinieta = sek.zwinieta && !S.sekOtw[sek.key];
+    // karta odrzucona przy wpisywaniu w innym polu: stan z serwera od razu
+    for (const k of ks) if (!S.stan[k]) S.stan[k] = zSerwera(S.meta[k]);
+    h += htmlSekcja(sek, ks, zwinieta);
+    for (const k of ks) h += (zwinieta && !S.otwarte[k]) ? htmlMini(k, sek) : htmlKarta(k, sek, zwinieta);
+    if (!zwinieta || S.dod[sek.key]) h += htmlDodaj(sek);
+  }
+  if (!h && S.ctx) h = `<div class="pusto">Ten trening nie ma jeszcze ćwiczeń.</div>`;
+  if (S.ctx) h += htmlNazwy();
+  const lista = document.getElementById("lista");
+  lista.innerHTML = h;
+  lista.classList.toggle("czeka", edycjaCzeka());
+  root.querySelectorAll("textarea.nota").forEach(autoWys);
+  renderStopka();
+  aktualizujPasek();
+  aktualizujKropki();
+  wysokosc();
+}
+function renderStopka() {
+  const el = document.getElementById("stopka");
+  if (!S.ctx || !S.karty.length) { el.innerHTML = ""; return; }
+  const czeka = !!S.kolejka["k|" + ctxKlucz(S.ctx)];
+  let h;
+  if (czeka) h = `<button type="button" class="zakoncz" disabled>Zapisuję…</button>`;
+  else if (S.status.stan === "Zapisany") {
+    h = `<div class="zapisany">✓ Zapisany${S.status.data ? " " + esc(S.status.data) : ""}</div>`
+      + `<div class="maly">Wpisy możesz dalej poprawiać.</div>`;
+  } else h = `<button type="button" class="zakoncz" data-act="koniec">Zakończ trening</button>`;
+  if (S.odrzKoniec) h += `<div class="odrz">${esc(S.odrzKoniec)}</div>`;
+  el.innerHTML = h;
+}
+function aktualizujKropki() {
+  const teraz = Date.now();
+  root.querySelectorAll("[data-kropka]").forEach((el) => {
+    const k = el.dataset.kropka;
+    let t = "", c = "kropka";
+    if (S.kolejka["c|" + k]) t = "zapisuję…";
+    else if (teraz - (S.zapisane[k] || 0) < ZAPISANE_MS) { t = "✓ zapisane"; c = "kropka ok"; }
+    if (el.textContent !== t) el.textContent = t;
+    el.className = c;
+  });
+}
+function aktualizujPasek() {
+  const el = document.getElementById("pasek");
+  const ops = Object.values(S.kolejka), n = ops.length;
+  const dawno = ops.some((op) => Date.now() - (+op.t || 0) >= PASEK_MS);
+  let h = "", c = "pasek";
+  if (n && S.blad) { h = `<span>Nie zapisano — ponawiam</span>`; c = "pasek blad"; }
+  else if (edycjaCzeka()) h = `<span>Zapisuję zmianę planu…</span>`;
+  else if (n && dawno) h = `<span>${esc(wpisy(n))}</span>`;
+  if (h) h += `<button type="button" data-act="ponow">Ponów</button>`;
+  if (el.innerHTML !== h) el.innerHTML = h;
+  el.className = c;
+  el.hidden = !h;
+}
+function autoWys(el) {
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + 2 + "px";
+}
+let H = -1;
+function wysokosc() {
+  const h = Math.ceil(root.getBoundingClientRect().height);
+  if (h !== H) { H = h; SETH(h); }
+}
+function odswiezPodpowiedzi(k) {
+  root.querySelectorAll(`input.pole[data-k="${CSS.escape(k)}"]`).forEach((el) => {
+    const v = podpowiedzi(k, +el.dataset.si)[el.dataset.f] || "";
+    if (el.placeholder !== v) el.placeholder = v;
+  });
+}
+
+/* ---------------------------------------------------------------- dane z Pythona */
+function wPolu() {
+  const akt = document.activeElement;
+  return !!akt && root.contains(akt) && (akt.tagName === "INPUT" || akt.tagName === "TEXTAREA")
+    && document.hasFocus();
+}
+function zastosuj(a) {
+  if (ctxKlucz(a.ctx) !== ctxKlucz(S.ctx)) S.odrzKoniec = "";
+  S.ctx = a.ctx || null;
+  S.sekcje = a.sekcje || [];
+  S.karty = a.karty || [];
+  S.status = a.status || {};
+  S.nazwy = Array.isArray(a.nazwy) ? a.nazwy : [];
+  for (const karta of S.karty) {
+    const k = kl(karta);
+    S.meta[k] = karta;
+    S.metaCtx[k] = S.ctx;
+    if (S.brudne[k] && S.stan[k]) continue;           // trener właśnie pisze
+    const op = S.kolejka["c|" + k];                    // niepotwierdzone: stan z telefonu
+    S.stan[k] = op ? zOp(op, karta) : zSerwera(karta);
+  }
+  render();
+}
+// nowe dane rysuję dopiero, gdy kursor wyszedł z pola i palec z ekranu —
+// przerysowanie zabrałoby fokus albo zgubiło rozpoczęte stuknięcie
+function sprobujOdlozone() {
+  if (!S.odlozone || wPolu() || S.wcisniety) return false;
+  const a = S.odlozone;
+  S.odlozone = null;
+  zastosuj(a);
+  return true;
+}
+function przyjmij(a) {
+  const ack = new Set((a.ack || []).map(String));
+  const odrz = new Map((a.odrzucone || []).map((o) => [String(o.id), o.powod || "Nie zapisano"]));
+  let zmiana = false, przerysuj = false;
+  for (const [m, op] of Object.entries(S.kolejka)) {
+    const edycja = op.typ === "usun" || op.typ === "dodaj" || op.typ === "zamien";
+    const k = op.typ === "koniec" || op.typ === "dodaj" ? null : kartaOp(op);
+    if (ack.has(String(op.id))) {
+      delete S.kolejka[m];
+      zmiana = true;
+      if (edycja) { zapomnijCtx(op); przerysuj = true; }
+      else if (k) { S.zapisane[k] = Date.now(); setTimeout(aktualizujKropki, ZAPISANE_MS + 50); }
+    } else if (odrz.has(String(op.id))) {
+      delete S.kolejka[m];
+      zmiana = przerysuj = true;
+      if (op.typ === "dodaj") S.odrzSek[op.section] = odrz.get(String(op.id));
+      else if (edycja) S.odrz[k] = odrz.get(String(op.id));
+      else if (k) { S.odrz[k] = odrz.get(String(op.id)); S.brudne[k] = false; delete S.stan[k]; }
+      else S.odrzKoniec = odrz.get(String(op.id));
+    }
+  }
+  S.blad = txt(a.blad);
+  if (zmiana) zapiszLS();
+  return przerysuj;
+}
+// po zmianie rozpiski indeksy ćwiczeń się przesuwają — stan lokalny tego
+// treningu (klucz = indeks) bierze się na nowo z danych z Pythona
+function zapomnijCtx(op) {
+  const pre = ctxKlucz(op) + "|";
+  for (const obj of [S.stan, S.brudne, S.ile, S.otwarte, S.notOtw, S.ed, S.odrz])
+    for (const k of Object.keys(obj)) if (k.startsWith(pre)) delete obj[k];
+}
+function kolejkujEd(op) {
+  splucz();                          // wpisane serie idą PRZED zmianą rozpiski
+  S.kolejka[miejsceOp(op)] = op;
+  zapiszLS();
+  render();
+  SEND();
+}
+window.addEventListener("message", (ev) => {
+  const d = ev.data;
+  if (!d || d.type !== "streamlit:render") return;
+  const a = d.args || {};
+  const przerysuj = przyjmij(a);
+  const fp = JSON.stringify([a.ctx || null, a.sekcje || [], a.karty || [], a.status || {}]);
+  if (fp !== S.fp || przerysuj) { S.fp = fp; S.odlozone = a; }
+  if (!sprobujOdlozone()) { renderStopka(); aktualizujPasek(); aktualizujKropki(); }
+  if (!S.gotowy) {                 // pierwsze dane: wyślij kolejkę z poprzedniej wizyty
+    S.gotowy = true;
+    if (oczekujace()) SEND();
+  }
+});
+
+/* ---------------------------------------------------------------- akcje */
+function zdejmijFokus() {
+  const akt = document.activeElement;
+  if (akt && root.contains(akt) && akt.blur) akt.blur();
+}
+function fokus(sel) {
+  const el = root.querySelector(sel);
+  if (el) el.focus();
+}
+function zmienione(k) {
+  S.odrz[k] = "";
+  kolejkuj(k);
+  render();
+  SEND();
+}
+root.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-act]");
+  if (!b || !root.contains(b) || b.disabled) return;
+  if (edycjaCzeka() && b.dataset.act !== "ponow") return;
+  const k = b.dataset.k, si = +b.dataset.si, s = b.dataset.s;
+  switch (b.dataset.act) {
+    case "ok":
+    case "nie":
+      if (!S.stan[k]) return;
+      zdejmijFokus();
+      (b.dataset.act === "ok" ? odhacz : pomin)(k, si);
+      zmienione(k);
+      break;
+    case "plus": {
+      if (!S.stan[k]) return;
+      S.ile[k] = ileWierszy(k) + 1;           // pusty wiersz — nic nie wysyłam
+      render();
+      fokus(`input.pole[data-k="${CSS.escape(k)}"][data-si="${S.ile[k] - 1}"][data-f="kg"]`);
+      break;
+    }
+    case "minus": {
+      if (!S.stan[k]) return;
+      const n = ileWierszy(k), st = S.stan[k];
+      if (n <= 1) return;
+      zdejmijFokus();
+      S.ile[k] = n - 1;
+      if (st.serie.length >= n) { st.serie.length = n - 1; przytnij(st); zmienione(k); }
+      else render();
+      break;
+    }
+    case "notatka":
+      S.notOtw[k] = true;
+      render();
+      fokus(`textarea.nota[data-k="${CSS.escape(k)}"]`);
+      break;
+    case "otworz":
+      S.otwarte[k] = true;
+      render();
+      break;
+    case "zwin":
+      zdejmijFokus();
+      S.otwarte[k] = false;
+      render();
+      break;
+    case "sekcja":
+      zdejmijFokus();
+      S.sekOtw[s] = !S.sekOtw[s];
+      if (!S.sekOtw[s]) for (const karta of S.karty) if (karta.section === s) S.otwarte[kl(karta)] = false;
+      render();
+      break;
+    case "wszystko": {
+      // zwinięta sekcja jednym stuknięciem: te same reguły co pojedyncze ✓;
+      // ✕ (seria niezrobiona) zostaje, „Cofnij" zdejmuje tylko ✓
+      zdejmijFokus();
+      const ks = S.karty.filter((karta) => karta.section === s).map(kl);
+      const cofnij = wszystkoZrobione(ks);
+      for (const kk of ks) {
+        const n = ileWierszy(kk), st = S.stan[kk];
+        for (let i = 0; i < n; i++) {
+          const w = seria(st, i);
+          if (cofnij) { if (w.stan === "ok") w.stan = ""; } else if (!w.stan) odhacz(kk, i);
+        }
+        przytnij(st);
+        S.odrz[kk] = "";
+        kolejkuj(kk);
+      }
+      render();
+      SEND();
+      break;
+    }
+    case "koniec": {
+      zdejmijFokus();
+      splucz();
+      const c = S.ctx;
+      const op = { id: nowyId(), typ: "koniec", t: Date.now(),
+        plan_id: c.plan_id, sess_id: c.sess_id, wk: c.wk };
+      S.kolejka[miejsceOp(op)] = op;
+      S.odrzKoniec = "";
+      zapiszLS();
+      render();
+      SEND();
+      break;
+    }
+    case "ponow":
+      splucz();
+      SEND();
+      break;
+    case "wiecej":
+      if (!S.stan[k]) return;
+      zdejmijFokus();
+      S.ed[k] = S.ed[k] ? null : { nowe: "", dawka: "", pewny: false };
+      render();
+      if (S.ed[k]) fokus(`input.edp[data-k="${CSS.escape(k)}"][data-ed="nowe"]`);
+      break;
+    case "anuluj":
+      S.ed[k] = null;
+      render();
+      break;
+    case "zamien": {
+      const ed = S.ed[k], karta = S.meta[k], c = S.metaCtx[k];
+      if (!ed || !karta) return;
+      if (!txt(ed.nowe)) { fokus(`input.edp[data-k="${CSS.escape(k)}"][data-ed="nowe"]`); return; }
+      zdejmijFokus();
+      S.ed[k] = null;
+      S.odrz[k] = "";
+      kolejkujEd({ id: nowyId(), typ: "zamien", t: Date.now(), plan_id: c.plan_id,
+        sess_id: c.sess_id, wk: c.wk, i: karta.i, exercise: karta.exercise || "",
+        nowe: txt(ed.nowe), dawka: txt(ed.dawka) });
+      break;
+    }
+    case "usun": {
+      const ed = S.ed[k], karta = S.meta[k], c = S.metaCtx[k];
+      if (!ed || !karta) return;
+      if (!ed.pewny) { ed.pewny = true; render(); return; }   // drugie stuknięcie
+      zdejmijFokus();
+      S.ed[k] = null;
+      S.odrz[k] = "";
+      kolejkujEd({ id: nowyId(), typ: "usun", t: Date.now(), plan_id: c.plan_id,
+        sess_id: c.sess_id, wk: c.wk, i: karta.i, exercise: karta.exercise || "" });
+      break;
+    }
+    case "dodaj_otworz":
+      zdejmijFokus();
+      S.dod[s] = { nowe: "", dawka: "" };
+      S.odrzSek[s] = "";
+      render();
+      fokus(`input.edp[data-s="${CSS.escape(s)}"][data-ed="nowe"]`);
+      break;
+    case "dodaj_anuluj":
+      S.dod[s] = null;
+      render();
+      break;
+    case "dodaj": {
+      const d = S.dod[s], c = S.ctx;
+      if (!d || !c) return;
+      if (!txt(d.nowe)) { fokus(`input.edp[data-s="${CSS.escape(s)}"][data-ed="nowe"]`); return; }
+      zdejmijFokus();
+      S.dod[s] = null;
+      S.odrzSek[s] = "";
+      kolejkujEd({ id: nowyId(), typ: "dodaj", t: Date.now(), plan_id: c.plan_id,
+        sess_id: c.sess_id, wk: c.wk, section: s, nowe: txt(d.nowe), dawka: txt(d.dawka) });
+      break;
+    }
+  }
+  sprobujOdlozone();
+});
+root.addEventListener("input", (e) => {
+  const el = e.target, k = el.dataset && el.dataset.k;
+  if (el.dataset && el.dataset.ed) {              // formularz zamiany / dodania
+    const f = el.dataset.ed, cel = k ? S.ed[k] : S.dod[el.dataset.s];
+    if (cel) cel[f] = el.value;
+    return;
+  }
+  if (!k || !S.stan[k]) return;
+  const st = S.stan[k];
+  if (el.dataset.f === "notatka") { st.notatka = el.value; st.notZm = true; autoWys(el); }
+  else { seria(st, +el.dataset.si)[el.dataset.f] = el.value; odswiezPodpowiedzi(k); }
+  S.brudne[k] = true;
+  S.odrz[k] = "";
+});
+// poprawka pola: do kolejki (i localStorage) od razu po wyjściu z pola,
+// wysyłka po ZWLOKA_MS — kolejne pola tej samej serii idą jedną wysyłką
+root.addEventListener("focusout", (e) => {
+  const k = e.target.dataset && e.target.dataset.k;
+  if (k && S.brudne[k]) { kolejkuj(k); planujWysylke(); }
+  setTimeout(sprobujOdlozone, 60);
+});
+root.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.classList.contains("edp")) {
+    e.preventDefault();
+    const nast = e.target.nextElementSibling;
+    if (nast && nast.classList.contains("edp")) nast.focus(); else e.target.blur();
+    return;
+  }
+  if (e.key !== "Enter" || !e.target.classList.contains("pole")) return;
+  e.preventDefault();
+  const pola = [...root.querySelectorAll("input.pole")], i = pola.indexOf(e.target);
+  if (i >= 0 && i + 1 < pola.length) pola[i + 1].focus(); else e.target.blur();
+});
+root.addEventListener("pointerdown", () => { S.wcisniety = true; });
+const puszczony = () => { S.wcisniety = false; setTimeout(sprobujOdlozone, 400); };
+window.addEventListener("pointerup", puszczony);
+window.addEventListener("pointercancel", puszczony);
+// stuknięcie poza ramką (tydzień, trening, ← Zawodnicy) — wyślij, zanim
+// Streamlit przerysuje stronę; blokada ekranu — to samo
+window.addEventListener("blur", () => { if (splucz() || oczekujace()) SEND(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") { if (splucz() || oczekujace()) SEND(); }
+  else if (oczekujace()) SEND();
+});
+window.addEventListener("pagehide", () => { splucz(); });
+window.addEventListener("online", () => { if (oczekujace()) SEND(); });
+setInterval(() => {
+  if (oczekujace() && Date.now() - S.ostWys >= PONOW_MS - 1000) SEND();
+}, PONOW_MS);
+if (window.ResizeObserver) new ResizeObserver(wysokosc).observe(root);
+
+wczytajLS();
+READY();
+render();
+</script>
+</body>
+</html>

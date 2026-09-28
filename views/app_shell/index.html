@@ -52,6 +52,8 @@ select{appearance:none;background-image:none}
 .me i{width:24px;height:24px;border-radius:999px;background:#ecebe6;font-size:10.5px;font-weight:700;
   color:var(--dim);display:inline-flex;align-items:center;justify-content:center}
 .me span{font-size:12.5px;font-weight:600;color:var(--dim)}
+.me .wyloguj{margin-left:auto;border:none;background:transparent;color:var(--mute);font-size:12px;cursor:pointer;padding:4px 2px}
+.me .wyloguj:hover{color:var(--ink);text-decoration:underline}
 
 /* ---- page ---- */
 .main{flex:1;min-width:0;position:relative}
@@ -189,6 +191,18 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 .modal .mb{padding:20px;display:flex;flex-direction:column;gap:14px}
 .modal .mf{display:flex;align-items:center;gap:9px;padding:14px 20px;border-top:1px solid var(--hair2);background:#fdfdfb}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+/* Instrukcja obsługi (Filip 2026-09-28: prosto, najważniejsze opcje, bez ściany tekstu) */
+.brakpt{margin:12vh auto 0;max-width:760px;text-align:center;font-size:38px;line-height:1.25;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+@media (max-width:700px){.brakpt{font-size:26px;margin-top:8vh}}
+.helpgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;margin-top:22px}
+.hcard{background:var(--card);border:1px solid var(--line2);border-radius:10px;padding:14px 16px}
+.hcard h3{margin:0 0 3px;font-size:15px;font-weight:700}
+.hcard .gdzie{font-size:12px;color:var(--mute);margin-bottom:8px}
+.hcard ol{margin:0;padding-left:18px;font-size:13.5px;line-height:1.55;color:var(--ink)}
+.hcard code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:var(--fill);border-radius:4px;padding:1px 5px}
+.hdawki{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;margin:0}
+.hdawki dt{color:var(--dim)}
+.hdawki dd{margin:0}
 
 /* ---- rozszerzenia integracyjne (funkcje istniejacej aplikacji) ---- */
 .menuwrap{position:relative}
@@ -479,14 +493,17 @@ const NAV = [
                              {id:"exercises", label:"Baza ćwiczeń"},
                              {id:"testing", label:"Performance testing"}]},
   {group:"Zawodnicy", items:[{id:"athletes", label:"Podopieczni"}]},
+  {group:"Pomoc",     items:[{id:"help", label:"Instrukcja obsługi"}]},
 ];
 function sidebar(){
   // instancja „tylko plany" (drugi trener) nie pokazuje Performance testing
-  const NAV_WID = D.tylko_plany
+  // …chyba że konto ma własny napis w miejscu modułu (pt_komunikat)
+  const NAV_WID = D.tylko_plany && !D.pt_komunikat
     ? NAV.map(g=>({...g, items:g.items.filter(it=>it.id!=="testing")}))
     : NAV;
   const groups = NAV_WID.map(g=>`<h3>${esc(g.group)}</h3><div class="navgroup">` + g.items.map(it=>{
-    const on = S.screen===it.id || (it.id==="plans" && S.screen==="plan");
+    const on = S.screen===it.id || (it.id==="plans" && S.screen==="plan")
+      || (it.id==="testing" && S.screen==="brak_pt");
     return `<button class="navitem${on?" on":""}" data-act="nav" data-v="${it.id}"><i></i>${esc(it.label)}</button>`;
   }).join("") + `</div>`).join("");
   if(S.navCollapsed) return "";
@@ -495,15 +512,19 @@ function sidebar(){
       <button class="navtoggle" data-act="navtoggle" title="Zwiń panel">‹</button></div>
     ${groups}
     <div class="spacer"></div>
-    <div class="me"><i>${esc(D.user.initials)}</i><span>${esc(D.user.name)}</span></div>
+    <div class="me"><i>${esc(D.user.initials)}</i><span>${esc(D.user.name)}</span>
+      ${D.wyloguj ? `<button class="wyloguj" data-act="wyloguj" title="Wyloguj">Wyloguj</button>` : ""}</div>
   </div>`;
 }
 
 /* ------------------------------------------------- przełącznik panelu */
 function coachbar(){
-  const list = D.coaches || [];
+  // konta (admin): ten sam przełącznik, ale po kontach, nie panelach
+  const konta = D.konta || [];
+  const list = konta.length ? konta : (D.coaches || []);
   if(!list.length) return "";
-  const cur = list.find(c=>c.id===D.coach) || list[0];
+  const aktywny = konta.length ? D.konto : D.coach;
+  const cur = list.find(c=>c.id===aktywny) || list[0];
   const menu = S.coachMenu ? `<div class="coachmenu">` + list.map(c=>
       `<button class="${c.id===cur.id?"on":""}" data-act="switch_coach" data-id="${esc(c.id)}">
          <i>${esc(c.initials)}</i>${esc(c.name)}</button>`).join("") + `</div>` : "";
@@ -552,7 +573,10 @@ function screenStart(){
   return `<div class="page">
     <div class="pagehead">
       <div><h1>Start</h1><div class="sub">Kolejka do rozpisania i szybki dostęp do planów.</div></div>
-      <button class="btn primary" data-act="new_plan_start">Rozpisz plan</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" data-act="tryb_trenera">Prowadzenie treningu</button>
+        <button class="btn primary" data-act="new_plan_start">Rozpisz plan</button>
+      </div>
     </div>
     <div class="stats">${stats}</div>
     <div class="cols">
@@ -753,7 +777,10 @@ function screenExercises(){
   let widoczne = null;
   const tabs = [["Wszystkie","all",null,""],
                 ["Bez filmu","film",D.no_film_total,"red"],
-                ["Bez kategorii","cat",D.no_cat_total,"amber"]].map(([l,k,c,tone])=>
+                ["Bez kategorii","cat",D.no_cat_total,"amber"]]
+    // admin: ćwiczenia dodane przez innych trenerów (Filip 2026-09-28)
+    .concat((D.ex_trenerzy||[]).length ? [["Od trenerów","trenerzy",D.ex_trenerzy.length,""]] : [])
+    .map(([l,k,c,tone])=>
     `<button class="tab${S.exTab===k?" on":""}" data-act="extab" data-v="${k}">${esc(l)}
       ${c!=null?`<span class="cnt ${tone}">${esc(c)}</span>`:""}</button>`).join("");
 
@@ -822,6 +849,28 @@ function screenExercises(){
             <span style="font-size:13.5px;font-weight:600;min-width:0">${esc(e.name)}</span>
             <span style="display:flex;gap:5px;min-width:0;flex-wrap:nowrap;align-items:center"><span class="badge" style="color:${cfg};background:${cbg}">${esc(e.cat)}</span>${bdg2?`<span style="width:26px;flex:none"></span>${bdg2}`:""}</span>
             <button class="iconbtn" data-act="edit_exercise" data-name="${esc(e.name)}">✎</button></div>`;
+        }).join("")}
+      </div>`;
+  } else if (S.exTab==="trenerzy") {
+    const wszyscy = [...new Set((D.ex_trenerzy||[]).map(e=>e.dodal))];
+    const kto = wszyscy.includes(S.exTrener) ? S.exTrener : "Wszyscy";
+    const rows = (D.ex_trenerzy||[]).filter(e=>kto==="Wszyscy"||e.dodal===kto);
+    const GRID = "grid-template-columns:44px minmax(190px,.6fr) 1fr 190px 130px";
+    body = `
+      <div class="segs" style="margin-top:18px">${["Wszyscy"].concat(wszyscy).map(c=>
+        `<button class="seg${kto===c?" on":""}" data-act="extrener" data-v="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+      <div class="card" style="margin-top:12px">
+        <div class="thead" style="${GRID}"><span></span><span>Nazwa</span><span>Kategoria</span><span>Dodane przez</span><span></span></div>
+        ${rows.map(e=>{
+          const [cfg,cbg]=CAT[e.group]||CAT["Nieprzypisane"];
+          const th = e.thumb ? `<span class="thumb"><img src="${esc(e.thumb)}" alt="" loading="lazy"></span>`
+                             : `<span class="thumb${e.has_film?"":" no"}">${e.has_film?"▶":"—"}</span>`;
+          return `<div class="trow static" style="${GRID}">${th}
+            <span style="font-size:13.5px;font-weight:600;min-width:0">${esc(e.name)}</span>
+            <span><span class="badge" style="color:${cfg};background:${cbg}">${esc(e.cat)}</span></span>
+            <span style="font-size:12.5px;color:var(--dim)">${esc(e.dodal)}</span>
+            ${e.w_bazie ? `<span style="font-size:12px;color:var(--mute)">jest w Twojej Bazie</span>`
+              : `<button class="btn xs" data-act="przejmij_cwiczenie" data-name="${esc(e.name)}">Dodaj do mojej Bazy</button>`}</div>`;
         }).join("")}
       </div>`;
   } else if (S.exTab==="film") {
@@ -1106,6 +1155,8 @@ function screenAthlete(){
     <div class="sekcja">
       <h2>Aktualny plan</h2>
       ${biez}
+      ${a.current ? `<button class="btn sm" style="margin-top:10px" data-act="tryb_trenera"
+        data-id="${esc(a.current.id)}">Prowadź trening</button>` : ""}
     </div>
     ${zapl ? `<div class="sekcja">
       <h2>Zaplanowane <span class="ilez">${a.upcoming.length}</span></h2>
@@ -1147,8 +1198,13 @@ function screenAthlete(){
         Wstawisz go w edytorze — trzy kropki przy tygodniu → „Test siły (RM)".</div></div>`;
 
   /* ---- Wykonanie: co zawodnik odklikał na telefonie ---- */
-  const seriaTxt = (x) => x.stan === "skip" ? "✕"
-    : (x.kg || x.reps) ? `${esc(x.kg||"—")}${x.reps?" × "+esc(x.reps):""}` : "✓";
+  // RPE wpisuje trener w trybie trenera; seria z liczbami, ale bez ✓ — szara
+  const seriaTxt = (x) => {
+    if(x.stan === "skip") return "✕";
+    const t = ((x.kg || x.reps) ? `${esc(x.kg||"—")}${x.reps?" × "+esc(x.reps):""}`
+               : x.stan === "ok" ? "✓" : "—") + (x.rpe ? " @" + esc(x.rpe) : "");
+    return x.stan === "ok" ? t : `<span style="color:var(--mute)">${t}</span>`;
+  };
   const wykonanie = wyk.length ? wyk.map(w=>`
     <div class="sekcja">
       <h2>${esc(w.date)} · Trening ${esc(w.trening)} <span class="ilez">tydz. ${w.week}</span></h2>
@@ -1255,8 +1311,71 @@ function athleteModal(){
   </div></div>`;
 }
 
-const SCREENS = {start:screenStart, plans:screenPlans, plan:screenPlan,
-                 exercises:screenExercises, athletes:screenAthletes};
+// Instrukcja obsługi — statyczna, bez danych; Performance testing tylko
+// tam, gdzie moduł istnieje (instancja „tylko plany" go nie ma)
+function screenHelp(){
+  const k = (tyt, gdzie, kroki) => `<div class="hcard"><h3>${tyt}</h3>
+    <div class="gdzie">${gdzie}</div><ol>${kroki.map(x=>`<li>${x}</li>`).join("")}</ol></div>`;
+  const karty = [
+    k("Nowy plan", "Training Plans → ＋ Nowy plan", [
+      "Wybierz zawodnika z listy albo wpisz nową osobę.",
+      "Nazwa planu, data startu, liczba tygodni → <b>Utwórz plan</b>.",
+      "Kliknij trening (A, B…), żeby go rozpisać. <b>＋ Dodaj trening</b> dokłada kolejny."]),
+    k("Rozpisywanie treningu", "Plan → trening → Edytor", [
+      "Trzy sekcje: <b>Movement Prep</b>, <b>Plyo &amp; Power</b>, <b>Main</b>.",
+      "Wpisz nazwę — podpowiedzi są z Bazy, film podpina się sam.",
+      "Dawka w kolumnie tygodnia, np. <code>3 x 8 @ rpe 8</code>. Pusty tydzień = jak poprzedni.",
+      "Superseria: ten sam numer z literą, <code>1a</code> + <code>1b</code>.",
+      "Na końcu <b>Zapisz</b>. <b>Podgląd</b> pokazuje widok zawodnika."]),
+    k("Z dyktanda", "Training Plans → 🎙 Z dyktanda", [
+      "Wklej gotową rozpiskę (np. przygotowaną z Claude).",
+      "<b>Sprawdź dopasowania</b> — niepewne nazwy wybierasz z listy.",
+      "Zapisz — plan pojawia się na liście."]),
+    k("PDF i link dla zawodnika", "Otwarty plan → PDF / Udostępnij", [
+      "<b>PDF</b> — gotowy plik do wysłania.",
+      "<b>Udostępnij</b> — link: zawodnik widzi plan z filmami i wpisuje ciężary.",
+      "To, co wpisze, widzisz w profilu zawodnika."]),
+    k("Baza ćwiczeń", "Menu → Baza ćwiczeń", [
+      "Szukaj po nazwie albo filtruj kategorią.",
+      "Zakładka <b>Bez filmu</b> — ćwiczenia bez linku.",
+      "<b>＋ Nowe ćwiczenie</b>: nazwa, kategoria, link do YouTube."
+      + (D.tylko_plany ? " Twoje ćwiczenia widzisz tylko Ty." : "")]),
+    k("Podopieczni", "Menu → Podopieczni", [
+      "Profil zawodnika: jego plany i to, co już zrobił.",
+      "Stąd też otworzysz plan albo założysz nowy."]),
+    k("Prowadzenie treningu (telefon)", "Start → Prowadzenie treningu", [
+      "Zawodnik → tydzień → trening.",
+      "Przy serii: kg, powtórzenia, RPE, potem ✓ (zrobiona) albo ✕ (pominięta).",
+      "<b>＋ notatka</b> do ćwiczenia, <b>⋯</b> zamień lub usuń, <b>＋ ćwiczenie</b> dodaje nowe.",
+      "Na koniec <b>Zakończ trening</b>. Zapis idzie sam, także po chwili bez internetu.",
+      "Ikonka na iPhonie: Safari → <code>/app/static/trener.html</code> → Udostępnij → Do ekranu początkowego."]),
+  ];
+  if(!D.tylko_plany) karty.push(k("Performance testing", "Menu → Performance testing", [
+    "Wyniki testów VALD zawodnika, porównanie sesji i asymetrie."]));
+  const dawki = `<div class="hcard"><h3>Jak zapisywać dawki</h3>
+    <div class="gdzie">W edytorze i w dyktandzie</div>
+    <dl class="hdawki">
+      <dt>powtórzenia</dt><dd><code>3 x 8-12 @ rpe 8</code></dd>
+      <dt>czas</dt><dd><code>2 x 30-45 sec</code></dd>
+      <dt>na stronę</dt><dd><code>2 x 5/str</code></dd>
+      <dt>top set</dt><dd><code>top set 1 x 3 @ rpe 9 + 2 x 5 @ rpe 7</code></dd>
+      <dt>cluster</dt><dd><code>cluster 3 x (2 x 1) / 30 s</code></dd>
+      <dt>test siły</dt><dd><code>test 3RM</code></dd>
+    </dl></div>`;
+  return `<div class="page">
+    <div class="pagehead"><div><h1>Instrukcja obsługi</h1>
+      <div class="sub">Najważniejsze funkcje w skrócie.</div></div></div>
+    <div class="helpgrid">${karty.join("")}${dawki}</div>
+  </div>`;
+}
+
+// Performance testing na koncie bez dostępu: sam duży napis z danych konta
+function screenBrakPT(){
+  return `<div class="page"><div class="brakpt">${esc(D.pt_komunikat || "")}</div></div>`;
+}
+
+const SCREENS = {brak_pt:screenBrakPT, start:screenStart, plans:screenPlans, plan:screenPlan,
+                 exercises:screenExercises, athletes:screenAthletes, help:screenHelp};
 function render(){
   const fa = document.activeElement;
   const keep = (fa && fa.dataset && fa.dataset.f) ? {f:fa.dataset.f, s:fa.selectionStart, e:fa.selectionEnd} : null;
@@ -1416,6 +1535,7 @@ document.addEventListener("click", e=>{
       act("close_athlete"); break;
     case "nav":
       S.menu = false; S.coachMenu = false;
+      if(b.dataset.v==="testing" && D.pt_komunikat){ S.screen = "brak_pt"; render(); break; }
       if(b.dataset.v==="testing"){ act("navigate",{to:"testing"}); break; }
       // otwarty plan zostaje otwarty (Filip 2026-09-05) — Python i tak odeśle
       // ekran planu, więc bez skoku przez listę
@@ -1423,6 +1543,14 @@ document.addEventListener("click", e=>{
       if(b.dataset.tab) S.exTab = b.dataset.tab;
       if(S.screen==="plans") S.planTab = "plany";
       S.share = false; S.menu = false; render(); act("navigate",{to:b.dataset.v}); break;
+    case "extrener":
+      S.exTrener = b.dataset.v; render(); break;
+    case "przejmij_cwiczenie":
+      act("przejmij_cwiczenie", {name: b.dataset.name}); break;
+    case "wyloguj":
+      act("wyloguj"); break;
+    case "tryb_trenera":
+      act("tryb_trenera", {plan_id: b.dataset.id || ""}); break;
     case "new_plan_start":
       S.screen = "plans"; S.planTab = "nowy"; S.share = false; S.menu = false;
       render(); act("navigate",{to:"plans"}); break;

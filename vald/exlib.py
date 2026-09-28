@@ -192,6 +192,31 @@ def _tylko_moje(wspolne: dict, widok: dict) -> dict:
             "ukryte": [i for i in baza if i not in widoczne]}
 
 
+def dodatki_trenerow() -> list[dict]:
+    """Ćwiczenia dodane przez innych trenerów w ich przestrzeniach (nakładki
+    `ws/<nazwa>/exercise_library_own`), z polem `dodal` = nazwa konta.
+    Tylko dla admina w jego własnej przestrzeni (Filip 2026-09-28: „chcę
+    widzieć, co dodał Coach Maciek, z filtrem"). Tylko odczyt — do wspólnej
+    Bazy trafia dopiero, gdy admin je przejmie (add_exercise)."""
+    from . import konta, store
+    if not store.enabled() or store.workspace() or not konta.jest_admin():
+        return []
+    wspolne = {e.get("id") for e in (store.kv_get(_STORE_KEY) or {}).get("exercises", [])}
+    out: list[dict] = []
+    for k in konta.wszystkie():
+        ws = store._czysta_ws(k.get("workspace") or "")
+        if not ws:
+            continue
+        try:
+            wl = store.kv_get(f"ws/{ws}/{_WLASNE_KEY}") or {}
+        except (RuntimeError, OSError):
+            continue
+        for e in (wl.get("exercises") or []):
+            if isinstance(e, dict) and e.get("name") and e.get("id") not in wspolne:
+                out.append(dict(e, dodal=k.get("name") or k["id"]))
+    return sorted(out, key=lambda e: (e["dodal"], e["name"].lower()))
+
+
 def exercises(cat: str | None = None) -> list[dict]:
     exs = _load_all()["exercises"]
     if cat:

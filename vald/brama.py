@@ -38,7 +38,16 @@ def _haslo() -> str:
 
 def sprawdz_haslo() -> bool:
     """True = wpuszczam dalej. False = pokazałem ekran logowania albo odmowę."""
+    from . import konta
     from .store import workspace
+    if konta.aktywne():
+        # konta trenerów (vald/konta.py) zastępują jedno wspólne hasło
+        if konta.zalogowane():
+            return True
+        if len(str(st.query_params.get("plan") or "").strip()) >= _MIN_TOKEN:
+            return True
+        _ekran_kont()
+        return False
     haslo = _haslo()
     if not haslo:
         if workspace():
@@ -97,3 +106,47 @@ def _ekran() -> None:
                 st.error("Nie to hasło.")
         if st.session_state.get(_PROBY, 0) >= 3:
             st.caption("Hasło dostajesz od trenera, który zakładał dostęp.")
+
+
+def _ekran_kont() -> None:
+    """Logowanie: wybór konta + hasło. Te same limity prób co przy haśle."""
+    from . import konta
+    lista = [k for k in konta.wszystkie() if k.get("skrot")]
+    st.markdown(
+        "<div style='max-width:380px;margin:14vh auto 0;text-align:center;'>"
+        "<div style='font-size:34px;'>🔒</div>"
+        "<div style='font-size:19px;font-weight:700;margin:10px 0 2px;'>"
+        "Athletic Performance Hub</div>"
+        "<div style='color:#54606F;font-size:14px;'>Wybierz konto i podaj hasło."
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+    _, srodek, _ = st.columns([1, 2, 1])
+    with srodek:
+        zostalo = st.session_state.get(_BLOKADA_DO, 0.0) - time.monotonic()
+        if zostalo > 0:
+            st.warning(f"Za dużo prób. Spróbuj za {int(zostalo) + 1} s.")
+            return
+        kid = st.selectbox("Konto", [k["id"] for k in lista], key="brama_konto",
+                           format_func=lambda i: next(
+                               (k.get("name") or i) for k in lista if k["id"] == i),
+                           label_visibility="collapsed")
+        wpis = st.text_input("Hasło", type="password", key="brama_wpis",
+                             label_visibility="collapsed", placeholder="hasło")
+        if st.button("Wejdź", type="primary", use_container_width=True,
+                     key="brama_wejdz"):
+            k = konta.sprawdz(kid, (wpis or "").strip())
+            if k:
+                konta.wejdz(k)
+                for s_ in (_PROBY, _BLOKADA_DO):
+                    st.session_state.pop(s_, None)
+                st.rerun()
+            else:
+                proby = st.session_state.get(_PROBY, 0) + 1
+                st.session_state[_PROBY] = proby
+                if proby >= _LIMIT:
+                    st.session_state[_BLOKADA_DO] = time.monotonic() + _PRZERWA
+                    st.session_state[_PROBY] = 0
+                    st.rerun()
+                st.error("Nie to hasło.")
+

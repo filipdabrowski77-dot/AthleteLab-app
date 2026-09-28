@@ -4366,10 +4366,12 @@ def main() -> None:
             and not st.session_state.get("_qp_mode_consumed")):
         st.session_state["_qp_mode_consumed"] = True
         st.session_state["app_mode"] = qp_mode
-        try:
-            del st.query_params["mode"]
-        except Exception:
-            pass
+        # tryb trenera zostaje w adresie — odświeżenie telefonu wraca do niego
+        if qp_mode != "gym":
+            try:
+                del st.query_params["mode"]
+            except Exception:
+                pass
 
     # Sekretny link zawodnika: ?plan=<token> — TYLKO ten jeden plan
     qp_tok = st.query_params.get("plan")
@@ -4380,7 +4382,12 @@ def main() -> None:
             from vald import store as _vs
             _vs.set_workspace(qp_ws)
     if st.session_state.get("_athlete_token"):
-        _render_athlete_mode(st.session_state["_athlete_token"])
+        try:
+            _render_athlete_mode(st.session_state["_athlete_token"])
+        except RuntimeError as e:
+            # zawodnik na telefonie ma zobaczyć zdanie, nie traceback
+            st.error("Nie mogę teraz wczytać planu — spróbuj za chwilę.")
+            st.caption(str(e))
         return
 
     # Tryb SIŁOWNIA (telefon): pełny ekran bez top baru i sidebara
@@ -4404,7 +4411,7 @@ def main() -> None:
     # (views/app_shell) — jeden komponent rysuje sidebar i strony,
     # Python podaje dane i obsługuje akcje. Performance testing zostaje
     # w dotychczasowym widoku (Filip 2026-09-02).
-    if _mode_top in ("home", "training", "exlib", "athletes"):
+    if _mode_top in ("home", "training", "exlib", "athletes", "help"):
         from vald.shell import render_shell
         try:
             render_shell()
@@ -4511,7 +4518,9 @@ def main() -> None:
     _NAV = [("WORKSPACE", [("home", "Start", "Do rozpisania i szybki dostęp")]),
             ("TRENING", _trening),
             ("ZAWODNICY", [("athletes", "Podopieczni",
-                            "Profile, plany i testy siły")])]
+                            "Profile, plany i testy siły")]),
+            ("POMOC", [("help", "Instrukcja obsługi",
+                        "Najważniejsze funkcje w skrócie")])]
     with st.sidebar:
         st.markdown(
             "<div style='display:flex; align-items:center; gap:10px; "

@@ -38,6 +38,20 @@ _TTL = 15.0
 _cache: dict[str, tuple[float, dict]] = {}
 
 
+def _kopia(v):
+    """Głęboka kopia wartości JSON. Cache NIE może dzielić obiektów
+    z wołającym: plan zmieniony w miejscu (odklik serii, edytor) zmieniał
+    cache, a z nim bazę scalania w training._scal_plany — i scalanie
+    przywracało wartość z serwera (z telefonu dochodziła jedna seria,
+    audyt 2026-09-24). Sama rekurencja po dict/list: ~3,5× szybsza niż
+    copy.deepcopy (1,7 vs 5,8 ms na 229 KB), bo JSON nie potrzebuje memo."""
+    if isinstance(v, dict):
+        return {k: _kopia(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_kopia(x) for x in v]
+    return v
+
+
 def _creds() -> tuple[str, str] | None:
     """(url, key) z sekretów Streamlit albo env; None gdy brak konfiguracji.
 
@@ -117,6 +131,10 @@ def workspace() -> str:
         w = st.session_state.get(_WS_KEY)
         if w:
             return str(w)
+        # zalogowane konto (vald/konta.py) — pusta nazwa to przestrzeń Filipa,
+        # więc liczy się sama obecność klucza, nie jego wartość
+        if "_aph_ws_konto" in st.session_state:
+            return _czysta_ws(st.session_state["_aph_ws_konto"])
     except Exception:
         pass
     if _WS_OVERRIDE:
@@ -128,6 +146,13 @@ def coach_name() -> str:
     """Nazwa trenera w instancji gościa (sekret `coach_name`). Pusta = apka
     wyliczy ją z nazwy przestrzeni — bez tego drugi trener widział w stopce
     „Coach Filip" jako siebie."""
+    try:
+        import streamlit as st
+        n = st.session_state.get("_aph_konto_nazwa")   # zalogowane konto
+        if n:
+            return str(n)
+    except Exception:
+        pass
     return _secret("coach_name")
 
 
@@ -139,8 +164,17 @@ def share_base() -> str:
 def tylko_plany() -> bool:
     """Instancja bez Performance testing: sekret `tylko_plany` albo env
     APH_TYLKO_PLANY. Drugi trener układa plany i uzupełnia Bazę ćwiczeń,
-    wyników z płyt nie ogląda (Filip 2026-09-18)."""
-    return _secret("tylko_plany").lower() in ("1", "true", "tak", "yes", "on")
+    wyników z płyt nie ogląda (Filip 2026-09-18). Zalogowane konto bez
+    prawa do Performance testing (vald/konta.py, pole `pt`) też to włącza."""
+    if _secret("tylko_plany").lower() in ("1", "true", "tak", "yes", "on"):
+        return True
+    try:
+        import streamlit as st
+        if "_aph_konto_pt" in st.session_state:
+            return not st.session_state["_aph_konto_pt"]
+    except Exception:
+        pass
+    return False
 
 
 # Baza ćwiczeń jest WSPÓLNA do ODCZYTU: drugi trener widzi całą bibliotekę
@@ -148,7 +182,9 @@ def tylko_plany() -> bool:
 # dodatki i poprawki idą do prefiksowanej nakładki `exercise_library_own`
 # (vald/exlib.py) — wspólnej Bazy instancja gościa nie rusza. Plany, profile
 # i roster zostają osobne: to dane podopiecznych.
-_WSPOLNE_KEYS = {"exercise_library"}
+# `konta` (vald/konta.py) też bez prefiksu — logowanie musi je znaleźć,
+# zanim wiadomo, do której przestrzeni należy osoba przy ekranie
+_WSPOLNE_KEYS = {"exercise_library", "konta"}
 
 
 def _kv_name(name: str) -> str:
@@ -192,7 +228,7 @@ def kv_get(name: str) -> dict | None:
     name = _kv_name(name)
     hit = _cache.get(name)
     if hit and (time.monotonic() - hit[0]) < _TTL:
-        return hit[1]
+        return _kopia(hit[1])
     url, key = creds
 
     def _fetch(k: str):
@@ -208,7 +244,7 @@ def kv_get(name: str) -> dict | None:
     val = _fetch(name)
     if val is not None:
         _cache[name] = (time.monotonic(), val)
-    return val
+    return _kopia(val)
 
 
 def kv_get_many(names: "list[str]") -> dict:
@@ -224,7 +260,7 @@ def kv_get_many(names: "list[str]") -> dict:
              if not (_cache.get(_kv_name(n))
                      and (swieze - _cache[_kv_name(n)][0]) < _TTL)]
     if not braki:
-        return {n: _cache[_kv_name(n)][1] for n in names
+        return {n: _kopia(_cache[_kv_name(n)][1]) for n in names
                 if _kv_name(n) in _cache}
     url, key = creds
     pelne = [_kv_name(n) for n in braki]
@@ -240,7 +276,7 @@ def kv_get_many(names: "list[str]") -> dict:
     teraz = time.monotonic()
     for w in wiersze:
         _cache[w["key"]] = (teraz, w["value"])
-    return {n: _cache[_kv_name(n)][1] for n in names
+    return {n: _kopia(_cache[_kv_name(n)][1]) for n in names
             if _kv_name(n) in _cache}
 
 
@@ -260,7 +296,7 @@ def kv_put(name: str, value: dict) -> None:
         with urllib.request.urlopen(req, timeout=10) as r:
             return r.read()
     _z_ponowieniem(_raz, f"przy zapisie '{name}'")
-    _cache[name] = (time.monotonic(), value)
+    _cache[name] = (time.monotonic(), _kopia(value))
 
 
 def invalidate(name: str | None = None) -> None:

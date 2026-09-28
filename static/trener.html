@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Strona-ikonka trybu trenera (Filip 2026-09-28: „mam ikonkę aplikacji
+     i włączam, wybieram osobę i mam plan"). Safari na iPhonie: Udostępnij →
+     „Do ekranu początkowego" — bierze stąd tytuł i ikonę; po otwarciu z ikonki
+     strona od razu przechodzi do apki w trybie trenera (?mode=gym).
+     Streamlit serwuje ten folder pod /app/static/ (enableStaticServing). -->
+<title>APH Trener</title>
+<link rel="manifest" href="/app/static/manifest.json">
+<link rel="apple-touch-icon" href="/app/static/aph-trener-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="APH Trener">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#1c1b18">
+<style>
+html,body{margin:0;height:100%;background:#1c1b18;color:#fff;font-family:-apple-system,system-ui,sans-serif}
+main{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center}
+img{width:96px;height:96px;border-radius:22px}
+h1{font-size:22px;margin:0}
+p{margin:0;color:#c3c0b8;font-size:15px;line-height:1.4;max-width:320px}
+a{display:inline-block;margin-top:8px;padding:14px 26px;border-radius:999px;background:#e8c96a;color:#1c1b18;font-weight:700;text-decoration:none;font-size:16px}
+</style>
+</head>
+<body>
+<main>
+<img src="/app/static/aph-trener-180.png" alt="">
+<h1>APH Trener</h1>
+<p id="msg">Otwieram tryb trenera…</p>
+<a href="/?mode=gym">Otwórz</a>
+<p id="tip" hidden>Dodaj do ekranu początkowego: Udostępnij → „Do ekranu początkowego". Potem apka startuje z ikonki.</p>
+</main>
+<script>
+// z ikonki (standalone) — od razu do apki; w zwykłej karcie Safari zostaw
+// stronę widoczną, żeby dało się ją dodać do ekranu początkowego
+var standalone = window.navigator.standalone === true
+  || window.matchMedia("(display-mode: standalone)").matches;
+if (standalone) location.replace("/?mode=gym");
+else { document.getElementById("msg").textContent = "Tryb trenera na telefonie."; document.getElementById("tip").hidden = false; }
+</script>
+</body>
+</html>

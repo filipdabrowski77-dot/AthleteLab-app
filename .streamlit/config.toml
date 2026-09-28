@@ -8,3 +8,8 @@ font = "sans serif"
 
 [server]
 maxUploadSize = 50
+# Tryb trenera na telefonie: ekran blokowany na przerwę między seriami
+# (2–3 min) nie może gubić sesji — domyślnie Streamlit trzyma ją 120 s
+disconnectedSessionTTL = 1800
+# strona-ikonka trybu trenera na telefonie: /app/static/trener.html
+enableStaticServing = true

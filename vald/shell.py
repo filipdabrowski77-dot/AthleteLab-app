@@ -259,10 +259,12 @@ _SHARE_BASE: list[str] = []
 
 
 def _share_base() -> str:
-    """Adres apki do linków — liczony raz na proces (bez sekretu i pliku
-    szło przez socket do 8.8.8.8 przy każdym renderze ekranu planu)."""
-    if _SHARE_BASE:
-        return _SHARE_BASE[0]
+    """Adres apki do linków. Sekret i plik czytam przy każdym użyciu:
+    runner zapisuje do share_base_url.txt nowy adres tunelu przy każdym
+    jego starcie, a adres zapamiętany raz na proces dawał linki na martwy
+    tunel aż do restartu apki. Raz na proces liczę tylko adres z sieci
+    lokalnej (bez sekretu i pliku szło przez socket do 8.8.8.8 przy każdym
+    renderze ekranu planu)."""
     from .store import share_base
     base = share_base()
     if not base:
@@ -270,6 +272,8 @@ def _share_base() -> str:
             base = (LIBRARY_DIR / "share_base_url.txt").read_text().strip().rstrip("/")
         except Exception:
             pass
+    if not base and _SHARE_BASE:
+        return _SHARE_BASE[0]
     if not base:
         ip = "localhost"
         try:
@@ -280,7 +284,7 @@ def _share_base() -> str:
         except Exception:
             pass
         base = f"http://{ip}:8501"
-    _SHARE_BASE.append(base)
+        _SHARE_BASE.append(base)
     return base
 
 
@@ -298,7 +302,10 @@ def _all_names() -> list[str]:
     """Zawodnicy AKTYWNEGO trenera. Plany są wspólne, więc nie dociągam
     nazwisk z planów — inaczej panele widziałyby swoich podopiecznych
     nawzajem (Filip 2026-09-02)."""
-    vald = {a["name"] for a in get_athletes_summary()}
+    from . import store as _st
+    # nazwiska z testów VALD to zawodnicy Filipa — tylko w jego przestrzeni;
+    # konto trenera (i podgląd admina) na apce Filipa ich nie widzi
+    vald = set() if _st.workspace() else {a["name"] for a in get_athletes_summary()}
     return names_for_coach(coaches.current(), vald_names=vald)
 
 
@@ -478,7 +485,13 @@ def _zmien_nazwe_cwiczenia(stara: str, nowa: str) -> tuple[int, str]:
         exlib.upsert_exercise(e2)
     else:
         info = "tego ćwiczenia nie ma w Bazie — poprawione tylko w rozpiskach"
+    return _przepnij_rozpiski(stara, nowa), info
 
+
+def _przepnij_rozpiski(stara: str, nowa: str) -> int:
+    """Nazwa ćwiczenia stara → nowa we wszystkich rozpiskach, jednym
+    zapisem planów. Film jest szukany po nazwie, więc pozycja ze starą
+    nazwą traci link. Zwraca, ile pozycji zmieniono."""
     ile, zmienione = 0, []
     for pl in get_all_plans():
         zmiana = False
@@ -491,7 +504,7 @@ def _zmien_nazwe_cwiczenia(stara: str, nowa: str) -> tuple[int, str]:
         if zmiana:
             zmienione.append(pl)
     upsert_plans(zmienione)
-    return ile, info
+    return ile
 
 
 def build_data(screen: str) -> dict:
@@ -511,7 +524,15 @@ def build_data(screen: str) -> dict:
     # „Coach Filip / Coach Kuba" to panele Filipa i nie ma go co pokazywać
     _ws = _st.workspace()
     _solo = bool(_ws) and _st.tylko_plany()
-    if _ws:
+    from . import konta as _konta
+    _zal = _konta.zalogowane()
+    if _zal:
+        # konta (Filip 2026-09-28): stopka = kto się zalogował; przełącznik
+        # kont tylko u admina, stary przełącznik paneli znika
+        _nazwa = _zal.get("name") or _zal["id"]
+        _ini = _konta.inicjaly(_nazwa)
+        _solo = True
+    elif _ws:
         # w przestrzeni gościa stopka pokazywała „Coach Filip" — czyli
         # drugiego trenera cudzym nazwiskiem
         _nazwa = _st.coach_name() or f"Coach {_ws.capitalize()}"
@@ -523,6 +544,13 @@ def build_data(screen: str) -> dict:
         _nazwa, _ini = coaches.name(_c), coaches.info(_c)["initials"]
     data: dict = {"user": {"name": _nazwa, "initials": _ini},
                   "coaches": [] if _solo else coaches.as_data(), "coach": _c}
+    if _zal:
+        data["konta"] = _konta.do_przelacznika()
+        data["konto"] = _konta.ogladane_id()
+        data["wyloguj"] = True
+        # konto bez Performance testing może mieć własny napis pod tą pozycją
+        # menu (Filip 2026-09-28, żart dla Maćka) — tekst w danych konta
+        data["pt_komunikat"] = str(_zal.get("pt_komunikat") or "") if not _zal.get("pt") else ""
     # Start to pulpit JEDNEGO trenera (Filip 2026-09-02): liczby liczą tylko
     # jego podopiecznych i ich plany. Baza planów w Training Plans zostaje
     # wspólna — tam widać wszystko.
@@ -640,6 +668,16 @@ def build_data(screen: str) -> dict:
         "thumb": _yt_thumb(e.get("url", "")) or "",
     } for e in sorted(exs, key=lambda e: e.get("name", "").lower())]
     data["exercises_total"] = len(exs)
+    # admin: ćwiczenia dodane przez innych trenerów (zakładka „Od trenerów")
+    data["ex_trenerzy"] = [{
+        "name": e.get("name", ""), "cat": e.get("cat") or "Nieprzypisane",
+        "group": _grupa(e.get("cat") or "Nieprzypisane"),
+        "sub": e.get("sub", "") or "", "url": e.get("url", "") or "",
+        "has_film": bool((e.get("url") or "").strip()),
+        "thumb": _yt_thumb(e.get("url", "")) or "", "dodal": e["dodal"],
+        "w_bazie": (e.get("name") or "").strip().lower() in {
+            (x.get("name") or "").strip().lower() for x in exs},
+    } for e in exlib.dodatki_trenerow()]
     # plany podajemy tylko po to, żeby pytanie przed usunięciem ćwiczenia
     # mówiło, z czego dokładnie zniknie (Filip 2026-09-05)
     data["no_film"] = [{"name": n, "plany": braki[n]}
@@ -737,13 +775,41 @@ def _zamknij_plan(ss) -> None:
         ss["app_mode"] = "training"
 
 
+def _st_nazwa_panelu() -> str:
+    from . import konta as _konta, store as _st
+    return _st.coach_name() if _konta.zalogowane() else coaches.name()
+
+
 def handle_action(ev: dict) -> None:
     from .ui_training import _tr_copy_plan_dialog, _tr_edit_plan_dialog
     a = ev.get("action")
     ss = st.session_state
 
-    if a == "switch_coach":
-        coaches.set_current(ev.get("id", ""))
+    if a == "wyloguj":
+        from . import konta as _konta
+        _konta.wyloguj()
+        st.rerun()
+
+    elif a == "przejmij_cwiczenie":
+        # admin przenosi ćwiczenie trenera do swojej (wspólnej) Bazy
+        from . import konta as _konta
+        e = next((x for x in exlib.dodatki_trenerow()
+                  if x.get("name") == ev.get("name")), None) if _konta.jest_admin() else None
+        if e and exlib.add_exercise(e["name"], e.get("cat") or "Nieprzypisane",
+                                    e.get("sub", ""), e.get("url", "")):
+            st.toast(f"Dodane do Twojej Bazy: {e['name']}", icon="✅")
+        elif e:
+            st.toast("To ćwiczenie już jest w Twojej Bazie.", icon="ℹ️")
+        st.rerun()
+
+    elif a == "switch_coach":
+        from . import konta as _konta
+        if _konta.zalogowane():
+            # admin: podgląd danych innego konta (inna przestrzeń magazynu)
+            if not _konta.podglad(ev.get("id", "")):
+                return
+        else:
+            coaches.set_current(ev.get("id", ""))
         # czysty start w nowym panelu: bez otwartego planu, edytora i trybu
         # wyboru z Bazy; JS też wraca na Start, więc app_mode musi to gonić
         ss["app_mode"] = "home"
@@ -751,7 +817,7 @@ def handle_action(ev: dict) -> None:
                   "exlib_pick_sec", "exlib_pick_n", "tr_reopen_workout",
                   "tr_athlete", "tr_athlete_pending"):
             ss.pop(k, None)
-        st.toast(f"Panel: {coaches.name()}", icon="✅")
+        st.toast(f"Panel: {_st_nazwa_panelu()}", icon="✅")
         st.rerun()
 
     elif a == "navigate":
@@ -773,7 +839,7 @@ def handle_action(ev: dict) -> None:
             ss["plan_skad"] = "plans"
         ss["app_mode"] = {"start": "home", "plans": "training",
                           "exercises": "exlib", "testing": "tests",
-                          "athletes": "athletes"}.get(to, "home")
+                          "athletes": "athletes", "help": "help"}.get(to, "home")
         st.rerun()
 
     elif a == "close_plan":
@@ -884,6 +950,18 @@ def handle_action(ev: dict) -> None:
 
     elif a == "close_athlete":
         ss.pop("profil_osoby", None)
+        st.rerun()
+
+    elif a == "tryb_trenera":
+        # prowadzenie treningu z telefonu (Filip 2026-09-27); ?mode=gym zostaje
+        # w adresie, plan opcjonalnie (przycisk w profilu zawodnika)
+        ss["app_mode"] = "gym"
+        ss["_qp_mode_consumed"] = True
+        st.query_params["mode"] = "gym"
+        for k in ("p", "t", "w"):
+            st.query_params.pop(k, None)
+        if ev.get("plan_id"):
+            st.query_params["p"] = str(ev["plan_id"])
         st.rerun()
 
     elif a == "queue_add":
@@ -1297,14 +1375,22 @@ def handle_action(ev: dict) -> None:
 
     elif a == "save_exercise":
         f = ev.get("form") or {}
+        ex_id = (f.get("id") or "").strip() or None
+        # nazwa sprzed zapisu: film jest szukany po nazwie, więc zmiana
+        # tylko w Bazie odcinała go w planach (audyt 2026-09-24)
+        stara = next(((e.get("name") or "").strip() for e in exlib.exercises()
+                      if ex_id and e.get("id") == ex_id), "")
         ok = exlib.upsert_exercise({
-            "id": (f.get("id") or "").strip() or None,
+            "id": ex_id,
             "name": f.get("name", ""), "cat": f.get("cat") or "Nieprzypisane",
             "sub": f.get("sub", ""), "cat2": f.get("cat2", ""),
             "cat3": f.get("cat3", ""), "cat4": f.get("cat4", ""),
             "url": f.get("film", "")})
         if ok:
-            st.toast(f"Zapisano: {f.get('name', '')}", icon="✅")
+            nowa = (f.get("name") or "").strip()
+            ile = _przepnij_rozpiski(stara, nowa) if stara and nowa != stara else 0
+            st.toast(f"Zapisano: {f.get('name', '')}"
+                     + (f" ({ile} w rozpiskach)" if ile else ""), icon="✅")
         else:
             st.warning("Pusta nazwa albo taka nazwa już jest w bazie.")
         st.rerun()
@@ -1405,7 +1491,7 @@ def render_shell() -> None:
         _render_workout_page(ow[0], ow[1])
         return
     screen = {"home": "start", "training": "plans", "exlib": "exercises",
-              "athletes": "athletes"}.get(mode, "start")
+              "athletes": "athletes", "help": "help"}.get(mode, "start")
     if mode == "training" and st.session_state.get("tr_open_plan"):
         if not any(p["id"] == st.session_state["tr_open_plan"] for p in get_all_plans()):
             st.session_state.pop("tr_open_plan", None)
