@@ -118,14 +118,11 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 /* ---- start ---- */
 /* Start: dwa duże kafle zamiast liczników (Filip 2026-09-29) */
 .startkafle{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:26px}
-.startkafel{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-end;gap:6px;
-  min-height:118px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;
-  padding:18px 20px;cursor:pointer;font:inherit;color:var(--ink)}
+.startkafel{display:flex;align-items:center;justify-content:center;min-height:96px;text-align:center;
+  background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;cursor:pointer;
+  font:inherit;font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
 .startkafel:hover{border-color:#c9c5bb;background:#fdfdfb}
-.startkafel b{font-size:19px;font-weight:800;letter-spacing:-.01em}
-.startkafel span{font-size:13px;color:var(--mute)}
 .startkafel.ciemny{background:var(--ink);border-color:var(--ink);color:#fff}
-.startkafel.ciemny span{color:#c9c5bb}
 .startkafel.ciemny:hover{background:#333029}
 .konczy{flex-wrap:wrap}
 .konczy .dni{font-size:12px;font-weight:700;color:var(--amber-fg);background:var(--amber-bg);border-radius:4px;padding:2px 7px;white-space:nowrap}
@@ -446,8 +443,7 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
   .undobar{margin:12px 14px 0}
   .coachmenu{right:14px}
   h1{font-size:24px}
-  .startkafel{min-height:96px;padding:14px}
-  .startkafel b{font-size:16px}
+  .startkafel{min-height:76px;padding:12px;font-size:16px}
   .cols{grid-template-columns:minmax(0,1fr)}
   .grid2{grid-template-columns:minmax(0,1fr)}
   .grid2 .grid2{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -614,8 +610,8 @@ function screenStart(){
       <div><h1>Start</h1></div>
     </div>
     <div class="startkafle">
-      <button class="startkafel" data-act="tryb_trenera"><b>Prowadzenie treningu</b><span>Serie i ciężary na telefonie</span></button>
-      <button class="startkafel ciemny" data-act="new_plan_start"><b>Rozpisz plan</b><span>Nowy plan dla podopiecznego</span></button>
+      <button class="startkafel" data-act="tryb_trenera">Prowadzenie treningu</button>
+      <button class="startkafel ciemny" data-act="new_plan_start">Rozpisz plan</button>
     </div>
     ${konczy}
     <div class="cols">
