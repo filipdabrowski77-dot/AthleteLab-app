@@ -1,13 +1,13 @@
 {
   "name": "APH Trener",
   "short_name": "APH Trener",
-  "start_url": "/?mode=gym",
-  "scope": "/",
+  "start_url": "../../?mode=gym",
+  "scope": "../../",
   "display": "standalone",
   "background_color": "#1c1b18",
   "theme_color": "#1c1b18",
   "icons": [
-    {"src": "/app/static/aph-trener-180.png", "sizes": "180x180", "type": "image/png"},
-    {"src": "/app/static/aph-trener-512.png", "sizes": "512x512", "type": "image/png"}
+    {"src": "aph-trener-180.png", "sizes": "180x180", "type": "image/png"},
+    {"src": "aph-trener-512.png", "sizes": "512x512", "type": "image/png"}
   ]
 }

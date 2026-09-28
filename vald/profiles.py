@@ -168,7 +168,11 @@ def delete_profile(name: str) -> None:
     if key not in profiles:
         return
     del profiles[key]
-    if profiles:
+    from . import store
+    # z magazynem pusty słownik też trzeba zapisać: gałąź „plik" kasowała
+    # lokalny athletes_meta.json Filipa, a profil w magazynie zostawał
+    # (trener usuwający jedynego podopiecznego, 2026-09-28)
+    if profiles or store.enabled():
         _save_profiles(profiles)
     else:
         daily_backup(PROFILES_PATH)

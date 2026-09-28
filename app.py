@@ -4342,7 +4342,38 @@ def _start_auto_refresh_daemon() -> bool:
     return True
 
 
+def _ikonka_trenera() -> None:
+    """Ikonka „APH Trener" na ekranie początkowym telefonu (Safari →
+    Udostępnij → „Do ekranu początkowego" na adresie z ?mode=gym).
+    Streamlit oddaje pliki .html ze static/ jako text/plain, więc osobna
+    strona-ikonka pokazywała się jako kod, a własnego <head> apka nie ma —
+    dopisuję ikonę, nazwę i manifest do dokumentu apki z ramki komponentu
+    (ta sama domena). Adresy względne: w Streamlit Cloud apka siedzi pod /~/+/."""
+    import streamlit.components.v1 as components
+    components.html("""<script>
+    try {
+      const w = window.parent, d = w.document;
+      const u = p => new URL(p, w.location.href).href;
+      const dodaj = (tag, at) => {
+        const sel = tag + Object.entries(at).filter(([k]) => k !== "href" && k !== "content")
+          .map(([k, v]) => `[${k}="${v}"]`).join("");
+        if (d.head.querySelector(sel)) return;
+        const el = d.createElement(tag);
+        Object.entries(at).forEach(([k, v]) => el.setAttribute(k, v));
+        d.head.appendChild(el);
+      };
+      dodaj("link", {rel: "apple-touch-icon", href: u("app/static/aph-trener-180.png")});
+      dodaj("link", {rel: "manifest", href: u("app/static/manifest.json")});
+      dodaj("meta", {name: "apple-mobile-web-app-title", content: "APH Trener"});
+      dodaj("meta", {name: "apple-mobile-web-app-capable", content: "yes"});
+      dodaj("meta", {name: "theme-color", content: "#1c1b18"});
+    } catch (e) {}
+    </script>""", height=0)
+
+
 def main() -> None:
+    if st.query_params.get("mode") == "gym":
+        _ikonka_trenera()
     # Publiczny adres instancji gościa — bez hasła wszedłby każdy, kto zna
     # link (Streamlit Cloud: jedna zamknięta apka na konto). Bez sekretu
     # `haslo` ta funkcja zwraca True od razu, więc u Filipa nic się nie zmienia.
