@@ -422,6 +422,32 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 
 /* nagłówek bez podpisu — bez tego h1 dotykał treści pod nim (audyt 2026-09-05) */
 .pagehead.bezsub{margin-bottom:18px}
+/* ---- telefon (audyt 2026-09-28): panel boczny 224 px zjadał ekran 390 px,
+   a iframe nie przewija się w poziomie, więc prawa część była nieosiągalna.
+   Na wąskim ekranie panel to szuflada nad treścią (zamknięta na start),
+   szerokie tabele przewijają się w poziomie wewnątrz karty. ---- */
+.navscrim{display:none}
+.card{overflow-x:auto;overflow-y:hidden}
+@media (max-width:700px){
+  .app{position:relative;min-height:0}
+  .side{position:absolute;left:0;top:0;bottom:0;z-index:70;min-height:100%}
+  .navscrim{display:block;position:absolute;inset:0;z-index:65;background:rgba(28,27,24,.28)}
+  .page,.main.nocol .page{padding:54px 14px 60px}
+  .topbar{padding:12px 14px 0}
+  .undobar{margin:12px 14px 0}
+  .coachmenu{right:14px}
+  h1{font-size:24px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cols{grid-template-columns:minmax(0,1fr)}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .grid2 .grid2{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .field .in{width:100%;min-width:0}
+  .pagehead .tytul{flex-wrap:wrap}
+  .badge{white-space:nowrap}
+  .modal{width:calc(100vw - 24px)}
+  .navopen{width:38px;height:38px;font-size:18px;left:10px;top:10px}
+  .navtoggle{width:34px;height:34px;font-size:17px}
+}
 </style>
 </head>
 <body>
@@ -468,9 +494,12 @@ let D = {
 };
 
 /* ---------------------------------------------------------------- stan UI */
+// szerokość okna strony, nie ramki: ramka przy starcie skryptu bywa jeszcze
+// wąska i komputer startował ze zwiniętym menu
+function waski(){ try{ return window.parent.innerWidth <= 700; }catch(_){ return window.innerWidth <= 700; } }
 let S = {screen:"start", planTab:"plany", askBase:false, odlozone:false, exTab:"all", cat:"Wszystkie", grp:"Wszystkie",
          planQuery:"", exQuery:"", share:false, modal:false, menu:false, coachMenu:false,
-         navCollapsed:false,   // start zawsze rozwinięty — bez pamiętania stanu
+         navCollapsed:waski(),   // start rozwinięty (na telefonie zwinięty) — bez pamiętania stanu
          // widok listy podopiecznych — wybór przeżywa zamknięcie karty
          rosterView:(()=>{ try{ return localStorage.getItem("aph.roster") || "kafelki"; }
                            catch(_){ return "kafelki"; } })(),
@@ -616,7 +645,7 @@ function screenPlans(){
     if(S.grp!=="Wszystkie")   return p.group===S.grp;
     return q ? true : p.in_base === true;
   });
-  const GRID = "grid-template-columns:96px 1fr 170px 150px 96px 30px 26px";
+  const GRID = "grid-template-columns:96px 1fr 170px 150px 96px 30px 26px;min-width:800px";
   const wybrany = grps.includes(S.grp);
   const segs = `<div class="segs">` +
     ["Wszystkie"].concat(grps, grps.length?["Bez folderu"]:[]).map(g=>
@@ -730,7 +759,7 @@ function screenPlan(){
     <button class="back" data-act="close_plan">${wroc}</button>
     <div class="pagehead" style="margin-top:10px">
       <div>
-        <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <h1>${esc(p.name)}</h1>
           <span class="badge" style="color:${fg};background:${bg};padding:4px 8px">${esc(p.status)}</span>
           <button class="badge" data-act="toggle_in_base" title="Kliknij, żeby zmienić"
@@ -768,6 +797,7 @@ function oknoDoBazy(){
     <div class="mf">
       <button class="btn primary" data-act="in_base_tak">Tak</button>
       <button class="btn ghost" data-act="in_base_nie">Nie</button>
+      <button class="btn ghost" style="margin-left:auto" data-act="in_base_pozniej">Później</button>
     </div>
   </div></div>`;
 }
@@ -827,7 +857,7 @@ function screenExercises(){
       .map(r => r.filter(c => c==="Wszystkie" || uzyte.has(c)))
       .filter(r => r.length)
       .map(r => `<div class="segs">${r.map(btn).join("")}</div>`).join("");
-    const GRID = "grid-template-columns:44px minmax(190px,.5fr) 1fr 34px";
+    const GRID = "grid-template-columns:44px minmax(190px,.5fr) 1fr 34px;min-width:480px";
     body = pick + `
       <div style="margin-top:18px">
         <input class="in" style="width:100%;max-width:380px;background:#fff" data-f="exQuery"
@@ -857,7 +887,7 @@ function screenExercises(){
     const wszyscy = [...new Set((D.ex_trenerzy||[]).map(e=>e.dodal))];
     const kto = wszyscy.includes(S.exTrener) ? S.exTrener : "Wszyscy";
     const rows = (D.ex_trenerzy||[]).filter(e=>kto==="Wszyscy"||e.dodal===kto);
-    const GRID = "grid-template-columns:44px minmax(190px,.6fr) 1fr 190px 130px";
+    const GRID = "grid-template-columns:44px minmax(190px,.6fr) 1fr 190px 130px;min-width:760px";
     body = `
       <div class="segs" style="margin-top:18px">${["Wszyscy"].concat(wszyscy).map(c=>
         `<button class="seg${kto===c?" on":""}" data-act="extrener" data-v="${esc(c)}">${esc(c)}</button>`).join("")}</div>
@@ -902,7 +932,7 @@ function screenExercises(){
           const opcje = (wyb, zajete, pusty) => `<option value="">${pusty}</option>`
             + KATY.filter(c=>!zajete.includes(c.name))
                   .map(c=>`<option${wyb===c.name?" selected":""}>${esc(c.name)}</option>`).join("");
-          return `<div class="trow static" style="grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) 148px 148px 92px 34px">
+          return `<div class="trow static" style="grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) 148px 148px 92px 34px;min-width:820px">
           <input class="in sm" style="min-width:0;font-weight:600;background:#fff"
                  data-f="nfname.${esc(k)}" value="${esc(n)}" title="Popraw nazwę ćwiczenia">
           <input class="filminput" data-f="film.${esc(k)}" value="${esc(FORM["film."+k]||"")}"
@@ -929,7 +959,7 @@ function screenExercises(){
           const opcje = (wyb, zajete) => `<option value="">${zajete.length?"—":"wybierz kategorię…"}</option>`
             + CATS.filter(c=>!zajete.includes(c.name))
                   .map(c=>`<option${wyb===c.name?" selected":""}>${esc(c.name)}</option>`).join("");
-          return `<div class="trow static" style="grid-template-columns:1fr 172px 172px 172px 92px 34px">
+          return `<div class="trow static" style="grid-template-columns:1fr 172px 172px 172px 92px 34px;min-width:860px">
           <input class="in sm" style="min-width:0;font-weight:600;background:#fff"
                  data-f="ncname.${esc(k)}" value="${esc(n)}" title="Popraw nazwę ćwiczenia">
           <select class="in" style="padding:7px 10px;font-size:13px" data-f="cat.${esc(k)}">${opcje(c1,[])}</select>
@@ -970,7 +1000,8 @@ function planModal(){
     + (D.groups||[]).map(g=>opt(g, FORM["pm.group"]||"")).join("");
   const sts = ["Auto","Trwa","Szkic","Zamknięty"]
     .map(x=>opt(x, FORM["pm.status"]||"Auto")).join("");
-  return `<div class="scrim" data-act="close_pmodal"><div class="modal" data-stop="1">
+  // tło nie zamyka (jak okno ćwiczenia): klik obok gubił wpisaną zmianę (audyt 2026-09-28)
+  return `<div class="scrim"><div class="modal" data-stop="1">
     <div class="mh"><b>Plan</b>
       <button class="iconbtn" style="font-size:17px;color:var(--mute2)" data-act="close_pmodal">×</button></div>
     <div class="mb">
@@ -1413,7 +1444,7 @@ function render(){
     </div>` : "";
   const bylModal = !!document.querySelector(".modal");
   document.getElementById("root").innerHTML =
-    `<div class="app">${sidebar()}<div class="main${S.navCollapsed?" nocol":""}">${opener}${coachbar()}${pasekUndo}${view}</div>${modal()}${planModal()}${athleteModal()}${S.askBase?oknoDoBazy():""}</div>`;
+    `<div class="app">${sidebar()}${S.navCollapsed?"":`<div class="navscrim" data-act="navtoggle"></div>`}<div class="main${S.navCollapsed?" nocol":""}">${opener}${coachbar()}${pasekUndo}${view}</div>${modal()}${planModal()}${athleteModal()}${S.askBase?oknoDoBazy():""}</div>`;
   const sc = document.querySelector(".scrim");
   if (sc) {
     // srodek tej czesci iframe, ktora jest teraz na ekranie
@@ -1443,7 +1474,50 @@ function render(){
   let H = 720; try { H = Math.max(720, parent.innerHeight - 2); } catch(_) {}
   const app = document.querySelector(".app"); if (app) app.style.minHeight = H + "px";
   SETH(Math.max(H, document.getElementById("root").scrollHeight));
+  sledzHistorie();
 }
+
+/* ---------------------------------------------------------------- Wstecz przeglądarki
+   Nawigacja w powłoce nie tworzyła wpisów w historii, więc Wstecz (też gest
+   na telefonie) wyprowadzał z apki (audyt 2026-09-28). Każde nowe miejsce
+   (ekran, otwarty plan, profil, formularz planu) dostaje wpis w historii
+   dokumentu apki; Wstecz/Dalej odsyła zapisane miejsce do Pythona. */
+function miejsce(){
+  if(S.screen==="plan" && D.plan) return {screen:"plan", plan:D.plan.id};
+  if(S.screen==="athletes" && D.athlete) return {screen:"athletes", athlete:D.athlete.name};
+  if(S.screen==="plans" && S.planTab==="nowy") return {screen:"plans", tab:"nowy"};
+  return {screen:S.screen};
+}
+let MAMY_DANE = false;   // pierwszy render (przed danymi z Pythona) to zawsze Start
+function sledzHistorie(){
+  if(!MAMY_DANE) return;
+  let P; try{ P = window.parent; void P.history.state; }catch(_){ return; }
+  const k = JSON.stringify(miejsce()), st = P.history.state || {};
+  if(P.__aphCel){                       // trwa przejście Wstecz/Dalej
+    if(P.__aphCel.k !== k && Date.now() - P.__aphCel.t < 5000) return;
+    P.__aphCel = null;
+    if(st.aph !== k) P.history.replaceState(Object.assign({}, st, {aph:k}), "");
+    return;
+  }
+  if(st.aph === k) return;
+  if(!st.aph) P.history.replaceState(Object.assign({}, st, {aph:k}), "");
+  else P.history.pushState({aph:k}, "");
+}
+function naWstecz(ev){
+  const st = (ev && ev.state) || {};
+  if(!st.aph) return;                   // wpis sprzed wejścia do apki
+  let m; try{ m = JSON.parse(st.aph); }catch(_){ return; }
+  window.parent.__aphCel = {k:st.aph, t:Date.now()};
+  S.menu = false; S.coachMenu = false; S.share = false; S.askBase = false;
+  S.modal = false; S.pmodal = null; S.amodal = null;
+  if(m.screen==="plans") S.planTab = m.tab==="nowy" ? "nowy" : "plany";
+  if(m.screen==="editor"){ if(m.plan && m.sid) act("open_workout",{plan_id:m.plan, sid:m.sid}); return; }
+  act("miejsce",{cel:m});
+}
+try{
+  window.parent.addEventListener("popstate", naWstecz);
+  window.addEventListener("pagehide", ()=>{ try{ window.parent.removeEventListener("popstate", naWstecz); }catch(_){} });
+}catch(_){}
 
 /* ---------------------------------------------------------------- zdarzenia */
 document.addEventListener("input", e=>{
@@ -1466,6 +1540,7 @@ document.addEventListener("keydown", e=>{
   else if(S.amodal){ S.amodal=null; S.amodalAll=false; S.amodalBlad=""; render(); }
   else if(S.pmodal){ S.pmodal=null; render(); }
   else if(S.menu||S.coachMenu){ S.menu=false; S.coachMenu=false; render(); }
+  else if(S.share){ S.share=false; render(); }
 });
 document.addEventListener("click", e=>{
   const b = e.target.closest("[data-act]");
@@ -1548,7 +1623,8 @@ document.addEventListener("click", e=>{
       act("close_athlete"); break;
     case "nav":
       S.menu = false; S.coachMenu = false;
-      if(b.dataset.v==="testing" && D.pt_komunikat){ S.screen = "brak_pt"; render(); break; }
+      if(waski()) S.navCollapsed = true;   // telefon: szuflada chowa się po wyborze
+      if(b.dataset.v==="testing" && D.pt_komunikat){ S.screen = "brak_pt"; render(); act("navigate",{to:"testing"}); break; }
       if(b.dataset.v==="testing"){ act("navigate",{to:"testing"}); break; }
       // otwarty plan zostaje otwarty (Filip 2026-09-05) — Python i tak odeśle
       // ekran planu, więc bez skoku przez listę
@@ -1568,6 +1644,10 @@ document.addEventListener("click", e=>{
       S.screen = "plans"; S.planTab = "nowy"; S.share = false; S.menu = false;
       render(); act("navigate",{to:"plans"}); break;
     case "plantab": S.planTab = b.dataset.v; render(); break;
+    case "in_base_pozniej":
+      // bez decyzji: plan się zamyka, pytanie wróci przy następnym wyjściu
+      // (audyt 2026-09-28: bez Tak/Nie nie dało się wrócić do listy)
+      S.askBase = false; render(); act("close_plan"); break;
     case "in_base_tak":
     case "in_base_nie":
       S.askBase = false; render();
@@ -1740,6 +1820,7 @@ window.addEventListener("message", ev=>{
   const args = d.args || {};
   if(args.data)   D = Object.assign({}, D, args.data);
   if(args.screen) S.screen = args.screen;
+  if(args.data)   MAMY_DANE = true;
   // Po każdej akcji Python przebudowuje komponent, a stan JS startuje od zera —
   // usunięcie ćwiczenia z zakładki „Bez kategorii" wyrzucało na „Wszystkie"
   // i kasowało filtr. Odtwarzamy widok Bazy z tego, co zapamiętał Python.

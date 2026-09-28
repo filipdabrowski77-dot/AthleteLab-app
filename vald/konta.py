@@ -26,6 +26,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import time
+import urllib.parse
 
 import streamlit as st
 
@@ -38,6 +40,14 @@ S_OGLADANE = "_aph_konto_ogladane"
 S_WS = "_aph_ws_konto"            # czyta store.workspace()
 S_NAZWA = "_aph_konto_nazwa"      # czyta store.coach_name()
 S_PT = "_aph_konto_pt"            # czyta store.tylko_plany()
+S_WYLOGOWANY = "_aph_wylogowany"  # ta karta się wylogowała — bez wejścia z ciasteczka
+
+# Zapamiętane logowanie: F5 i nowa karta wymagały hasła od nowa, a ekran
+# lądował na Starcie (audyt 2026-09-28). Ciasteczko to „id.ważność.podpis";
+# podpis HMAC zależy od skrótu hasła, więc zmiana hasła je unieważnia,
+# a klucz wynika z sekretu magazynu, którego przeglądarka nie zna.
+CIASTKO = "aph_sesja"
+CIASTKO_DNI = 30
 
 
 def _skrot(haslo: str, sol: str) -> str:
@@ -111,8 +121,50 @@ def wejdz(k: dict) -> None:
 
 
 def wyloguj() -> None:
-    for s in (S_ZALOGOWANY, S_OGLADANE, S_WS, S_NAZWA, S_PT):
-        st.session_state.pop(s, None)
+    # cała sesja, nie tylko klucze konta: otwarty profil, plan i edytor
+    # poprzedniego konta pokazywały się następnemu w tej samej karcie,
+    # także nazwiska z przestrzeni Filipa (audyt 2026-09-28)
+    st.session_state.clear()
+    st.session_state[S_WYLOGOWANY] = True
+
+
+def _podpis(kid: str, waznosc: int, skrot: str) -> str:
+    from .store import _creds
+    c = _creds()
+    klucz = hashlib.sha256(b"aph-sesja|" + (c[1] if c else "").encode()).digest()
+    return hmac.new(klucz, f"{kid}|{waznosc}|{skrot}".encode(),
+                    hashlib.sha256).hexdigest()[:40]
+
+
+def token_sesji(k: dict) -> str:
+    waznosc = int(time.time()) + CIASTKO_DNI * 86400
+    return f"{k['id']}.{waznosc}.{_podpis(k['id'], waznosc, k.get('skrot') or '')}"
+
+
+def _ciastko() -> str:
+    try:
+        return urllib.parse.unquote(st.context.cookies.get(CIASTKO) or "")
+    except Exception:
+        return ""
+
+
+def z_ciastka() -> dict | None:
+    """Wejście bez hasła, gdy przeglądarka ma ważne ciasteczko tego konta."""
+    if st.session_state.get(S_WYLOGOWANY):
+        return None
+    try:
+        kid, waznosc, podpis = _ciastko().rsplit(".", 2)
+        waznosc = int(waznosc)
+    except ValueError:
+        return None
+    if waznosc < time.time():
+        return None
+    k = _po_id(kid)
+    if not k or not k.get("skrot") or not hmac.compare_digest(
+            podpis, _podpis(kid, waznosc, k["skrot"])):
+        return None
+    wejdz(k)
+    return k
 
 
 def zalogowane() -> dict | None:

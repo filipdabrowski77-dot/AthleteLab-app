@@ -342,6 +342,24 @@ _KLUCZE = ("training_plans", "exercise_library", "athlete_profiles",
            "plan_todos", "recent_plans", "plan_groups", "film_pominiete")
 
 
+def rozgrzej_magazyn() -> None:
+    """Klucze ekranu trenera jednym zapytaniem na początku przebiegu. Po
+    wygaśnięciu cache (15 s) konta, dane przestrzeni i nakładki Bazy szły
+    po kolei: 3 zapytania u trenera, 6 u admina, 0,5-1 s na klik (audyt
+    2026-09-28). Lista przestrzeni do nakładek z poprzedniego odczytu kont."""
+    from . import konta as _konta, store as _st
+    if not _st.enabled() or not st.session_state.get(_konta.S_ZALOGOWANY):
+        return
+    klucze = ["konta", *_KLUCZE, "exercise_library_own"]
+    if not _st.workspace():
+        stare = ((_st._cache.get("konta") or (0, None))[1] or {}).get("konta") or []
+        for k in stare:
+            ws = _st._czysta_ws((k.get("workspace") or "") if isinstance(k, dict) else "")
+            if ws:
+                klucze.append(f"ws/{ws}/exercise_library_own")
+    _st.kv_get_many(klucze)
+
+
 def _planow(n: int) -> str:
     if n == 1:
         return "plan"
@@ -592,9 +610,15 @@ def build_data(screen: str) -> dict:
     _r.sort(key=lambda k: (0 if k["current"] else 1, k["name"].lower()))
     data["roster"] = _r
     kto = st.session_state.get("profil_osoby") or ""
-    data["athlete"] = _profil_pelny(kto, plans) if kto else None
     # zdjęci z listy — bez tego usunięcie byłoby nieodwracalne
     data["hidden"] = hidden_names()
+    # profil tylko z przestrzeni oglądanego konta: nazwisko z innej
+    # (stara sesja, podgląd admina) nie może się pokazać (audyt 2026-09-28)
+    if kto and kto not in ({r["name"] for r in _r} | set(data["hidden"])
+                           | {p.get("athlete", "") for p in plans}):
+        st.session_state.pop("profil_osoby", None)
+        kto = ""
+    data["athlete"] = _profil_pelny(kto, plans) if kto else None
     # lista planów: od najnowszego; „group" = folder klubu (Filip 2026-09-02)
     widoczne_plany = _plany_trenera(plans)
     data["plans"] = [{
@@ -821,9 +845,12 @@ def handle_action(ev: dict) -> None:
         # czysty start w nowym panelu: bez otwartego planu, edytora i trybu
         # wyboru z Bazy; JS też wraca na Start, więc app_mode musi to gonić
         ss["app_mode"] = "home"
+        # profil_osoby też: bez niego podgląd konta trenera pokazywał profil
+        # zawodnika z przestrzeni Filipa (audyt 2026-09-28)
         for k in ("tr_open_plan", "tr_open_workout", "exlib_pick",
                   "exlib_pick_sec", "exlib_pick_n", "tr_reopen_workout",
-                  "tr_athlete", "tr_athlete_pending"):
+                  "tr_athlete", "tr_athlete_pending", "profil_osoby",
+                  "plan_skad", "wk_exit_ask", "pp_dirty", "pp_zapisz_i_wyjdz"):
             ss.pop(k, None)
         st.toast(f"Panel: {_st_nazwa_panelu()}", icon="✅")
         st.rerun()
@@ -848,10 +875,45 @@ def handle_action(ev: dict) -> None:
         ss["app_mode"] = {"start": "home", "plans": "training",
                           "exercises": "exlib", "testing": "tests",
                           "athletes": "athletes", "help": "help"}.get(to, "home")
+        from . import store as _st
+        if ss["app_mode"] == "tests" and _st.tylko_plany():
+            # konto bez Performance testing: napis zamiast testów. Python musi
+            # o nim wiedzieć — inaczej echo renderu cofało powłokę na ekran
+            # sprzed kliknięcia (z Instrukcji i Bazy, audyt 2026-09-28)
+            ss["app_mode"] = "brak_pt"
         st.rerun()
 
     elif a == "close_plan":
         _zamknij_plan(ss)
+        st.rerun()
+
+    elif a == "miejsce":
+        # Wstecz / Dalej przeglądarki: miejsce zapisane przez powłokę w historii
+        # (audyt 2026-09-28: Wstecz wyprowadzał z apki)
+        cel = ev.get("cel") or {}
+        ekran = cel.get("screen") or "start"
+        for k in ("tr_open_workout", "exlib_pick", "exlib_pick_sec",
+                  "wk_exit_ask", "pp_dirty", "pp_zapisz_i_wyjdz"):
+            ss.pop(k, None)
+        plan = next((p for p in get_all_plans() if p.get("id") == cel.get("plan")),
+                    None) if ekran == "plan" else None
+        if plan:
+            ss["tr_athlete_pending"] = plan.get("athlete", "")
+            ss["tr_open_plan"] = plan["id"]
+            ss.setdefault("plan_skad", "plans")
+            ss["app_mode"] = "training"
+            st.rerun()
+        ss.pop("tr_open_plan", None)
+        if ekran == "athletes" and cel.get("athlete"):
+            ss["profil_osoby"] = str(cel["athlete"])
+        elif ekran == "athletes":
+            ss.pop("profil_osoby", None)
+        from . import store as _st
+        ss["app_mode"] = {"start": "home", "plans": "training",
+                          "exercises": "exlib", "athletes": "athletes",
+                          "help": "help"}.get(ekran, "home")
+        if ekran == "brak_pt" and _st.tylko_plany():
+            ss["app_mode"] = "brak_pt"
         st.rerun()
 
     elif a in ("open_plan", "queue_open"):
@@ -1417,7 +1479,8 @@ EDITOR_CSS = """<style>
 .stApp .st-key-wk_back button:hover{background:#f2f1ec!important}
 .stApp .st-key-wk_bar{padding:18px 40px 0}
 .aph-wk-eyebrow{font-family:Archivo,system-ui,sans-serif;font-size:12.5px;font-weight:700;
-  letter-spacing:.08em;text-transform:uppercase;color:#8a867c;padding-top:8px}
+  letter-spacing:.08em;text-transform:uppercase;color:#8a867c;padding-top:8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .aph-wk-warn{font-family:Archivo,system-ui,sans-serif;font-size:13px;font-weight:600;
   color:#a8452f;padding-top:9px}
 </style>"""
@@ -1499,7 +1562,8 @@ def render_shell() -> None:
         _render_workout_page(ow[0], ow[1])
         return
     screen = {"home": "start", "training": "plans", "exlib": "exercises",
-              "athletes": "athletes", "help": "help"}.get(mode, "start")
+              "athletes": "athletes", "help": "help",
+              "brak_pt": "brak_pt"}.get(mode, "start")
     if mode == "training" and st.session_state.get("tr_open_plan"):
         if not any(p["id"] == st.session_state["tr_open_plan"] for p in get_all_plans()):
             st.session_state.pop("tr_open_plan", None)

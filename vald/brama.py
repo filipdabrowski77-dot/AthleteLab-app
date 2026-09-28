@@ -23,6 +23,7 @@ import streamlit as st
 _OK = "_brama_otwarta"
 _PROBY = "_brama_proby"
 _BLOKADA_DO = "_brama_blokada_do"
+_DO_CIASTKA = "_brama_do_ciastka"
 _LIMIT = 5          # nieudanych prób, zanim sesja poczeka
 _PRZERWA = 30.0     # sekund
 
@@ -45,6 +46,8 @@ def sprawdz_haslo() -> bool:
         if konta.zalogowane():
             return True
         if len(str(st.query_params.get("plan") or "").strip()) >= _MIN_TOKEN:
+            return True
+        if konta.z_ciastka():
             return True
         _ekran_kont()
         return False
@@ -108,9 +111,35 @@ def _ekran() -> None:
             st.caption("Hasło dostajesz od trenera, który zakładał dostęp.")
 
 
+def _ciastko_js(wartosc: str, sekundy: int) -> None:
+    """Zapis/usunięcie ciasteczka sesji w dokumencie apki (ramka
+    components.html ma ten sam origin)."""
+    import json
+    import streamlit.components.v1 as components
+    from .konta import CIASTKO
+    components.html(f"""<script>
+    try {{
+      const w = window.parent, bezp = w.location.protocol === "https:" ? "; Secure" : "";
+      w.document.cookie = "{CIASTKO}=" + encodeURIComponent({json.dumps(wartosc)})
+        + "; Max-Age={sekundy}; Path=/; SameSite=Lax" + bezp;
+    }} catch (e) {{}}
+    </script>""", height=0)
+
+
+def zapamietaj_logowanie() -> None:
+    """Po wejściu hasłem: ciasteczko, żeby F5 i nowa karta nie pytały
+    o hasło (woła app.py za bramą, raz po zalogowaniu)."""
+    from .konta import CIASTKO_DNI
+    tok = st.session_state.pop(_DO_CIASTKA, None)
+    if tok:
+        _ciastko_js(tok, CIASTKO_DNI * 86400)
+
+
 def _ekran_kont() -> None:
     """Logowanie: wybór konta + hasło. Te same limity prób co przy haśle."""
     from . import konta
+    if st.session_state.get(konta.S_WYLOGOWANY) and konta._ciastko():
+        _ciastko_js("", 0)        # Wyloguj: nowa karta też ma pytać o hasło
     lista = [k for k in konta.wszystkie() if k.get("skrot")]
     st.markdown(
         "<div style='max-width:380px;margin:14vh auto 0;text-align:center;'>"
@@ -138,8 +167,9 @@ def _ekran_kont() -> None:
             k = konta.sprawdz(kid, (wpis or "").strip())
             if k:
                 konta.wejdz(k)
-                for s_ in (_PROBY, _BLOKADA_DO):
+                for s_ in (_PROBY, _BLOKADA_DO, konta.S_WYLOGOWANY):
                     st.session_state.pop(s_, None)
+                st.session_state[_DO_CIASTKA] = konta.token_sesji(k)
                 st.rerun()
             else:
                 proby = st.session_state.get(_PROBY, 0) + 1

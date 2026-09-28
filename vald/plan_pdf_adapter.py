@@ -155,7 +155,9 @@ def _dawka(it: dict, wk: int) -> str:
     out = f"{s}×{r}" if s and r else (r or s)
     if out and p.get("intent"):
         out += f" @ {p['intent']}"
-    return out
+    # dawki tekstowe (top set, druga część „+ 2 x 5”) też z „×” jak reszta
+    # (audyt 2026-09-28: „top set 1 x 3 @ rpe 9 + 2 x” łamało się w komórce)
+    return re.sub(r"(\d)\s*x\s*(?=[\d(])", r"\1×", out)
 
 
 def _sec_items(items: list, section: str) -> list:
@@ -179,7 +181,12 @@ def build_plan_pdf_green(plan: dict, url_map: dict | None = None) -> bytes:
     prep_w_nag = bool(plan.get("prep_w_naglowku"))
 
     dni, linki = [], {}
+    # pusty trening (formularz zakłada A i B) dawał w PDF stronę z samym
+    # tytułem (audyt 2026-09-28); gdy puste są wszystkie — stara plansza
+    pomin_puste = any(s.get("items") for s in sessions)
     for i, sess in enumerate(sessions):
+        if pomin_puste and not sess.get("items"):
+            continue
         # normalizacja przy renderze: samotne „3a" → „3" także w planach
         # zapisanych przed wprowadzeniem reguły (kopia, nie ruszamy danych)
         items = normalize_slots([dict(it) for it in (sess.get("items") or [])])
@@ -240,7 +247,7 @@ def build_plan_pdf_green(plan: dict, url_map: dict | None = None) -> bytes:
         # legenda (RPE + wskazówki) TYLKO nad pierwszym treningiem —
         # nie powtarzamy jej na stronie B, C…
         dzien = {"nr": tytul_dnia, "bloki": bloki}
-        if i == 0 and not plan.get("bez_legendy"):
+        if not dni and not plan.get("bez_legendy"):
             dzien["wstep"] = _WSTEP
             # tabelka intensywności tylko tam, gdzie Filip jej używa
             dzien["legenda"] = _legenda(prep_rows, cond_rows)

@@ -117,7 +117,9 @@ def _odmiana(n: int, poj: str, kilka: str, wiele: str) -> str:
     return wiele
 
 
-@st.dialog("Plan z dyktanda", width="large")
+# bez zamykania Esc i kliknięciem obok: wklejony tekst trafia do Pythona
+# dopiero po wyjściu z pola, więc Esc kasował go bez śladu (audyt 2026-09-28)
+@st.dialog("Plan z dyktanda", width="large", dismissible=False)
 def _tr_dyktando_dialog() -> None:
     """Dyktando (Wispr Flow) wprost w apce — bez terminala i bez asystenta.
     Parser `vald/dyktando.py` jest czystym Pythonem: liczebniki słowne,
@@ -136,8 +138,11 @@ def _tr_dyktando_dialog() -> None:
                    "Sekcje: prep, plyo, main, akcesoria.")
     # Streamlit oddaje treść pola dopiero po ⌘+Enter albo kliknięciu poza nie —
     # bez tego przycisku wklejenie tekstu nie robiło z pozoru NIC.
-    st.button("Sprawdź dopasowania", use_container_width=True,
-              key="dykt_sprawdz")
+    _c1, _c2 = st.columns([3, 1])
+    _c1.button("Sprawdź dopasowania", use_container_width=True,
+               key="dykt_sprawdz")
+    if _c2.button("Zamknij", use_container_width=True, key="dykt_zamknij"):
+        st.rerun()
     if not (tekst or "").strip():
         return
     try:
@@ -577,7 +582,8 @@ def _tr_workout_body(plan_id: str, sid: str) -> None:
             for e in _exl_pp.exercises() if (e.get("name") or "").strip()]
     plan_panel({"athlete": _ath_pp, "name": plan.get("name", "")},
                _wk, key=f"pp_{key}", pdf_png=pdf_uri, pdf_err=pdf_err,
-               ack=_ack, ui=ui, exlist=_sug)
+               ack=_ack, ui=ui, exlist=_sug,
+               miejsce={"plan": plan_id, "sid": sid})   # wpis w historii (Wstecz)
 
     if w_pdf and pdf_bytes:
         from .plan_xlsx import build_plan_xlsx

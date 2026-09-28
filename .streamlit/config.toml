@@ -11,5 +11,11 @@ maxUploadSize = 50
 # Tryb trenera na telefonie: ekran blokowany na przerwę między seriami
 # (2–3 min) nie może gubić sesji — domyślnie Streamlit trzyma ją 120 s
 disconnectedSessionTTL = 1800
-# strona-ikonka trybu trenera na telefonie: /app/static/trener.html
+# ikonka i manifest trybu trenera na telefonie: /app/static/
 enableStaticServing = true
+
+[global]
+# komunikaty od 1 KB (bloki CSS) przeglądarka trzyma w cache i dostaje sam
+# hash; przy domyślnych 10 KB szło ~73 KB stylów na każde kliknięcie
+# (audyt 2026-09-28: 195 → 125 KB na klik)
+minCachedMessageSize = 1000

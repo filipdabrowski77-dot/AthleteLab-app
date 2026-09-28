@@ -179,8 +179,10 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
                     # element może być tekstem, własną mini-tabelką albo
                     # LISTĄ mini-tabelek — wtedy stają w jednym rzędzie
                     # (movement prep i conditioning ramię w ramię)
-                    szer_prawej = W * (1 - float(grupa.get('szer', .62))
-                                       - .02)
+                    # dokładna szerokość treści prawej komórki (szerokość
+                    # kolumny − 8 − lewy padding 14); „− 0,02·W” było za mało
+                    # i tabelka intensywności wystawała 6 pt za ramkę
+                    szer_prawej = W * (1 - float(grupa.get('szer', .62))) - 8 - 14
 
                     def _mini(linia, szer_dost):
                         mt = linia['tabela']

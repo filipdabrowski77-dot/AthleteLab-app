@@ -450,9 +450,11 @@ function editorSection(sec) {
     </tr>`;
   }).join("");
 
-  const minw = sec.simple ? 0 : fixed + n * wk;
+  // prep: 382 px stałych kolumn + miejsce na nazwę; bez minimum kolumna
+  // „Ćwiczenie” dostawała 0 px na telefonie (audyt 2026-09-28)
+  const minw = sec.simple ? 580 : fixed + n * wk;
   return `<div class="sec-title" style="color:${sec.accent}">${esc(sec.title)}</div>
-    <div class="card${sec.simple ? "" : " przewijana"}" style="border-top:3px solid ${sec.accent}">
+    <div class="card przewijana" style="border-top:3px solid ${sec.accent}">
       <table style="min-width:${minw}px"><thead>${head}</thead><tbody>${body}</tbody></table>
     </div>
     <div class="foot">
@@ -1012,6 +1014,7 @@ document.addEventListener("change", (e) => {
 window.addEventListener("message", (ev) => {
   const d = ev.data; if (!d || d.type !== "streamlit:render") return;
   const args = d.args || {};
+  wpisEdytora(args.miejsce);
   if (Array.isArray(args.exlist)) EXLIST = args.exlist;
   // echo starszego stanu (np. dwa szybkie klikniecia): Python odeslal ack != LAST_SENT —
   // nie nadpisuj lokalnych zmian, kolejny przebieg przyniesie aktualny stan
@@ -1033,6 +1036,44 @@ window.addEventListener("message", (ev) => {
   S.pdfPending = !S.pdfPng && !S.pdfErr && S.view !== "edytor" && S.pvMode === "pdf";
   render();
 });
+/* ---------------------------------------------------------------- Wstecz i F5
+   Audyt 2026-09-28: Wstecz wyprowadzał z apki, a F5 z niezapisanymi
+   zmianami kasował je bez pytania. Edytor ma własny wpis w historii;
+   Wstecz zamyka go tą samą drogą co „← Wróć do planu" (z pytaniem
+   o zapis), a F5 / zamknięcie karty przy zmianach pyta przeglądarką. */
+let WPIS_EDYTORA = false;
+function wpisEdytora(m) {
+  if (WPIS_EDYTORA || !m || !m.plan) return;
+  WPIS_EDYTORA = true;
+  try {
+    const P = window.parent, st = P.history.state || {};
+    const k = JSON.stringify({ screen: "editor", plan: m.plan, sid: m.sid || "" });
+    if (P.__aphCel && P.__aphCel.k === k) P.__aphCel = null;
+    if (st.aph !== k) P.history.pushState({ aph: k }, "");
+  } catch (_) {}
+}
+function wsteczEdytora(ev) {
+  const st = (ev && ev.state) || {};
+  if (!st.aph) return;
+  try {
+    const P = window.parent, b = P.document.querySelector(".st-key-wk_back button");
+    if (!b) return;
+    P.__aphCel = { k: st.aph, t: Date.now() };
+    b.click();
+  } catch (_) {}
+}
+function przedWyjsciem(e) { if (S.dirty) { e.preventDefault(); e.returnValue = ""; } }
+try {
+  window.parent.addEventListener("popstate", wsteczEdytora);
+  window.parent.addEventListener("beforeunload", przedWyjsciem);
+  window.addEventListener("pagehide", () => {
+    try {
+      window.parent.removeEventListener("popstate", wsteczEdytora);
+      window.parent.removeEventListener("beforeunload", przedWyjsciem);
+    } catch (_) {}
+  });
+} catch (_) {}
+
 READY(); render();
 </script>
 </body>

@@ -4377,9 +4377,12 @@ def main() -> None:
     # Publiczny adres instancji gościa — bez hasła wszedłby każdy, kto zna
     # link (Streamlit Cloud: jedna zamknięta apka na konto). Bez sekretu
     # `haslo` ta funkcja zwraca True od razu, więc u Filipa nic się nie zmienia.
-    from vald.brama import sprawdz_haslo
+    from vald.shell import rozgrzej_magazyn
+    rozgrzej_magazyn()
+    from vald.brama import sprawdz_haslo, zapamietaj_logowanie
     if not sprawdz_haslo():
         return
+    zapamietaj_logowanie()
     _start_auto_refresh_daemon()
 
     # Deep-link: ?athlete=Imię+Nazwisko otwiera profil od razu (np. link
@@ -4442,7 +4445,7 @@ def main() -> None:
     # (views/app_shell) — jeden komponent rysuje sidebar i strony,
     # Python podaje dane i obsługuje akcje. Performance testing zostaje
     # w dotychczasowym widoku (Filip 2026-09-02).
-    if _mode_top in ("home", "training", "exlib", "athletes", "help"):
+    if _mode_top in ("home", "training", "exlib", "athletes", "help", "brak_pt"):
         from vald.shell import render_shell
         try:
             render_shell()
