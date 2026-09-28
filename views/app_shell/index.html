@@ -199,6 +199,8 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 .hcard h3{margin:0 0 3px;font-size:15px;font-weight:700}
 .hcard .gdzie{font-size:12px;color:var(--mute);margin-bottom:8px}
 .hcard ol{margin:0;padding-left:18px;font-size:13.5px;line-height:1.55;color:var(--ink)}
+.hclaude .btn{margin-top:10px}
+.hclaude .instr{display:block;width:100%;box-sizing:border-box;margin-top:8px;height:74px;resize:vertical;font:12px/1.4 ui-monospace,Menlo,monospace;color:var(--dim);background:var(--bg,transparent);border:1px solid var(--line2);border-radius:8px;padding:6px 8px}
 .hcard code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:var(--fill);border-radius:4px;padding:1px 5px}
 .hdawki{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;margin:0}
 .hdawki dt{color:var(--dim)}
@@ -652,8 +654,8 @@ function screenPlans(){
               // bez folderów rada „wybierz folder" jest ślepa — plan da się
               // wtedy otworzyć tylko z wyszukiwarki albo z profilu (2026-09-20)
               (D.groups||[]).length
-                ? esc(D.plans.length)+" planów czeka w folderach — wybierz folder obok albo wyszukaj po nazwie. Do tej listy trafiają plany, które zatwierdzisz na koniec rozpisywania."
-                : esc(D.plans.length)+" planów jest poza bazą — wpisz nazwę albo zawodnika w wyszukiwarce, żeby je otworzyć. Do tej listy trafiają plany, które zatwierdzisz na koniec rozpisywania.")
+                ? esc(D.plans.length)+" "+odm(D.plans.length,"plan czeka","plany czekają","planów czeka")+" w folderach — wybierz folder obok albo wyszukaj po nazwie. Do tej listy trafiają plany, które zatwierdzisz na koniec rozpisywania."
+                : esc(D.plans.length)+" "+odm(D.plans.length,"plan jest","plany są","planów jest")+" poza bazą — wpisz nazwę albo zawodnika w wyszukiwarce, żeby je otworzyć. Do tej listy trafiają plany, które zatwierdzisz na koniec rozpisywania.")
           : "Brak planów. Zacznij od „＋ Nowy plan”."}</div>`}
     </div>`;
 
@@ -1350,6 +1352,17 @@ function screenHelp(){
       "Na koniec <b>Zakończ trening</b>. Zapis idzie sam, także po chwili bez internetu.",
       "Ikonka na iPhonie: Safari → adres apki z <code>?mode=gym</code> na końcu → Udostępnij → Do ekranu początkowego."]),
   ];
+  // plan z Claude trenera (Filip 2026-09-28) — na razie przez wklejenie;
+  // po zbudowaniu łącznika ta karta opisze podłączenie jednym adresem
+  karty.push(`<div class="hcard hclaude"><h3>Plan z Claude</h3>
+    <div class="gdzie">Twój Claude (claude.ai) → Projekty</div><ol>
+      <li>Na claude.ai załóż projekt, np. „Plany APH”.</li>
+      <li>Kliknij <b>Skopiuj instrukcję dla Claude</b> i wklej ją w instrukcje projektu.</li>
+      <li>W tym projekcie dyktuj plan normalnie, także głosem. Na koniec Claude odda jeden blok tekstu.</li>
+      <li>Skopiuj blok → Training Plans → <b>🎙 Z dyktanda</b> → wklej → <b>Sprawdź dopasowania</b> → zapisz.</li>
+      <li>Bezpośrednie połączenie Claude z apką (bez kopiowania) jest w przygotowaniu.</li></ol>
+    <button class="btn primary xs" data-act="kopiuj_instr">Skopiuj instrukcję dla Claude</button>
+    <textarea class="instr" readonly aria-label="Instrukcja dla Claude">${esc(D.instrukcja_claude||"")}</textarea></div>`);
   if(!D.tylko_plany) karty.push(k("Performance testing", "Menu → Performance testing", [
     "Wyniki testów VALD zawodnika, porównanie sesji i asymetrie."]));
   const dawki = `<div class="hcard"><h3>Jak zapisywać dawki</h3>
@@ -1648,6 +1661,16 @@ document.addEventListener("click", e=>{
       render();
       } break;
     case "pdf":           act("pdf",{plan_id:D.plan.id}); break;
+    case "kopiuj_instr": {
+      const ta = document.querySelector(".hclaude .instr");
+      const ok = () => { b.textContent = "Skopiowano ✓"; };
+      if(ta){ ta.focus(); ta.select(); }
+      try{
+        if(navigator.clipboard && window.isSecureContext)
+          navigator.clipboard.writeText(D.instrukcja_claude||"").then(ok, () => { try{ document.execCommand("copy") && ok(); }catch(_){} });
+        else if(document.execCommand("copy")) ok();
+      }catch(_){}
+      } break;
     case "copy_link":     { const u=D.plan.share_url; try{ navigator.clipboard && navigator.clipboard.writeText(u); }catch(_){}
                             act("copy_link",{url:u}); } break;
     case "add_workout":   act("add_workout",{plan_id:D.plan.id}); break;

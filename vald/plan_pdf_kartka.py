@@ -33,21 +33,18 @@ from reportlab.platypus import (BaseDocTemplate, Flowable, Frame, Image,
 from .plan_pdf_adapter import _kap, _txt
 from .training import ensure_sessions, normalize_slots, week_params
 
-# ── font z polskimi znakami (jak w zielonym szablonie) ──────────────────
-_FONT, _FONT_B = "Helvetica", "Helvetica-Bold"
-for kat in ("/Library/Fonts", "/System/Library/Fonts/Supplemental",
-            str(Path.home() / "Library/Fonts")):
-    p_r, p_b = Path(kat) / "Arial.ttf", Path(kat) / "Arial Bold.ttf"
-    if p_r.exists():
-        try:
-            pdfmetrics.registerFont(TTFont("AR", str(p_r)))
-            _FONT = "AR"
-            if p_b.exists():
-                pdfmetrics.registerFont(TTFont("AR-B", str(p_b)))
-                _FONT_B = "AR-B"
-            break
-        except Exception:
-            pass
+# ── font z polskimi znakami: ta sama rodzina co zielony szablon ─────────
+# (Arial → Liberation → DejaVu). Własna pętla szukała tylko Ariala w
+# katalogach macOS — w chmurze (Linux) kartka szła Helveticą z kwadratami
+# zamiast ą/ę/ł/ś/ż (audyt 2026-09-28).
+from .plan_pdf_green import znajdz_rodzine
+_para = znajdz_rodzine()
+if _para is None:
+    raise RuntimeError("brak czcionki TTF z polskimi znakami (Arial / "
+                       "Liberation Sans / DejaVu) — kartka miałaby kwadraty")
+pdfmetrics.registerFont(TTFont("AR", _para[0]))
+pdfmetrics.registerFont(TTFont("AR-B", _para[1]))
+_FONT, _FONT_B = "AR", "AR-B"
 
 # paleta kartki: niebieska (Filip 2026-08-24) — zielony zostaje
 # rozpiskom w plan_pdf_green, kartka robocza idzie na niebiesko

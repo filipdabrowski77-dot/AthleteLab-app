@@ -35,7 +35,7 @@ _TABLE = "kv"
 # zawodnika. 1.5 s oznaczało, że każde kliknięcie szło po sieci na nowo
 # (8 kluczy × 100-800 ms = ponad sekunda na akcję).
 _TTL = 15.0
-_cache: dict[str, tuple[float, dict]] = {}
+_cache: dict[str, tuple[float, dict | None]] = {}
 
 
 def _kopia(v):
@@ -242,8 +242,10 @@ def kv_get(name: str) -> dict | None:
         return rows[0]["value"] if rows else None
 
     val = _fetch(name)
-    if val is not None:
-        _cache[name] = (time.monotonic(), val)
+    # brak wpisu też trafia do cache: nowy trener nie ma jeszcze większości
+    # kluczy i każdy ekran pytał o nie od nowa (14 zapytań, ~2,5 s na
+    # kliknięcie u Maćka, 2026-09-28). Własny zapis nadpisuje to w kv_put.
+    _cache[name] = (time.monotonic(), val)
     return _kopia(val)
 
 
@@ -261,7 +263,7 @@ def kv_get_many(names: "list[str]") -> dict:
                      and (swieze - _cache[_kv_name(n)][0]) < _TTL)]
     if not braki:
         return {n: _kopia(_cache[_kv_name(n)][1]) for n in names
-                if _kv_name(n) in _cache}
+                if _kv_name(n) in _cache and _cache[_kv_name(n)][1] is not None}
     url, key = creds
     pelne = [_kv_name(n) for n in braki]
     lista = ",".join(urllib.parse.quote(k, safe="") for k in pelne)
@@ -274,10 +276,12 @@ def kv_get_many(names: "list[str]") -> dict:
     except _SIEC:
         return {}          # cicho — wołający pobierze klucze pojedynczo
     teraz = time.monotonic()
+    for k in pelne:                 # nieznalezione = pusty wpis w cache
+        _cache[k] = (teraz, None)
     for w in wiersze:
         _cache[w["key"]] = (teraz, w["value"])
     return {n: _kopia(_cache[_kv_name(n)][1]) for n in names
-            if _kv_name(n) in _cache}
+            if _kv_name(n) in _cache and _cache[_kv_name(n)][1] is not None}
 
 
 def kv_put(name: str, value: dict) -> None:

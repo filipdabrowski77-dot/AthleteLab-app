@@ -15,6 +15,7 @@ import base64
 import json
 import socket
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -715,6 +716,13 @@ def build_data(screen: str) -> dict:
             }
         else:
             st.session_state.pop("exlib_pick", None)
+    if screen == "help":
+        # tekst do wklejenia w instrukcje projektu w Claude trenera
+        try:
+            data["instrukcja_claude"] = (
+                Path(__file__).with_name("instrukcja_claude.txt").read_text("utf-8"))
+        except OSError:
+            data["instrukcja_claude"] = ""
     return data
 
 
