@@ -45,7 +45,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .kropka{font-size:11.5px;font-weight:600;color:#a09c92;white-space:nowrap;padding-top:3px}
 .kropka.ok{color:oklch(.5 .12 155)}
 .kropka:empty{display:none}
-.zwin{min-width:44px;min-height:44px;border:0;background:transparent;color:#a09c92;font-size:15px;margin:-10px -10px 0 0;padding:0}
+.zwin{min-width:44px;min-height:44px;border:0;background:transparent;color:#a09c92;font-size:15px;margin:-10px -9px 0 0;padding:0}
 
 /* serie: nr | kg | powt. | RPE | ✓ | ✕ — pola 44 px, font 16 px (Safari
    powiększa stronę przy fokusie w polu z mniejszą czcionką) */
@@ -84,7 +84,14 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .dodajcw{width:100%;min-height:44px;margin:0 0 10px;border:1px dashed #d8d5cc;border-radius:12px;background:transparent;font-size:14px;font-weight:600;color:#6f6b61}
 
 /* zwinięta sekcja (Prep, Plyo): jeden wiersz na ćwiczenie */
-.mini{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;background:#fff;border:1px solid #ebe9e2;border-radius:14px;padding:9px 12px;margin:0 0 8px;text-align:left}
+.mini{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;background:#fff;border:1px solid #ebe9e2;border-radius:14px;padding:9px 12px;margin:0 0 8px;text-align:left;overflow:hidden}
+.mini.zrobione{background:#f7faf5;border-color:#d9e6d3}
+.mini .minibtn{display:flex;align-items:center;gap:12px;flex:1;min-width:0;min-height:44px;border:0;background:transparent;padding:0;text-align:left}
+.mini .ost{font-size:12.5px}
+.mini .chevo{min-width:44px;min-height:44px;margin:-9px -12px -9px 0;border:0;border-left:1px solid #f0eee8;background:transparent;color:#a09c92;font-size:16px}
+.mini .fajka{width:26px;height:26px;border-radius:999px;border:1px solid #d8d5cc;display:inline-flex;align-items:center;justify-content:center;font-size:14px;color:transparent;flex-shrink:0}
+.mini.zrobione .fajka{background:#1c1b18;border-color:#1c1b18;color:#fff}
+.akcja.nota-btn.jest{border-style:solid;color:#1c1b18}
 .mdose{font-size:13px;font-weight:600;color:#6f6b61;font-variant-numeric:tabular-nums}
 .licz{font-size:13px;font-weight:700;color:#8a867c;white-space:nowrap;font-variant-numeric:tabular-nums}
 .licz.pelny{color:oklch(.5 .12 155)}
@@ -349,14 +356,17 @@ function htmlKarta(k, sek, wZwinietej) {
       + `<button type="button" class="btn-nie" data-act="nie" ${a} aria-pressed="${s.stan === "skip"}"`
       + ` aria-label="Seria ${si + 1} niezrobiona">✕</button></div>`;
   }
-  const nota = S.notOtw[k] || txt(st.notatka);
+  // notatka: przycisk ✎, pole pokazuje się po stuknięciu; gdy notatka jest,
+  // przycisk ma pełną ramkę (Filip 2026-09-29: „klikam i wpisuję notatkę")
+  const jestNota = !!txt(st.notatka), nota = !!S.notOtw[k];
   h += `</div><div class="akcje"><button type="button" class="akcja" data-act="plus" ${dk}>+ seria</button>`
     + (n > 1 ? `<button type="button" class="akcja" data-act="minus" ${dk}>− seria</button>` : "")
-    + (nota ? "" : `<button type="button" class="akcja" data-act="notatka" ${dk}>+ notatka</button>`)
+    + `<button type="button" class="akcja nota-btn${jestNota ? " jest" : ""}" data-act="notatka" ${dk}`
+    + ` aria-expanded="${nota}">✎${jestNota ? " notatka" : ""}</button>`
     + `<button type="button" class="wiecej" data-act="wiecej" ${dk} aria-label="Zamień lub usuń ćwiczenie">⋯</button>`
     + `</div>` + htmlEdycja(k)
     + (nota ? `<textarea class="nota" ${dk} data-f="notatka" rows="1" maxlength="500"`
-      + ` placeholder="Notatka do ćwiczenia">${esc(st.notatka)}</textarea>` : "")
+      + ` placeholder="Notatka">${esc(st.notatka)}</textarea>` : "")
     + (S.odrz[k] ? `<div class="odrz">${esc(S.odrz[k])}</div>` : "")
     + `</div>`;
   return h;
@@ -396,11 +406,20 @@ function htmlNazwy() {
   return `<datalist id="nazwy">` + S.nazwy.map((n) => `<option value="${esc(n)}"></option>`).join("") + `</datalist>`;
 }
 function htmlMini(k, sek) {
-  const karta = S.meta[k], n = ileWierszy(k), o = ileOk(k);
-  return `<button type="button" class="mini" data-act="otworz" data-k="${esc(k)}">${htmlSlot(k, sek)}`
-    + `<span class="pvcol"><span class="pvname">${esc(karta.exercise)}</span>`
-    + `<span class="mdose">${esc(karta.dawka)}${karta.intent ? " · " + esc(karta.intent) : ""}</span></span>`
-    + `<span class="kropka" data-kropka="${esc(k)}"></span>`
+  const karta = S.meta[k], n = ileWierszy(k), o = ileOk(k), dk = `data-k="${esc(k)}"`;
+  const tresc = `${htmlSlot(k, sek)}<span class="pvcol"><span class="pvname">${esc(karta.exercise)}</span>`
+    + `<span class="mdose">${esc(karta.dawka)}${karta.intent ? " · " + esc(karta.intent) : ""}</span>`
+    + (karta.ostatnio && !sek.zwinieta ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "")
+    + `</span><span class="kropka" data-kropka="${esc(k)}"></span>`;
+  if (sek.zwinieta) {
+    // Prep / Plyo: stuknięcie = zrobione (bez pól), „›" otwiera serie i ⋯
+    // (Filip 2026-09-29: „w movement prepie raczej nie będę zmieniał serii")
+    return `<div class="mini${o === n ? " zrobione" : ""}"><button type="button" class="minibtn" data-act="odhacz_wiersz" ${dk}>`
+      + tresc + `<span class="fajka">✓</span></button>`
+      + `<button type="button" class="chevo" data-act="otworz" ${dk} aria-label="Serie i zmiany">›</button></div>`;
+  }
+  // Main: plan widać od razu, serie po stuknięciu w ćwiczenie
+  return `<button type="button" class="mini" data-act="otworz" ${dk}>` + tresc
     + `<span class="licz${o === n ? " pelny" : ""}">${o}/${n} ✓</span></button>`;
 }
 function wszystkoZrobione(ks) {
@@ -410,8 +429,7 @@ function htmlSekcja(sek, ks, zwinieta) {
   const tyt = `<i style="background:${esc(sek.acc)}"></i>${esc(sek.tytul)}`;
   let h = `<div class="pvsec" style="color:${esc(sek.acc)}">`;
   if (sek.zwinieta) {
-    h += `<button type="button" class="sekbtn" data-act="sekcja" data-s="${esc(sek.key)}"`
-      + ` aria-expanded="${!zwinieta}">${tyt}<span class="chev">${zwinieta ? "▸" : "▾"}</span></button>`
+    h += `<span class="sektyt">${tyt}</span>`
       + `<button type="button" class="wszystko" data-act="wszystko" data-s="${esc(sek.key)}">`
       + (wszystkoZrobione(ks) ? "Cofnij wszystko" : "✓ Wszystko") + `</button>`;
   } else {
@@ -428,10 +446,16 @@ function render() {
     // karta odrzucona przy wpisywaniu w innym polu: stan z serwera od razu
     for (const k of ks) if (!S.stan[k]) S.stan[k] = zSerwera(S.meta[k]);
     h += htmlSekcja(sek, ks, zwinieta);
-    for (const k of ks) h += (zwinieta && !S.otwarte[k]) ? htmlMini(k, sek) : htmlKarta(k, sek, zwinieta);
-    if (!zwinieta || S.dod[sek.key]) h += htmlDodaj(sek);
+    // otwarta: stuknięta, albo w trakcie (część serii ✓) — po przeładowaniu
+    // ramki i po zmianie rozpiski trener wraca do tego samego ćwiczenia
+    for (const k of ks) {
+      const o = ileOk(k), otw = S.otwarte[k] ?? (o > 0 && o < ileWierszy(k));
+      h += otw ? htmlKarta(k, sek, true) : htmlMini(k, sek);
+    }
+    // „+ ćwiczenie" tylko w Main — Prep/Plyo zostają jedną listą (minimum tekstu)
+    if (!sek.zwinieta || S.dod[sek.key]) h += htmlDodaj(sek);
   }
-  if (!h && S.ctx) h = `<div class="pusto">Ten trening nie ma jeszcze ćwiczeń.</div>`;
+  if (!h && S.ctx) h = `<div class="pusto">Brak ćwiczeń.</div>`;
   if (S.ctx) h += htmlNazwy();
   const lista = document.getElementById("lista");
   lista.innerHTML = h;
@@ -450,7 +474,7 @@ function renderStopka() {
   if (czeka) h = `<button type="button" class="zakoncz" disabled>Zapisuję…</button>`;
   else if (S.status.stan === "Zapisany") {
     h = `<div class="zapisany">✓ Zapisany${S.status.data ? " " + esc(S.status.data) : ""}</div>`
-      + `<div class="maly">Wpisy możesz dalej poprawiać.</div>`;
+      ;
   } else h = `<button type="button" class="zakoncz" data-act="koniec">Zakończ trening</button>`;
   if (S.odrzKoniec) h += `<div class="odrz">${esc(S.odrzKoniec)}</div>`;
   el.innerHTML = h;
@@ -626,14 +650,28 @@ root.addEventListener("click", (e) => {
       break;
     }
     case "notatka":
-      S.notOtw[k] = true;
+      S.notOtw[k] = !S.notOtw[k];
+      if (!S.notOtw[k]) zdejmijFokus();
       render();
-      fokus(`textarea.nota[data-k="${CSS.escape(k)}"]`);
+      if (S.notOtw[k]) fokus(`textarea.nota[data-k="${CSS.escape(k)}"]`);
       break;
     case "otworz":
       S.otwarte[k] = true;
       render();
       break;
+    case "odhacz_wiersz": {
+      // Prep / Plyo: cały wiersz zrobiony albo cofnięty jednym stuknięciem
+      if (!S.stan[k]) return;
+      zdejmijFokus();
+      const n = ileWierszy(k), st = S.stan[k], cofnij = ileOk(k) === n;
+      for (let i = 0; i < n; i++) {
+        const w = seria(st, i);
+        if (cofnij) { if (w.stan === "ok") w.stan = ""; } else if (!w.stan) odhacz(k, i);
+      }
+      przytnij(st);
+      zmienione(k);
+      break;
+    }
     case "zwin":
       zdejmijFokus();
       S.otwarte[k] = false;

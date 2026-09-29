@@ -1349,12 +1349,10 @@ function screenHelp(){
   // plan z Claude trenera (Filip 2026-09-28) — na razie przez wklejenie;
   // po zbudowaniu łącznika ta karta opisze podłączenie jednym adresem
   karty.push(`<div class="hcard hclaude"><h3>Plan z Claude</h3>
-    <div class="gdzie">Twój Claude (claude.ai) → Projekty</div><ol>
-      <li>Na claude.ai załóż projekt, np. „Plany APH”.</li>
-      <li>Kliknij <b>Skopiuj instrukcję dla Claude</b> i wklej ją w instrukcje projektu.</li>
-      <li>W tym projekcie dyktuj plan normalnie, także głosem. Na koniec Claude odda jeden blok tekstu.</li>
-      <li>Skopiuj blok → Training Plans → <b>🎙 Z dyktanda</b> → wklej → <b>Sprawdź dopasowania</b> → zapisz.</li>
-      <li>Bezpośrednie połączenie Claude z apką (bez kopiowania) jest w przygotowaniu.</li></ol>
+    <div class="gdzie">Training Plans → 🎙 Z dyktanda</div><ol>
+      <li>Powiedz albo wpisz, dla kogo i co ma być w planie → <b>Ułóż z Claude</b>.</li>
+      <li>Claude dopyta albo od razu wstawi plan → <b>Sprawdź dopasowania</b> → <b>Utwórz plan</b>.</li>
+      <li>Wymaga klucza API Anthropic w sekretach apki (<code>anthropic_api_key</code>). Bez klucza zostaje wariant z claude.ai: instrukcja poniżej.</li></ol>
     <button class="btn primary xs" data-act="kopiuj_instr">Skopiuj instrukcję dla Claude</button>
     <textarea class="instr" readonly aria-label="Instrukcja dla Claude">${esc(D.instrukcja_claude||"")}</textarea></div>`);
   if(!D.tylko_plany) karty.push(k("Performance testing", "Menu → Performance testing", [

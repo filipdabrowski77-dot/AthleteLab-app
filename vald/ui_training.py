@@ -128,7 +128,42 @@ def _tr_dyktando_dialog() -> None:
     by znać składnię `=> Nazwa`, a tego nie da się zgadnąć."""
     from . import dyktando as dk
     from . import exlib as _ex
-    st.caption("Wklej albo nadyktuj rozpiskę — dawki i nazwy dopasuję do Bazy.")
+    ss = st.session_state
+    # Claude w apce (Filip 2026-09-29): mówię do telefonu, Claude oddaje blok
+    # planu, który wchodzi niżej jak zwykłe dyktando. Tylko z kluczem API.
+    from . import claude_plan as _cp
+    if _cp.dostepny():
+        rozm = ss.setdefault("dykt_claude", [])
+        for m in rozm[-4:]:
+            st.markdown(("**Ty:** " if m["role"] == "user" else "**Claude:** ")
+                        + (m["content"] if m["role"] == "user" or not _cp.wyciagnij_blok(m["content"])
+                           else "plan poniżej ↓"))
+        wpis = st.text_area("Do Claude", height=90, key="dykt_claude_wpis",
+                            placeholder="Powiedz, dla kogo i co ma być w planie",
+                            label_visibility="collapsed")
+        _k1, _k2 = st.columns([3, 1])
+        if _k1.button("Ułóż z Claude", type="primary", use_container_width=True,
+                      key="dykt_claude_go") and (wpis or "").strip():
+            from .shell import _all_names
+            rozm.append({"role": "user", "content": wpis.strip()})
+            try:
+                with st.spinner("Claude układa…"):
+                    odp = _cp.odpowiedz(rozm, [e["name"] for e in _ex.exercises()],
+                                        _all_names())
+            except Exception as e:
+                rozm.pop()
+                st.error(f"Claude nie odpowiedział: {e}")
+                return
+            rozm.append({"role": "assistant", "content": odp})
+            blok = _cp.wyciagnij_blok(odp)
+            if blok:
+                ss["dykt_tekst"] = blok
+            ss.pop("dykt_claude_wpis", None)
+            st.rerun()
+        if rozm and _k2.button("Od nowa", use_container_width=True, key="dykt_claude_reset"):
+            ss["dykt_claude"] = []
+            st.rerun()
+        st.divider()
     tekst = st.text_area("Dyktando", height=240, key="dykt_tekst",
                          placeholder=_DYKT_WZOR, label_visibility="collapsed")
     with st.expander("Format — wzór do skopiowania"):
@@ -187,7 +222,7 @@ def _tr_dyktando_dialog() -> None:
             return
         from .shell import touch_recent
         touch_recent(plan["id"])
-        ss = st.session_state
+        ss.pop("dykt_claude", None)
         ss["tr_open_plan"] = plan["id"]
         ss["app_mode"] = "training"
         st.rerun()
@@ -857,15 +892,6 @@ def _render_plan_workout_body(plan: dict, sub: str,
         f"color:var(--aph-bone)!important;}}</style>",
         unsafe_allow_html=True,
     )
-    for row_start in range(0, weeks_n, 4):
-        row_weeks = list(range(row_start + 1, min(row_start + 4, weeks_n) + 1))
-        wk_cols = st.columns(len(row_weeks))
-        for t, col in zip(row_weeks, wk_cols):
-            if col.button(f"Week {t}", key=f"gymwk_{plan['id']}_{t}",
-                          use_container_width=True) and t != wk:
-                st.session_state[wkk] = t
-                st.rerun()
-
     # ── wybór treningu: duże przyciski A/B/C ────────────────────────────
     sk = f"gym_sess_{plan['id']}"
     if st.session_state.get(sk) not in {s["id"] for s in sessions}:
@@ -884,6 +910,20 @@ def _render_plan_workout_body(plan: dict, sub: str,
         for _k, _v in (("w", str(wk)), ("t", sel)):
             if st.query_params.get(_k) != _v:
                 st.query_params[_k] = _v
+    # tryb trenera: na przycisku tygodnia data wykonania WYBRANEGO treningu
+    # („W2 · 12.09"), na przyciskach treningów data z bieżącego tygodnia
+    _sel_s = next((s_ for s_ in sessions if s_["id"] == sel), None) if trener else None
+    for row_start in range(0, weeks_n, 4):
+        row_weeks = list(range(row_start + 1, min(row_start + 4, weeks_n) + 1))
+        wk_cols = st.columns(len(row_weeks))
+        for t, col in zip(row_weeks, wk_cols):
+            _d = _trk_data(_sel_s, t) if trener else ""
+            lbl = f"W{t} · {_d}" if _d else (f"W{t}" if trener else f"Week {t}")
+            if col.button(lbl, key=f"gymwk_{plan['id']}_{t}",
+                          use_container_width=True) and t != wk:
+                st.session_state[wkk] = t
+                st.rerun()
+
     st.markdown(
         f"<style>.stApp .st-key-gymt_{sel} button{{"
         f"background:var(--aph-ink)!important;"
@@ -902,7 +942,9 @@ def _render_plan_workout_body(plan: dict, sub: str,
             i = sessions.index(s)
             _t = (s.get("title") or "").strip()
             lbl = _tr_letter(i) + (f" · {_t}" if _t and _t.upper() != _tr_letter(i) else "")
-            if col.button(lbl[:16], key=f"gymt_{s['id']}",
+            _d = _trk_data(s, wk) if trener else ""
+            lbl = (lbl[:16] + f" · {_d}") if _d else lbl[:16]
+            if col.button(lbl, key=f"gymt_{s['id']}",
                           use_container_width=True) and s["id"] != sel:
                 st.session_state[sk] = s["id"]
                 st.rerun()
@@ -954,7 +996,8 @@ def _render_plan_workout_body(plan: dict, sub: str,
             f"<div class='pvhead'><div><div class='pvtitle'>{_html_esc(_tyt)}</div>"
             f"<div class='pvsub'>{_html_esc(plan.get('athlete', ''))} · "
             f"{_html_esc(plan.get('name', ''))}</div></div>"
-            f"<span class='pvbadge'>{_pv_status(w, wk)}</span></div>",
+            f"<span class='pvbadge'>{_pv_status(w, wk)}"
+            f"{(' ' + _trk_data(w, wk)) if trener and _trk_data(w, wk) else ''}</span></div>",
             unsafe_allow_html=True)
         if trener:
             _render_trener_panel(plan, w, wk)
@@ -1422,7 +1465,16 @@ def _trk_seria_txt(s: dict) -> str:
     return txt + (f" @{rpe}" if rpe else "")
 
 
-def _trk_ostatnio(plan: dict, it: dict, wk: int, plany=()) -> tuple:
+def _trk_data(sess: dict | None, wk) -> str:
+    """„12.09" — kiedy ten trening był zrobiony w tygodniu wk (done_weeks)."""
+    iso = ((sess or {}).get("done_weeks") or {}).get(str(wk), "")
+    try:
+        return f"{pd.Timestamp(iso):%d.%m}" if iso else ""
+    except Exception:
+        return ""
+
+
+def _trk_ostatnio(plan: dict, it: dict, wk: int, plany=(), sess: dict | None = None) -> tuple:
     """(„W1: 70×7 · 80×7 · 85×6", kg pierwszej serii) — odniesienie na karcie.
 
     Najbliższy wcześniejszy tydzień TEGO ćwiczenia z seriami ✓, a gdy go nie
@@ -1452,7 +1504,9 @@ def _trk_ostatnio(plan: dict, it: dict, wk: int, plany=()) -> tuple:
 
     ws = item_weeks(it)
     for w_ in range(int(wk) - 1, 0, -1):
-        wynik = _z_tygodnia(ws.get(str(w_)), f"W{w_}")
+        # z datą wykonania (Filip 2026-09-29: „każdy tydzień miał datę")
+        d_ = _trk_data(sess, w_)
+        wynik = _z_tygodnia(ws.get(str(w_)), f"W{w_}" + (f" · {d_}" if d_ else ""))
         if wynik:
             return wynik
     nazwa = (it.get("exercise") or "").strip().lower()
@@ -1471,7 +1525,9 @@ def _trk_ostatnio(plan: dict, it: dict, wk: int, plany=()) -> tuple:
                 if (x.get("exercise") or "").strip().lower() != nazwa:
                     continue
                 for k, tyg in item_weeks(x).items():
-                    wynik = _z_tygodnia(tyg, f"{p.get('name', '')} W{k}")
+                    d_ = _trk_data(s_, k)
+                    wynik = _z_tygodnia(tyg, f"{p.get('name', '')} W{k}"
+                                        + (f" · {d_}" if d_ else ""))
                     if wynik and str(k).isdigit() and (best is None or int(k) > best[0]):
                         best = (int(k), wynik)
         if best:
@@ -1511,7 +1567,7 @@ def _trk_dane(plan: dict, sess: dict, wk: int, plany=()) -> dict:
                 f"Tempo {it['tempo']}" if it.get("tempo") else "",
                 str(it.get("note") or "").strip()) if x)
             n_plan, reps_plan, reps_hint = _trk_serie_plan(it, wk)
-            ostatnio, kg_hint = _trk_ostatnio(plan, it, wk, plany)
+            ostatnio, kg_hint = _trk_ostatnio(plan, it, wk, plany, sess)
             serie = []
             for s in (p.get("sets_done") or []):
                 s = s if isinstance(s, dict) else {}
