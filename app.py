@@ -4062,11 +4062,8 @@ def _athlete_profile_dialog(prefill_name: str = "") -> None:
                 help="Dokładnie jak w VALD (diakrytyki, spacje).",
             )
         elif not vald_options:
-            st.warning(
-                "Brak danych z VALD API w `~/Desktop/vald-api/data/`. "
-                "Uruchom najpierw pull z API (przycisk **🔄** w prawym górnym rogu) "
-                "lub zaznacz **Wpisz nazwisko ręcznie** powyżej."
-            )
+            st.warning("Brak danych z VALD API w `~/Desktop/vald-api/data/`. "
+                       "Zrób pull (**🔄**) albo zaznacz **Wpisz nazwisko ręcznie**.")
             name = ""
         else:
             displays = ["— wybierz —"] + [d for d, _ in vald_options]
@@ -4453,6 +4450,7 @@ def main() -> None:
             # magazyn niedostępny (sieć/TLS/Supabase) — komunikat zamiast
             # ściany traceballa na ekranie trenera (Filip 2026-09-20)
             st.error(f"Nie mogę połączyć się z magazynem planów. {e}")
+            st.caption("Nic nie zostało zapisane.")
             if st.button("Spróbuj ponownie", type="primary"):
                 from vald import store as _s
                 _s.invalidate()

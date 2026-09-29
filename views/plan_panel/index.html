@@ -761,7 +761,8 @@ function metRysuj(kotwica) {
   const m = MET.wybrana ? METODY.find(x => x.id === MET.wybrana) : null;
   if (!m) {
     box.innerHTML = `<h4>Metoda rozpisania</h4>`
-      + `<button class="poz glowna" data-met="serie">Rozpisz serię po serii</button>`
+      + `<button class="poz glowna" data-met="serie">Rozpisz serię po serii`
+      + `<small>np. 1 x 6 @ rpe 8, 1 x 5 @ rpe 9</small></button>`
       + `<div class="met-sep"></div>`
       + METODY.map(x =>
       `<button class="poz" data-met="${x.id}">${esc(x.nazwa)}</button>`

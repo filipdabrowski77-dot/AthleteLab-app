@@ -378,7 +378,7 @@ function htmlEdycja(k) {
   if (!ed) return "";
   const dk = `data-k="${esc(k)}"`;
   // „puste = bez zmian" w tytule: w podpowiedzi pola ucinało się na telefonie (audyt 2026-09-28)
-  return `<div class="edycja"><div class="tyt">Zamień na · dawka od W${esc(S.ctx.wk)} (puste = bez zmian)</div>`
+  return `<div class="edycja"><div class="tyt">Zamień na · dawka od W${esc(S.ctx.wk)} <span style="white-space:nowrap">(puste = bez zmian)</span></div>`
     + `<input class="edp" ${dk} data-ed="nowe" list="nazwy" type="text" autocomplete="off"`
     + ` autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="80"`
     + ` placeholder="Nazwa ćwiczenia" value="${esc(ed.nowe)}">`

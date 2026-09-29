@@ -580,7 +580,7 @@ def _tr_workout_body(plan_id: str, sid: str) -> None:
             st.session_state["pp_dirty"] = False
             st.toast("Plan zapisany", icon="✅")
             if _bez:
-                st.warning(f"Pominięto {_bez} wiersz(e) bez nazwy ćwiczenia.")
+                st.warning(f"Pominięto {_bez} wiersz(e) bez nazwy ćwiczenia — wpisz nazwę i zapisz ponownie.")
         elif _act == "usun_trening":
             # dodanie treningu było dotąd nieodwracalne (Filip 2026-09-05)
             _p = next((x for x in get_all_plans() if x["id"] == plan_id), None)
@@ -766,7 +766,7 @@ _PV_CSS = """<style>
         .stApp [class*="st-key-gymt_"] button {
             border:1px solid #e6e3db; background:#fff; color:#6f6b61;
             font-size:12px !important; font-weight:600 !important;
-            border-radius:999px !important; min-height:0 !important;
+            border-radius:999px !important; min-height:44px !important;
             padding:6px 13px !important; }
         </style>"""
 
@@ -873,7 +873,9 @@ def _render_plan_workout_body(plan: dict, sub: str,
     wk = int(st.session_state[wkk])
     if _end and _today > _end:
         st.warning(f"Plan zakończył się {_end:%d.%m.%Y}. Wpisy trafią "
-                   f"do Week {wk}.")
+                   f"do Week {wk} — "
+                   + ("nowy plan wybierzesz wyżej." if trener else
+                      "nowy plan = nowy link od trenera."))
     elif not _started:
         st.info(f"Plan startuje {plan.get('start_date', '')[8:10]}."
                 f"{plan.get('start_date', '')[5:7]}.")
@@ -1085,7 +1087,7 @@ def _render_plan_workout_body(plan: dict, sub: str,
                                    key=f"gym_k_{w['id']}_{mi}_{si}_{wk}",
                                    label_visibility="collapsed")
                 st.text_input("Notatka", value=p.get("session_note", ""),
-                              placeholder="notatka",
+                              placeholder="np. za łatwe, +2,5 kg",
                               key=f"gym_note_{w['id']}_{mi}_{wk}",
                               label_visibility="collapsed")
             submitted = st.form_submit_button(
@@ -1392,7 +1394,7 @@ _TRK_CSS = """<style>
             height: 100%; padding: 8px 6px !important; white-space: normal !important;
             border-radius: 14px !important; }
         .stApp [class*="st-key-trk_z_"] button p { text-align: center;
-            font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; }
+            font-size: 14px; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
         .stApp .st-key-trk_pop { display: none !important; }
         </style>"""
 

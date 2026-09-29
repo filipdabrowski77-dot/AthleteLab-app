@@ -823,7 +823,8 @@ function oknoDoBazy(){
     <div class="mh"><b>Dodać plan do bazy planów?</b></div>
     <div class="mb">
       <div style="font-size:13.5px;line-height:1.55;color:var(--dim)">
-        „${esc(p.name)}” · ${esc(p.athlete)}
+        „${esc(p.name)}” · ${esc(p.athlete)}<br>
+        <b>Nie</b> = tylko w folderze i profilu.
       </div>
     </div>
     <div class="mf">
@@ -941,6 +942,7 @@ function screenExercises(){
   } else {
     const CATS = (D.categories||[]).filter(c=>c.name!=="Nieprzypisane");
     body = `
+      <div class="notice amber"><i></i>Pierwsza kategoria decyduje o sekcji w planie.</div>
       <div class="card" style="margin-top:12px">
         ${D.no_cat.map(r=>{
           const k = "nc:" + r.name;                       // klucz po nazwie, nie po indeksie
@@ -1001,7 +1003,8 @@ function planModal(){
         <label class="field"><span>Zawodnik</span><select class="in" data-f="pm.athlete">${ath}</select></label>
         <label class="field"><span>Folder</span><select class="in" data-f="pm.group">${grp}</select></label>
       </div>
-      <label class="field"><span>Status</span><select class="in" data-f="pm.status">${sts}</select></label>
+      <label class="field"><span>Status</span><select class="in" data-f="pm.status">${sts}</select>
+        <span style="font-size:11.5px;color:var(--mute);margin-top:4px">Auto = liczony z dat planu.</span></label>
     </div>
     <div class="mf">
       <button class="btn primary" data-act="save_plan_meta">Zapisz</button>
@@ -1260,7 +1263,7 @@ function athleteModal(){
       <div class="mh"><b>Zdjąć z listy?</b>
         <button class="iconbtn" style="font-size:17px;color:var(--mute2)" data-act="close_amodal">×</button></div>
       <div class="mb">
-        <p class="mtxt"><b>${esc(m.name)}</b> zniknie z listy. Plany i testy zostają.</p>
+        <p class="mtxt"><b>${esc(m.name)}</b> zniknie z listy. Plany i testy zostają — przywrócisz w trybie edycji.</p>
       </div>
       <div class="mf">
         <button class="btn danger" data-act="hide_athlete" data-name="${esc(m.name)}">Zdejmij</button>
@@ -1411,7 +1414,8 @@ function render(){
     // w zakladce „Bez kategorii" blokowal caly ekran Bazy)
     console.error("render widoku padl:", err);
     view = `<div class="page"><div class="notice red"><i></i>
-      Ten widok nie dał się narysować: ${esc(String(err && err.message || err))}.</div></div>`;
+      Ten widok nie dał się narysować: ${esc(String(err && err.message || err))}.
+      Wybierz inny ekran z panelu po lewej.</div></div>`;
   }
   const opener = S.navCollapsed ? `<button class="navopen" data-act="navtoggle" title="Rozwiń panel">›</button>` : "";
   const u = D.undo;
@@ -1691,7 +1695,7 @@ document.addEventListener("click", e=>{
       S.menu = false; render(); act(a,{plan_id:D.plan.id}); break;
     case "delete_plan":
       S.menu = false; render();
-      if(confirm("Usunąć plan „"+D.plan.name+"”?")) act("delete_plan",{plan_id:D.plan.id}); break;
+      if(confirm("Usunąć plan „"+D.plan.name+"”?\n\nOdzyskasz z kosza na liście planów.")) act("delete_plan",{plan_id:D.plan.id}); break;
     case "pick_exercise": act("pick_exercise",{name:b.dataset.name, section:FORM["pick.section"]||(D.pick&&D.pick.section)||"Main"}); break;
     case "pick_back":     act("pick_back",{}); break;
     case "delete_exercise":
