@@ -1149,6 +1149,14 @@ def _render_plan_workout_body(plan: dict, sub: str,
 # wpisujesz ciężar i powtórzenia; serię można też zamknąć bez wpisu i oznaczyć,
 # że jej nie zrobiłeś — a trener to widzi".
 _TRW_CSS = """<style>
+        /* audyt 2026-09-29: pola kg/powt. zlewały się z tłem i były niższe od ✓/✕ */
+        .stApp [class*="st-key-trw_kg_"] [data-baseweb="input"],
+        .stApp [class*="st-key-trw_rp_"] [data-baseweb="input"] {
+            border:1px solid #e3e0d8 !important; border-radius:10px !important;
+            background:#fdfdfb !important; min-height:44px; }
+        .stApp [class*="st-key-trw_kg_"] input, .stApp [class*="st-key-trw_rp_"] input {
+            font-size:16px !important; text-align:center; }
+        .stApp [class*="st-key-trw_"] button { min-height:44px !important; }
         .stApp .trwprog { font-family: var(--aph-text); font-size: 12px;
             color: var(--aph-dim); display:flex; justify-content:space-between;
             align-items:center; margin: 2px 0 6px; }
@@ -1315,10 +1323,13 @@ def _render_trening_prowadzony(plan, sess, wk, yt) -> bool:
             f"{f', {sk} pominiętych' if sk else ''}</div>",
             unsafe_allow_html=True)
         for p_ in poz:
+            # audyt 2026-09-29: „×15" bez kg było nieczytelne
             opis = ", ".join(
-                (f"{s['kg']}×{s['reps']}" if s["stan"] == "ok" and (s["kg"] or s["reps"])
+                (f"{s['kg']} kg × {s['reps']}" if s["stan"] == "ok" and s["kg"] and s["reps"]
+                 else f"{s['reps']} powt." if s["stan"] == "ok" and s["reps"]
+                 else f"{s['kg']} kg" if s["stan"] == "ok" and s["kg"]
                  else "✓" if s["stan"] == "ok" else "✕")
-                for s in p_["serie"])
+                for s in p_["serie"]) or "—"
             st.markdown(f"<div class='trwsum'><b>{_esc(p_['exercise'])}</b>"
                         f"<br>{_esc(opis)}</div>", unsafe_allow_html=True)
         c1, c2 = st.columns(2)
