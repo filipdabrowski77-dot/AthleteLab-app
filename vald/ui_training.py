@@ -104,7 +104,7 @@ main
 - 1b swiss ball leg curl | 2x10-15 rpe 9 | uwagi: do upadku"""
 
 
-_DYKT_NOWE = "➕ nowe ćwiczenie — wpisz dosłownie"
+_DYKT_NOWE = "➕ nowe ćwiczenie"
 
 
 def _odmiana(n: int, poj: str, kilka: str, wiele: str) -> str:
@@ -166,7 +166,7 @@ def _tr_dyktando_dialog() -> None:
         st.divider()
     tekst = st.text_area("Dyktando", height=240, key="dykt_tekst",
                          placeholder=_DYKT_WZOR, label_visibility="collapsed")
-    with st.expander("Format — wzór do skopiowania"):
+    with st.expander("Wzór"):
         st.code(_DYKT_WZOR, language=None)
         st.caption("Kolejne `|` z dawką to kolejne tygodnie (W1, W2, …). "
                    "Sekcje: prep, plyo, main, akcesoria.")
@@ -262,8 +262,6 @@ def _tr_copy_plan_dialog(plan_id: str) -> None:
     start = st.date_input("Start planu u zawodnika",
                           value=pd.Timestamp.now().date(),
                           key=f"trcp_start_{plan_id}")
-    st.caption("Kopiuje całą rozpiskę, bez wyników i linku "
-               "udostępniania.")
     if st.button("Kopiuj", type="primary", use_container_width=True,
                  key=f"trcp_go_{plan_id}"):
         newp = copy_plan_to_athlete(plan, target, start)
@@ -565,7 +563,7 @@ def _tr_workout_body(plan_id: str, sid: str) -> None:
         _pp_save()
         st.session_state["pp_dirty"] = False
         st.session_state.pop("tr_open_workout", None)
-        st.toast("Zapisano i wrócono do planu", icon="✅")
+        st.toast("Zapisano", icon="✅")
         st.rerun()
     if isinstance(_val, dict) and _val.get("seq") != st.session_state.get(_seqk):
         st.session_state[_seqk] = _val.get("seq")
@@ -582,9 +580,7 @@ def _tr_workout_body(plan_id: str, sid: str) -> None:
             st.session_state["pp_dirty"] = False
             st.toast("Plan zapisany", icon="✅")
             if _bez:
-                st.warning(
-                    f"Pominięto {_bez} wiersz(e) z rozpiską, ale bez nazwy "
-                    f"ćwiczenia — wpisz nazwę i zapisz ponownie.")
+                st.warning(f"Pominięto {_bez} wiersz(e) bez nazwy ćwiczenia.")
         elif _act == "usun_trening":
             # dodanie treningu było dotąd nieodwracalne (Filip 2026-09-05)
             _p = next((x for x in get_all_plans() if x["id"] == plan_id), None)
@@ -848,7 +844,7 @@ def _render_plan_workout_body(plan: dict, sub: str,
             unsafe_allow_html=True,
         )
     if not sessions:
-        st.info("Plan nie ma jeszcze treningów.")
+        st.info("Brak treningów.")
         return
 
     # tydzień planu — przełączany, zmienia dawki WSZYSTKICH treningów;
@@ -876,13 +872,11 @@ def _render_plan_workout_body(plan: dict, sub: str,
         st.session_state[wkk] = cw
     wk = int(st.session_state[wkk])
     if _end and _today > _end:
-        st.warning(f"Ten plan zakończył się {_end:%d.%m.%Y}. Wpisy trafią "
-                   f"do Week {wk} tego bloku — "
-                   + ("nowy plan wybierzesz wyżej." if trener else
-                      "jeśli masz nowy plan, użyj nowego linku."))
+        st.warning(f"Plan zakończył się {_end:%d.%m.%Y}. Wpisy trafią "
+                   f"do Week {wk}.")
     elif not _started:
         st.info(f"Plan startuje {plan.get('start_date', '')[8:10]}."
-                f"{plan.get('start_date', '')[5:7]} — poniżej podgląd.")
+                f"{plan.get('start_date', '')[5:7]}.")
     st.markdown(
         f"<style>.stApp .st-key-gymwk_{plan['id']}_{wk} button{{"
         f"background:var(--aph-ink)!important;"
@@ -1091,7 +1085,7 @@ def _render_plan_workout_body(plan: dict, sub: str,
                                    key=f"gym_k_{w['id']}_{mi}_{si}_{wk}",
                                    label_visibility="collapsed")
                 st.text_input("Notatka", value=p.get("session_note", ""),
-                              placeholder="np. za łatwe, +2,5 kg",
+                              placeholder="notatka",
                               key=f"gym_note_{w['id']}_{mi}_{wk}",
                               label_visibility="collapsed")
             submitted = st.form_submit_button(
@@ -1297,8 +1291,8 @@ def _render_trening_prowadzony(plan, sess, wk, yt) -> bool:
         poz, ok, sk = _trw_podsumowanie(sess, wk)
         if ok or sk:
             st.markdown(
-                f"<div class='trwsum'>W tym tygodniu masz odklikane "
-                f"<b>{ok}</b> serii, pominięte <b>{sk}</b>.</div>",
+                f"<div class='trwsum'>Zrobione: <b>{ok}</b> · "
+                f"pominięte: <b>{sk}</b></div>",
                 unsafe_allow_html=True)
         if st.button("▶  Zacznij trening", type="primary",
                      use_container_width=True,
@@ -1336,7 +1330,7 @@ def _render_trening_prowadzony(plan, sess, wk, yt) -> bool:
             oznacz_koniec(plan, sess["id"], wk)
             upsert_plan(plan)
             st.session_state[klucz] = False
-            st.success("Trening zapisany — trener już to widzi.")
+            st.success("Trening zapisany.")
             st.rerun()
         return True
 
@@ -1827,8 +1821,8 @@ def _render_athlete_mode(token: str) -> None:
             succ = later[0] if later else None
         if succ is not None:
             plan = succ
-            st.info(f"Poprzedni blok się zakończył — poniżej Twój "
-                    f"aktualny plan: {plan.get('name', '')}.")
+            st.info(f"Poprzedni blok zakończony. Aktualny plan: "
+                    f"{plan.get('name', '')}.")
     first = (plan.get("athlete", "") or "").split(" ")[0]
     _render_plan_workout_body(
         plan, f"{plan.get('name', '')} · Twój plan",
@@ -1855,7 +1849,7 @@ def _trk_lista_zawodnikow(plans: list) -> None:
         st.rerun()
     st.markdown(
         f"<div class='pvhead'><div><div class='pvtitle'>Prowadzenie treningu</div>"
-        f"<div class='pvsub'>{_esc(kto)} · wybierz zawodnika</div>"
+        f"<div class='pvsub'>{_esc(kto)}</div>"
         f"</div></div>", unsafe_allow_html=True)
     ukryci = {n.strip().lower() for n in hidden_names()}
     po_osobie: dict = {}
@@ -1870,7 +1864,7 @@ def _trk_lista_zawodnikow(plans: list) -> None:
         cur = [p for p in ps if is_current(p)]
         (teraz if cur else reszta).append((ath, (cur or ps)[0]))
     if not teraz and not reszta:
-        st.info("Brak planów treningowych.")
+        st.info("Brak planów.")
         return
 
     def _przycisk(ath: str, plan: dict) -> None:

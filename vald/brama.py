@@ -107,8 +107,6 @@ def _ekran() -> None:
                     st.session_state[_PROBY] = 0
                     st.rerun()          # od razu pokaż odliczanie, nie błąd
                 st.error("Nie to hasło.")
-        if st.session_state.get(_PROBY, 0) >= 3:
-            st.caption("Hasło dostajesz od trenera, który zakładał dostęp.")
 
 
 def _ciastko_js(wartosc: str, sekundy: int) -> None:

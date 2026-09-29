@@ -805,7 +805,7 @@ def handle_action(ev: dict) -> None:
                                     e.get("sub", ""), e.get("url", "")):
             st.toast(f"Dodane do Twojej Bazy: {e['name']}", icon="✅")
         elif e:
-            st.toast("To ćwiczenie już jest w Twojej Bazie.", icon="ℹ️")
+            st.toast("Już jest w Twojej Bazie.", icon="ℹ️")
         st.rerun()
 
     elif a == "switch_coach":
@@ -1331,8 +1331,7 @@ def handle_action(ev: dict) -> None:
                 # Bez tego każda nazwa wpisana w planie — także wariant różniący
                 # się dwiema literami albo pozycja użyta raz — zakładała nowy
                 # wpis bez linku i lista puchła.
-                st.toast(f'„{nazwa}” nie ma jeszcze filmu — dodaj link '
-                         f'w zakładce „Bez filmu”, wtedy trafi do Bazy.')
+                st.toast(f'„{nazwa}” nie ma filmu — dodaj go przez ✎ w Bazie.')
         elif czesci:
             st.toast(" · ".join(czesci), icon="✅")
         else:
@@ -1379,6 +1378,13 @@ EDITOR_CSS = """<style>
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .aph-wk-warn{font-family:Archivo,system-ui,sans-serif;font-size:13px;font-weight:600;
   color:#a8452f;padding-top:9px}
+@media (max-width:700px){
+  /* audyt telefonu 2026-09-29: pasek nad edytorem w jednej linii, przyciski
+     pobierania z marginesem */
+  .stApp .st-key-wk_bar{padding:12px 14px 0}
+  .stApp .st-key-wk_bar [data-testid="stColumn"]:nth-child(2){display:none}
+  .stApp [data-testid="stDownloadButton"]{padding:0 14px}
+}
 </style>"""
 
 
@@ -1397,7 +1403,7 @@ def _pytanie_o_zapis() -> None:
         "margin-top:14vh!important;border-radius:14px!important;"
         "box-shadow:0 18px 48px rgba(28,27,24,.18)!important}</style>",
         unsafe_allow_html=True)
-    st.write("W tym treningu są zmiany, których jeszcze nie zapisałeś.")
+    st.write("Masz niezapisane zmiany.")
     c1, c2 = st.columns(2)
     if c1.button("Zapisz", key="wk_save_back", type="primary",
                  use_container_width=True):

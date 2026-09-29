@@ -3477,7 +3477,7 @@ def _pull_log_dialog(log: str) -> None:
     expandera który rozsuwał layout strony)."""
     st.markdown(
         "<div style='color:var(--aph-bad); font-weight:600; margin-bottom:8px;'>"
-        "❌ Pull nieudany — szczegóły poniżej</div>",
+        "❌ Pull nieudany</div>",
         unsafe_allow_html=True,
     )
     st.code(log or "(brak outputu)", language="text")
@@ -3824,7 +3824,7 @@ def _report_dialog(name: str) -> None:
         return
     date_col = "Date" if "Date" in df.columns else None
     if not date_col:
-        st.info("Brak dat w danych — raport trendów niedostępny.")
+        st.info("Brak dat w danych.")
         return
     splits = {
         tt: df[df["Test Type"] == tt]
@@ -3835,7 +3835,7 @@ def _report_dialog(name: str) -> None:
         st.info("Brak testów do raportu.")
         return
 
-    st.caption(f"**{name}** · zaznacz co ma wejść do PDF")
+    st.caption(f"**{name}**")
     sel_tests = st.multiselect(
         "Testy",
         options=list(splits.keys()),
@@ -4037,7 +4037,6 @@ def _athlete_profile_dialog(prefill_name: str = "") -> None:
     is_edit = bool(prefill_name)
 
     if is_edit:
-        st.caption(f"Edycja profilu: **{prefill_name}**")
         name = st.text_input(
             "Imię i nazwisko *",
             value=prefill_name,
@@ -4049,12 +4048,9 @@ def _athlete_profile_dialog(prefill_name: str = "") -> None:
         # Toggle: pick z VALD vs wpisz ręcznie (gdy zawodnik świeżo dodany w VALD
         # i nie jest jeszcze w lokalnym profiles.csv — incremental pull go pomija).
         manual_entry = st.toggle(
-            "Wpisz nazwisko ręcznie (jeśli zawodnik świeżo dodany w VALD i nie ma go na liście)",
+            "Wpisz nazwisko ręcznie",
             value=not vald_options,
             key="dlg_manual_entry",
-            help="Manual entry tworzy profil w lokalnej bazie. Gdy następny "
-                 "pełen pull z VALD przyniesie testy zawodnika, zostaną do niego "
-                 "podpięte automatycznie po nazwisku.",
         )
 
         if manual_entry:
@@ -4063,8 +4059,7 @@ def _athlete_profile_dialog(prefill_name: str = "") -> None:
                 value="",
                 placeholder="Jan Kowalski",
                 key="dlg_manual_name_input",
-                help="Wpisz dokładnie takie samo imię i nazwisko jak w VALD ForceDecks "
-                     "(diakrytyki, spacje) żeby testy się podpięły przy następnym pull'u.",
+                help="Dokładnie jak w VALD (diakrytyki, spacje).",
             )
         elif not vald_options:
             st.warning(
@@ -4082,7 +4077,6 @@ def _athlete_profile_dialog(prefill_name: str = "") -> None:
             )
             if picked != "— wybierz —":
                 name = next(n for d, n in vald_options if d == picked)
-                st.caption(f"✅ Dodam: **{name}**")
             else:
                 name = ""
 
@@ -4128,7 +4122,7 @@ def _athlete_profile_dialog(prefill_name: str = "") -> None:
         type_counts = get_athlete_test_type_counts(prefill_name)
         if type_counts:
             st.markdown("---")
-            st.caption("**Testy w bazie** — usuń całą historię typu albo pojedynczy dzień testowy:")
+            st.caption("**Testy w bazie**")
             for ttype in sorted(type_counts.keys()):
                 n = type_counts[ttype]
                 label = TEST_LABELS.get(ttype, ttype)
@@ -4226,8 +4220,7 @@ def _athlete_profile_dialog(prefill_name: str = "") -> None:
             existing_athletes |= set(list_profile_names())
             if new_name in existing_athletes:
                 st.error(
-                    f"⚠️ Zawodnik **{new_name}** już istnieje w bazie. "
-                    "Najpierw usuń tamten albo wybierz inne imię."
+                    f"⚠️ Zawodnik **{new_name}** już istnieje w bazie."
                 )
                 return
             # Przepnij testy + profil pod nową nazwę
@@ -4460,8 +4453,6 @@ def main() -> None:
             # magazyn niedostępny (sieć/TLS/Supabase) — komunikat zamiast
             # ściany traceballa na ekranie trenera (Filip 2026-09-20)
             st.error(f"Nie mogę połączyć się z magazynem planów. {e}")
-            st.caption("Sprawdź internet i kliknij Spróbuj ponownie. "
-                       "Twoje dane są bezpieczne, nic nie zostało zapisane.")
             if st.button("Spróbuj ponownie", type="primary"):
                 from vald import store as _s
                 _s.invalidate()
@@ -4482,8 +4473,7 @@ def main() -> None:
             .stApp .st-key-pt_back_home button:hover{border-color:#a09c92!important;
             background:#f4f2ee!important}</style>""",
             unsafe_allow_html=True)
-        if _back_col.button("← Start", key="pt_back_home",
-                            help="Wróć do panelu głównego"):
+        if _back_col.button("← Start", key="pt_back_home"):
             st.session_state["app_mode"] = "home"
             st.rerun()
 
@@ -4499,8 +4489,7 @@ def main() -> None:
                 if last_sync_dt is not None else "brak pulla"
             )
             with util_col.popover("⋯", use_container_width=False):
-                st.caption(f"Ostatnia synchronizacja VALD: {relative}. "
-                           f"Auto-sync działa co tydzień.")
+                st.caption(f"Ostatnia synchronizacja VALD: {relative}")
                 if st.button(
                     "⟳ Sync teraz",
                     key="btn_refresh_vald_api",
@@ -4510,7 +4499,7 @@ def main() -> None:
                         success, log = _run_vald_api_refresh(full=False)
                     st.session_state["_last_pull_log"] = log
                     if success:
-                        st.toast("Sync OK — odśwież stronę (Cmd+R)", icon="✅")
+                        st.toast("Sync OK — odśwież (Cmd+R)", icon="✅")
                     else:
                         st.toast("Sync nieudany — zobacz log (⋯)", icon="❌")
                         st.session_state["_last_pull_failed"] = True
@@ -4552,16 +4541,14 @@ def main() -> None:
     # Menu musi mieć te same pozycje co powłoka — inaczej po wejściu
     # w Performance testing znikają „Baza ćwiczeń" i „Podopieczni"
     # i nie da się do nich wrócić inaczej niż przez Start (Filip 2026-09-03).
-    _trening = [("training", "Training Plans", "Plany, PDF, linki dla zawodników"),
-                ("exlib", "Baza ćwiczeń", "Filmy i kategorie ćwiczeń")]
+    _trening = [("training", "Training Plans", ""),
+                ("exlib", "Baza ćwiczeń", "")]
     if not _store.tylko_plany():
-        _trening.append(("tests", "Performance testing", "Profile i wyniki testów"))
-    _NAV = [("WORKSPACE", [("home", "Start", "Do rozpisania i szybki dostęp")]),
+        _trening.append(("tests", "Performance testing", ""))
+    _NAV = [("WORKSPACE", [("home", "Start", "")]),
             ("TRENING", _trening),
-            ("ZAWODNICY", [("athletes", "Podopieczni",
-                            "Profile, plany i testy siły")]),
-            ("POMOC", [("help", "Instrukcja obsługi",
-                        "Najważniejsze funkcje w skrócie")])]
+            ("ZAWODNICY", [("athletes", "Podopieczni", "")]),
+            ("POMOC", [("help", "Instrukcja obsługi", "")])]
     with st.sidebar:
         st.markdown(
             "<div style='display:flex; align-items:center; gap:10px; "
@@ -4689,7 +4676,7 @@ def main() -> None:
     if "_pending_pivot_for" in st.session_state:
         pivot_name = st.session_state.pop("_pending_pivot_for")
         with st.spinner(
-            f"Pobieram historyczne testy {pivot_name} z VALD ({pivot_name})…"
+            f"Pobieram testy {pivot_name} z VALD…"
         ):
             success, log = _run_pivot_and_import()
         if success:
@@ -4719,11 +4706,7 @@ def _render_profile_only_state(name: str) -> None:
     Spójny z głównym widokiem athlete — używa nowy hero (jak po dodaniu testów)."""
     # Hero z avatar/identity (taki sam jak dla zawodników z testami)
     _render_athlete_hero(name, df=None, athlete_col=None, splits=None)
-    st.info(
-        f"📤 **{name}** nie ma jeszcze wgranych testów. "
-        "Kliknij **⟳ Sync** w górnym pasku (opcja Full re-pull pod ⋯), "
-        "żeby pobrać profile + testy z VALD."
-    )
+    st.info("Brak testów.")
 
 
 _PER_ATHLETE_STATE_PREFIXES = (
@@ -4773,8 +4756,7 @@ def _delete_athlete_csv(name: str) -> None:
 
 def _render_back_button() -> None:
     """← do gridu wszystkich zawodników. Kompaktowy, bez rozpychania banera."""
-    if st.button("← Athletes", key="btn_back_to_grid",
-                 help="Wróć do listy wszystkich zawodników"):
+    if st.button("← Athletes", key="btn_back_to_grid"):
         _clear_per_athlete_state()
         st.rerun()
 
@@ -4941,20 +4923,18 @@ def _render_athlete_hero(
                 if st.button(
                     "📄 Raport", key=f"btn_report_hero_{name}",
                     use_container_width=True,
-                    help="Generuj raport PDF — wybierz testy i metryki",
                 ):
                     _report_dialog(name)
         with edit_col:
             if st.button(
                 "✏ Edit", key=f"btn_edit_hero_{name}",
                 use_container_width=True,
-                help="Edytuj profil zawodnika",
             ):
                 _athlete_profile_dialog(name)
         with more_col:
             # NORMS przeniesiony do session strip (per test tab). W popoverze
             # tylko realne akcje — placeholder '+ New session (wkrótce)' OUT.
-            with st.popover("⋯", use_container_width=True, help="Więcej akcji"):
+            with st.popover("⋯", use_container_width=True):
                 _render_hero_delete_button(name)
 
 
@@ -5163,17 +5143,9 @@ def _show_empty_state() -> None:
         _sa_inni = any(int(a.get("n_tests") or 0) > 0
                        for a in get_athletes_summary())
         if _sa_inni:
-            st.info(
-                f"**{_coaches_pt.name(_akt_trener)}** nie ma jeszcze zawodników "
-                "z testami. Przypisz ich do siebie w **Podopieczni** "
-                "(Edycja → ✎ → panel trenera) albo dodaj nowego poniżej."
-            )
+            st.info(f"**{_coaches_pt.name(_akt_trener)}** — brak zawodników z testami.")
         else:
-            st.info(
-                "Brak zawodników w bazie. Kliknij **⟳ Sync** w prawym "
-                "górnym rogu, żeby pobrać dane z VALD (~30s), albo **➕ Dodaj zawodnika** "
-                "poniżej żeby utworzyć profil ręcznie."
-            )
+            st.info("Brak zawodników w bazie.")
         if st.button("Dodaj zawodnika", type="primary", key="empty_add_athlete_only"):
             _athlete_profile_dialog()
         return
@@ -5202,7 +5174,6 @@ def _show_empty_state() -> None:
             "✓ Gotowe" if manage_mode else "⚙ Manage",
             key="roster_manage_toggle", use_container_width=True,
             type="primary" if manage_mode else "secondary",
-            help="Włącz/wyłącz tryb edycji i usuwania zawodników",
         ):
             st.session_state["roster_manage_mode"] = not manage_mode
             # Wyczyść ewentualne wiszące potwierdzenia usunięcia
@@ -5270,8 +5241,7 @@ def _show_empty_state() -> None:
                     else:
                         btn_edit, btn_del = st.columns(2)
                         if btn_edit.button("Edit", key=f"edit_{name}",
-                                           use_container_width=True,
-                                           help="Edytuj profil"):
+                                           use_container_width=True):
                             _athlete_profile_dialog(name)
 
                         confirm_key = f"empty_confirm_del_{name}"
@@ -5316,7 +5286,6 @@ def _render(df: pd.DataFrame) -> None:
                 "Zawodnik do podglądu",
                 options=all_names,
                 key="athlete_focus",
-                help="Każdą osobę oglądamy osobno — wybierz kogo pokazać.",
             )
         else:
             chosen_athlete = None
@@ -5865,10 +5834,7 @@ def _test_note_dialog(athlete: str, day, test_type: str) -> None:
         st.info("Najpierw wybierz zawodnika i dzień testowy.")
         return
     day_label = day.strftime("%Y-%m-%d") if hasattr(day, "strftime") else str(day)[:10]
-    st.caption(
-        f"**{athlete}** · {day_label}\n\n"
-        "Notatka jest wspólna dla wszystkich typów testów z tego dnia."
-    )
+    st.caption(f"**{athlete}** · {day_label}")
     existing = get_test_note(athlete, day)
     note = st.text_area(
         "Treść notatki",
@@ -5902,14 +5868,11 @@ def _render_test_day_notes(athlete: str | None, day, test_type: str) -> None:
     if note:
         snippet = note if len(note) <= 90 else note[:87] + "…"
         label = f"📝 {snippet}"
-        help_txt = f"Kliknij, aby edytować notatkę do testu {day_label}"
     else:
-        label = "📝 Dodaj notatkę do tego testu"
-        help_txt = f"Notatka coacha do dnia {day_label}"
+        label = "📝 Dodaj notatkę"
     if st.button(
         label,
         key=f"btn_test_note_{test_type}_{day_label}",
-        help=help_txt,
     ):
         _test_note_dialog(athlete, day, test_type)
 
@@ -6228,7 +6191,6 @@ def _render_trial_picker(
         ("▾" if is_open else "▸") + "  " + expander_label,
         key=f"sp_toggle_{test_type}",
         use_container_width=True,
-        help="Wybór dnia testowego i głównego skoku",
     ):
         st.session_state[open_key] = not is_open
         st.rerun()
@@ -7255,9 +7217,7 @@ def _render_key_metrics_timeline(
 
     n_days = d["_day"].nunique()
     if n_days < 2:
-        st.caption(
-            "📈 Wykres trendów pojawi się gdy wgrasz testy z co najmniej 2 różnych dni."
-        )
+        st.caption("📈 Trend: min. 2 dni testów.")
         return
 
     # ── Sekcje dostępne dla tego test_type (z metrykami non-null) ──
@@ -7355,7 +7315,6 @@ def _render_key_metrics_timeline(
         options=options,
         format_func=lambda k: option_labels.get(k, k),
         key=f"main_chart_{test_type}",
-        help="Wybierz konkretną metrykę żeby zobaczyć duży wykres trendu (Performance + Strategy razem).",
     )
 
     if chosen_key == OVERVIEW_KEY:
@@ -8420,7 +8379,6 @@ def _render_section_grid(
                 index=default_idx,
                 format_func=lambda d: d.strftime("%-d %b %Y") if hasattr(d, "strftime") else str(d),
                 key=asym_day_selector_key,
-                help="Zmiana dnia tu zsynchronizuje też trial picker na górze widoku",
             )
             # Sync z głównym pickerem (selected_day_{test_type})
             if picked_asym_day != selected_day:
@@ -8563,7 +8521,7 @@ def _render_asymmetry_phase_grid(
             unsafe_allow_html=True,
         )
         if not has_dates:
-            st.caption("Brak dat w danych — wykresy w czasie niedostępne.")
+            st.caption("Brak dat w danych.")
             st.markdown("")
             return
         phase_slug = caption
@@ -8942,9 +8900,6 @@ def _render_comparison_table(
 
     # Gdy są oba surowe pliki → dwie zakładki MAX / AVG (przełączane jednym klikiem)
     if raw_max is not None and raw_avg is not None:
-        st.caption(
-            "MAX = peak per metryka w teście · AVG = średnia z repów w teście"
-        )
         tab_max, tab_avg = st.tabs(["📈 MAX (peak)", "📊 AVG (mean)"])
         with tab_max:
             _render_one_table(
@@ -8960,14 +8915,14 @@ def _render_comparison_table(
 
     # Gdy jeden surowy plik → pokaż go
     if raw_max is not None:
-        st.caption("Widok: **MAX** (peak). AVG niedostępny — wgraj plik AVG po lewej.")
+        st.caption("Widok: **MAX** (peak).")
         _render_one_table(
             _filter_raw_to_match(raw_max, sub, athlete_col),
             test_type, athlete_col, date_col,
         )
         return
     if raw_avg is not None:
-        st.caption("Widok: **AVG** (mean). MAX niedostępny — wgraj plik MAX po lewej.")
+        st.caption("Widok: **AVG** (mean).")
         _render_one_table(
             _filter_raw_to_match(raw_avg, sub, athlete_col),
             test_type, athlete_col, date_col,
@@ -9076,20 +9031,18 @@ def _render_data_status_banner() -> None:
 
     if has_max and has_avg:
         st.success(
-            "✅ Wczytane: **MAX** (Performance) **+** **AVG** (Strategy / Asymmetry). "
-            "Metryki performance pokazują peak ability, reszta to typowe wartości sesji."
+            "✅ Wczytane: **MAX** (Performance) **+** **AVG** (Strategy / Asymmetry)."
         )
     elif has_avg and not has_max:
         st.warning(
             "📌 Wczytany tylko **AVG** — wartości performance (Jump Height, RSI-mod, "
-            "Peak Power…) są **uśrednione** i zaniżone vs peak. "
-            "Dorzuć MAX żeby zobaczyć rzeczywiste piki."
+            "Peak Power…) są **uśrednione** i zaniżone vs peak."
         )
     elif has_max and not has_avg:
         st.warning(
             "📌 Wczytany tylko **MAX** — metryki strategy (Contraction Time, "
             "CM Depth…) i asymetrie pokazują skrajne wartości, mogą być "
-            "**niereprezentatywne**. Dorzuć AVG."
+            "**niereprezentatywne**."
         )
 
 
@@ -9436,11 +9389,7 @@ def _render_profile_pb_section(
         if sex == "female":
             _render_female_cmj_profile_match(splits["CMJ"])
         elif not sex:
-            st.caption(
-                "💡 Ustaw płeć w profilu zawodnika (✏ Edit), aby zobaczyć "
-                "dopasowanie do profili neuromięśniowych atletek "
-                "(STRONG & FAST / WEAK & FAST / WEAK & SLOW)."
-            )
+            st.caption("💡 Ustaw płeć w profilu (✏ Edit).")
 
     elif test_type == "HOP":
         # Per-rep dane: Best RSI = peak single rep, Best Mean RSI = top 5 z testu
@@ -9630,10 +9579,7 @@ def _render_eur_section(splits: dict[str, pd.DataFrame]) -> None:
     cmj_jh = _best_pb_for(splits, "CMJ", "Jump Height")
     sj_jh = _best_pb_for(splits, "SJ", "Jump Height")
     if not cmj_jh or not sj_jh:
-        st.info(
-            "EUR wymaga **i CMJ i SJ** w bazie — dorzuć brakujący test żeby "
-            "zobaczyć wskaźnik."
-        )
+        st.info("EUR wymaga **CMJ i SJ**.")
         return
     cmj_val = cmj_jh[0]
     sj_val = sj_jh[0]
@@ -9763,9 +9709,7 @@ def _render_eur_section(splits: dict[str, pd.DataFrame]) -> None:
     st.markdown(header_html + "".join(rows_html), unsafe_allow_html=True)
 
     st.caption(
-        "⚠️ EUR sam w sobie jest niewystarczający — zawsze interpretuj razem "
-        "z absolutnymi wartościami CMJ i SJ. Dwóch zawodników z tym samym EUR "
-        "może mieć dramatycznie różne capacity (np. 50 cm CMJ vs 20 cm CMJ)."
+        "⚠️ EUR interpretuj razem z absolutnymi wartościami CMJ i SJ."
     )
     st.caption("Wzór: McGuigan et al. (2006)")
 
@@ -9827,8 +9771,6 @@ def _render_dsi_section(splits: dict[str, pd.DataFrame]) -> None:
         if not imtp_pf:
             missing.append("IMTP")
         st.info(
-            f"**Brak wystarczających danych.**  \n"
-            f"DSI = best CMJ Peak Force [N] ÷ best IMTP Peak Force [N]. "
             f"Brakuje testów: **{', '.join(missing)}**."
         )
         return
@@ -9958,8 +9900,7 @@ def _render_dsi_section(splits: dict[str, pd.DataFrame]) -> None:
     st.markdown(header_html + "".join(rows_html), unsafe_allow_html=True)
 
     st.caption(
-        "⚠️ DSI to RATIO — interpretuj razem z absolutnymi wartościami. "
-        "Wysokie DSI przy słabym IMTP ≠ to samo co wysokie DSI przy mocnym IMTP."
+        "⚠️ DSI to RATIO — interpretuj razem z absolutnymi wartościami."
     )
     st.caption("Wzór: Sheppard et al. (2011), Comfort et al. (2018), Suchomel et al. (2020)")
 
@@ -10026,7 +9967,6 @@ def _render_norms_chip(
         key=f"btn_open_norms{key_suffix}",
         use_container_width=True,
         type="secondary",
-        help="Personal bests + EUR + strefy RSI (M/K) — referencja do programowania.",
     ):
         st.session_state["_profile_dialog_splits"] = splits
         _athlete_profile_view_dialog(sections)

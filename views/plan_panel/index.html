@@ -12,7 +12,7 @@
   input:focus{outline:none} ::placeholder{color:#c3c0b8}
   .wrap{width:100%;max-width:1400px;box-sizing:border-box;margin:0 auto;padding:36px 40px 60px}
   .eyebrow{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#8a867c}
-  .title{font-size:32px;font-weight:800;letter-spacing:-.01em;border:none;background:transparent;padding:0;color:#1c1b18;width:420px}
+  .title{font-size:32px;font-weight:800;letter-spacing:-.01em;border:none;background:transparent;padding:0;color:#1c1b18;width:100%;max-width:420px}
   .seg{display:flex;align-items:center;border:1px solid #d8d5cc;border-radius:5px;overflow:hidden}
   .seg button{border:none;background:#fff;color:#6f6b61;font-size:13px;font-weight:600;padding:8px 18px;cursor:pointer}
   .seg button+button{border-left:1px solid #d8d5cc}
@@ -200,6 +200,13 @@ td textarea.week.test:focus{background:#fdf9ee}
   padding:9px 15px;font:inherit;font-size:13px;font-weight:650;cursor:pointer;
   white-space:nowrap;transition:background .12s}
 .usun-trening:hover{background:#000}
+@media (max-width:700px){
+  .wrap{padding:20px 14px 40px}
+  .przewijana table th:first-child,.przewijana table td:first-child{position:sticky;left:0;z-index:3;background:#fff}
+  .przewijana table.znr th:nth-child(2),.przewijana table.znr td:nth-child(2){position:sticky;left:46px;z-index:3;background:#fff}
+  .phone{width:min(390px,100%)}
+  .wkpill{white-space:nowrap;flex:none}
+}
 </style>
 </head>
 <body>
@@ -366,7 +373,10 @@ function editorSection(sec) {
   // Filip 2026-09-03: nazwa cwiczenia o ~28% wezsza, zwolnione miejsce idzie
   // do kolumn tygodni — dluzsze zapisy (rozpisane serie, cluster) maja sie
   // miescic bez ucinania
-  const nazwaW = sec.simple ? 0 : 336;
+  // telefon (audyt 2026-09-29): nazwa 150 px, NR i nazwa przyklejone przy
+  // przewijaniu tygodni — inaczej widać tylko NR i nazwę, a tygodnie nigdy
+  const waski = (document.documentElement.clientWidth || 1600) < 700;
+  const nazwaW = sec.simple ? 0 : (waski ? 150 : 336);
   const fixed = (sec.tempo ? 778 - 24 : 658) + 18 - 132 + 12;
   // .wrap ma max-width 1400 i po 40 px paddingu z kazdej strony — licząc
   // z szerokosci okna zawyzalismy budzet o ~280 px i suwak pojawial sie
@@ -410,7 +420,7 @@ function editorSection(sec) {
       if (serie && serie.length >= 2) {
         return `<td><div style="display:flex;align-items:flex-start;gap:2px">
           <button class="serie-widok" data-act="metoda" data-tryb="serie"
-                  data-id="${esc(id)}" data-w="${w}" title="Kliknij, żeby poprawić serie">
+                  data-id="${esc(id)}" data-w="${w}">
             ${serie.map((x, k) => `<span class="sk">
               <i>${k + 1}</i><b>${esc(x.ile)} × ${esc(x.reps)}</b>${
                 x.rpe ? `<em>RPE ${esc(x.rpe)}</em>` : ""}${
@@ -445,7 +455,7 @@ function editorSection(sec) {
       <td class="lnk" style="padding:4px 6px">${film
         ? `<a class="film" href="${esc(film)}" target="_blank">FILM</a>`
           + `<button class="filmedit" data-act="filmedit" data-id="${esc(id)}" title="Zmień lub usuń link">✎</button>`
-        : `<input class="film-input" data-f="film" data-id="${esc(id)}" value="${esc(ex.film || "")}" title="Wklej link do filmu">`}</td>
+        : `<input class="film-input" data-f="film" data-id="${esc(id)}" value="${esc(ex.film || "")}">`}</td>
       <td style="text-align:center"><button class="rowdel" data-act="delrow" data-id="${esc(id)}" title="Usuń">×</button></td>
     </tr>`;
   }).join("");
@@ -455,7 +465,7 @@ function editorSection(sec) {
   const minw = sec.simple ? 580 : fixed + n * wk;
   return `<div class="sec-title" style="color:${sec.accent}">${esc(sec.title)}</div>
     <div class="card przewijana" style="border-top:3px solid ${sec.accent}">
-      <table style="min-width:${minw}px"><thead>${head}</thead><tbody>${body}</tbody></table>
+      <table class="${sec.simple ? "" : "znr"}" style="min-width:${minw}px"><thead>${head}</thead><tbody>${body}</tbody></table>
     </div>
     <div class="foot">
       <button class="add" data-act="addrow" data-sec="${esc(sec.key)}">＋ Dodaj ćwiczenie</button>
@@ -499,7 +509,6 @@ function mobileHTML() {
     `<button class="wkpill ${i === S.pvWeek ? "on" : ""}" data-act="pvweek" data-w="${i}">Week ${i + 1}</button>`).join("");
 
   return `<div class="pv-wrap">
-    <div class="hint">Podgląd planu — tak zobaczy go zawodnik na telefonie</div>
     <div style="display:flex;gap:8px">${pills}</div>
     <div class="phone"><div class="screen">
       <div class="status"><span style="font-size:14px;font-weight:700">9:41</span><span class="notch"></span><span style="font-size:12px">▮▮▮</span></div>
@@ -518,7 +527,6 @@ function pdfHTML() {
   // zasada: nie imitowac pliku — pokazywac plik (obraz strony z generatora)
   if (S.pdfPng) {
     return `<div class="pv-wrap">
-      <div class="hint">Podgląd PDF — dokładnie ten plik, który pobierzesz</div>
       <img src="${S.pdfPng}" alt="PDF" style="width:1000px;max-width:100%;display:block;
            border:1px solid #ddd9d0;box-shadow:0 18px 44px -20px rgba(28,27,24,.3);background:#fff">
     </div>`;
@@ -610,20 +618,16 @@ function dopasujWysokosc(el) {
 /* ------------------------------------------------- metody rozpisania (Main) */
 const METODY = [
   { id: "test",    nazwa: "Test siły (RM)",
-    opis: "sprawdzenie maksimum na zadaną liczbę powtórzeń",
-    pola: [["rm", "Ile powtórzeń (RM) — 1, 3, 5, 8…", "3"],
-           ["kg", "Spodziewany ciężar (opcjonalnie)", "150-160 kg"]] },
+    pola: [["rm", "Ile powtórzeń (RM)", "3"],
+           ["kg", "Spodziewany ciężar", "150-160 kg"]] },
   { id: "topset",  nazwa: "Top set / back-off",
-    opis: "jedna cięższa seria, potem lżejsze",
     pola: [["top", "Top set", "1 x 3"], ["rpeTop", "RPE top setu", "9"],
-           ["kgTop", "Ciężar top setu (opcjonalnie)", "140-155 kg"],
+           ["kgTop", "Ciężar top setu", "140-155 kg"],
            ["back", "Back-off", "2 x 5"], ["rpeBack", "RPE back-off", "7"],
-           ["kgBack", "Ciężar back-offu (opcjonalnie)", "120-130 kg"]] },
+           ["kgBack", "Ciężar back-offu", "120-130 kg"]] },
   { id: "cluster", nazwa: "Cluster set",
-    opis: "serie z krótkimi przerwami wewnątrz",
     pola: [["opis", "Zapis klastra", "3 x (3 x 1) / 20 s"]] },
   { id: "amrap",   nazwa: "AMRAP",
-    opis: "as many reps as possible — maksymalna liczba powtórzeń",
     pola: [["zakres", "Orientacyjny zakres powtórzeń", "8-12"],
            ["ciezar", "Orientacyjny ciężar", "70 kg"]] },
 ];
@@ -757,11 +761,10 @@ function metRysuj(kotwica) {
   const m = MET.wybrana ? METODY.find(x => x.id === MET.wybrana) : null;
   if (!m) {
     box.innerHTML = `<h4>Metoda rozpisania</h4>`
-      + `<button class="poz glowna" data-met="serie">Rozpisz serię po serii`
-      + `<small>każda seria osobno, z własnym RPE — np. 1 x 6 @ rpe 8, potem 1 x 5 @ rpe 9</small></button>`
+      + `<button class="poz glowna" data-met="serie">Rozpisz serię po serii</button>`
       + `<div class="met-sep"></div>`
       + METODY.map(x =>
-      `<button class="poz" data-met="${x.id}">${esc(x.nazwa)}<small>${esc(x.opis)}</small></button>`
+      `<button class="poz" data-met="${x.id}">${esc(x.nazwa)}</button>`
     ).join("");
   } else {
     const v = MET.wartosci || {};
@@ -878,17 +881,14 @@ document.addEventListener("click", (e) => {
   else if (act === "delrow") delRow(exById(id));
   else if (act === "addw")   insertWeek(w);
   else if (act === "delw") {
-    if (confirm("Usunąć Week " + w + " z CAŁEGO planu?\n\nZniknie w każdym "
-              + "treningu tego planu, także w tych, których teraz nie widzisz.\n"
-              + "Tej operacji nie da się cofnąć."))
+    if (confirm("Usunąć Week " + w + " ze wszystkich treningów planu?\nNie da się cofnąć."))
       removeWeek(w);
   }
   else if (act === "cpw") {
     const cel = w + 1;
     const zajete = (S.workout.exercises || []).some(ex =>
       (ex.section === b.dataset.sec) && rawDose(ex, cel));
-    if (!zajete || confirm("Week " + cel + " ma już wpisane dawki w tej sekcji.\n"
-                         + "Nadpisać je tym, co jest w Week " + w + "?"))
+    if (!zajete || confirm("Week " + cel + " ma już wpisane dawki w tej sekcji. Nadpisać?"))
       copyWeek(b.dataset.sec, w);
   }
   else if (act === "cpc")    { const ex = exById(id); const v = rawDose(ex, w); if (v) { setDose(ex, w + 1, v); commit(); } }
