@@ -242,6 +242,8 @@ def forget_recent(plan_id: str) -> None:
 
 
 _SHARE_BASE: list[str] = []
+# publiczna apka z samym planem (athlete_app.py z repo AthleteLab-app)
+LINK_CHMURA = "https://aph-trening.streamlit.app"
 
 
 def _share_base() -> str:
@@ -258,6 +260,11 @@ def _share_base() -> str:
             base = (LIBRARY_DIR / "share_base_url.txt").read_text().strip().rstrip("/")
         except Exception:
             pass
+    if not base and Path("/mount/src").is_dir():
+        # apka w Streamlit Cloud (tam repo leży w /mount/src) bez sekretu:
+        # linki zawodników na stałą publiczną apkę — adres lokalny chmury
+        # byłby martwy (Filip 2026-10-01: link ma działać bez Maca)
+        base = LINK_CHMURA
     if not base and _SHARE_BASE:
         return _SHARE_BASE[0]
     if not base:
