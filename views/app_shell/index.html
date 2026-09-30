@@ -102,6 +102,16 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 
 /* ---- cards, tables ---- */
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.postep{overflow-x:auto}
+.postep table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+.postep th,.postep td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;font-size:13px}
+.postep thead th{font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--mute2)}
+.postep tbody th{position:sticky;left:0;background:var(--card);font-weight:400;white-space:normal;min-width:150px;max-width:220px}
+.postep tbody th b{display:block;font-size:13.5px;font-weight:650;color:var(--ink)}
+.postep tbody th span{font-size:11.5px;color:var(--mute)}
+.postep td{font-weight:650;color:var(--ink)}
+.postep tbody tr{cursor:pointer}
+.postep tbody tr:last-child th,.postep tbody tr:last-child td{border-bottom:0}
 .thead,.trow{display:grid;gap:12px;align-items:center}
 .thead{padding:9px 16px;border-bottom:1px solid var(--hair);background:var(--tint)}
 .thead span{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mute2)}
@@ -143,6 +153,14 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 .qrow .n{font-size:13.5px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .qrow .p{font-size:12.5px;color:var(--mute);white-space:nowrap}
 .empty{padding:26px 14px;text-align:center;font-size:13px;color:var(--mute2)}
+.nrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;font:inherit;color:inherit;
+  border-bottom:1px solid var(--hair2);background:transparent;padding:11px 14px;cursor:pointer}
+.nrow:last-child{border-bottom:0}
+.nrow:hover{background:var(--hover)}
+.nrow .d{font-size:12px;font-weight:600;color:var(--mute);width:46px;flex-shrink:0;font-variant-numeric:tabular-nums}
+.nrow .t{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.nrow .t b{font-size:13.5px;font-weight:600;overflow-wrap:anywhere}
+.nrow .t s{font-size:12px;color:var(--mute);text-decoration:none}
 .rrow{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:none;
   border-bottom:1px solid var(--hair2);background:transparent;padding:11px 14px;cursor:pointer}
 .rrow:hover{background:var(--hover)}
@@ -314,6 +332,46 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 .sekcja h2 .ilez{font-size:10.5px;font-weight:700;color:#a5a294;background:#f2f1eb;
   padding:2px 7px;border-radius:20px;letter-spacing:.02em}
 .sekcja .podpis{margin:-4px 0 11px;font-size:12px;color:#a5a294;line-height:1.5;max-width:560px}
+
+/* Wykonanie jak plan na telefonie (Filip 2026-09-30): trening i sekcje się
+   zwijają, Movement Prep zwinięty na start */
+.wtr{margin:0 0 22px}
+.wtrh{display:flex;align-items:center;gap:10px;width:100%;padding:0;margin:0 0 4px;border:0;background:none;
+  font:inherit;text-align:left;cursor:pointer;color:inherit}
+.wtrh b{font-size:15px;font-weight:700;color:#1c1b18}
+.wtrh .ilez{font-size:10.5px;font-weight:700;color:#a5a294;background:#f2f1eb;padding:2px 7px;border-radius:20px}
+.wtrh s{margin-left:auto;text-decoration:none;color:#8a8779;font-size:17px;line-height:1}
+.wtr .podpis{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;font-size:12px;color:#a5a294}
+.wplan{border:0;background:none;padding:0;font:inherit;font-size:12px;font-weight:600;color:#2563eb;cursor:pointer}
+.wsek{border-top:1px solid #f2f1eb}
+.wsek:first-child{border-top:0}
+.wsekh{display:flex;align-items:center;gap:9px;width:100%;padding:12px 16px;border:0;background:none;
+  font:inherit;text-align:left;cursor:pointer;color:var(--acc)}
+.wsekh:hover{background:#faf9f6}
+.wsekh i{width:4px;height:15px;border-radius:2px;background:var(--acc)}
+.wsekh span{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.wsekh em{font-style:normal;margin-left:auto;font-size:12px;font-weight:600;color:#a5a294}
+.wsekh s{text-decoration:none;color:#8a8779;font-size:16px;line-height:1;width:16px;text-align:center}
+.wpoz{display:flex;gap:12px;padding:10px 16px 12px}
+.wpoz+.wpoz{border-top:1px dashed #f2f1eb}
+.wslot{flex:none;width:30px;height:30px;border-radius:999px;background:var(--acc);color:#fff;font-size:12px;
+  font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.wslot.pusty{background:#f2f1eb;color:#a5a294}
+.wtresc{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.wnaz{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.wnaz b{font-size:14.5px;font-weight:650;color:#1c1b18}
+.wdawka{font-size:12.5px;font-weight:600;color:#8a8779;font-variant-numeric:tabular-nums}
+.wdawka i{font-style:normal;font-size:11.5px;font-weight:700;color:oklch(.5 .13 60);background:oklch(.96 .04 75);
+  border-radius:6px;padding:1px 6px}
+.wserie{display:flex;flex-wrap:wrap;gap:6px}
+.wch{display:inline-flex;align-items:baseline;gap:5px;padding:4px 10px;border-radius:9px;background:#f4f3ee;
+  font-size:13px;font-weight:650;color:#1c1b18;font-variant-numeric:tabular-nums}
+.wch i{font-style:normal;font-size:11.5px;font-weight:700;color:oklch(.5 .13 60)}
+.wch.ok{background:#eef5ea;color:#1f4d1a}
+.wch.skip{background:#fbeeed;color:#a33b2c}
+.wch.szara{color:#a5a294}
+.wbrak{font-size:12.5px;color:#c3c0b8}
+.wnota{padding:7px 11px;border-radius:9px;background:#f1f5fd;color:#2b3a55;font-size:13px;line-height:1.4}
 
 /* kafelek aktualnego planu — zielony znacznik w prawym górnym rogu */
 .kafelplan{position:relative;display:flex;flex-direction:column;gap:5px;
@@ -537,6 +595,7 @@ let D = {
 // wąska i komputer startował ze zwiniętym menu
 function waski(){ try{ return window.parent.innerWidth <= 700; }catch(_){ return window.innerWidth <= 700; } }
 let S = {screen:"start", planTab:"plany", askBase:false, exTab:"all", cat:"Wszystkie", grp:"Wszystkie",
+         wOtw:{},   // Wykonanie: zwinięte / rozwinięte treningi i sekcje
          planQuery:"", exQuery:"", share:false, modal:false, menu:false, coachMenu:false,
          navCollapsed:waski(),   // start rozwinięty (na telefonie zwinięty) — bez pamiętania stanu
          // widok listy podopiecznych — wybór przeżywa zamknięcie karty
@@ -631,6 +690,15 @@ function screenStart(){
         <button class="iconbtn del" data-act="queue_del" data-i="${i}" title="Zrobione">×</button></div>`).join("")
     : `<div class="empty">Nic nie czeka.</div>`;
 
+  // Powiadomienia (Filip 2026-09-30): kto zakończył trening, z datą; stuknięcie
+  // otwiera profil na Wykonaniu. „Wykonany trening” — bez zgadywania rodzaju
+  const pow = D.powiadomienia || [];
+  const powiad = pow.length
+    ? pow.map(n=>`<button class="nrow" data-act="open_wykonanie" data-name="${esc(n.athlete)}">
+        <span class="d">${esc(n.date)}</span><span class="t"><b>${esc(n.athlete)}</b>
+        <s>Wykonany trening ${esc(n.trening)} · W${esc(n.week)} · ${esc(n.plan)}</s></span></button>`).join("")
+    : `<div class="empty">Nic nowego.</div>`;
+
   const recent = D.recent.map(r=>`<button class="rrow" data-act="open_plan" data-id="${esc(r.id)}">
       <i>${esc(r.initials)}</i><span class="t"><b>${esc(r.plan)}</b><s>${esc(r.meta)}</s></span>
       <span class="chev">→</span></button>`).join("");
@@ -656,6 +724,8 @@ function screenStart(){
           </div>
           ${queue}
         </div>
+        <div class="eyebrow" style="margin:20px 0 8px">Powiadomienia</div>
+        <div class="card">${powiad}</div>
       </div>
       <div>
         <div class="eyebrow" style="margin-bottom:8px">Ostatnio edytowane</div>
@@ -1220,26 +1290,53 @@ function screenAthlete(){
     ) : `<div class="card"><div class="pusto">Brak testów.</div></div>`;
 
   /* ---- Wykonanie: co zawodnik odklikał na telefonie ---- */
-  // RPE wpisuje trener w trybie trenera; seria z liczbami, ale bez ✓ — szara
-  const seriaTxt = (x) => {
-    if(x.stan === "skip") return "✕";
-    const t = ((x.kg || x.reps) ? `${esc(x.kg||"—")}${x.reps?" × "+esc(x.reps):""}`
-               : x.stan === "ok" ? "✓" : "—") + (x.rpe ? " @" + esc(x.rpe) : "");
-    return x.stan === "ok" ? t : `<span style="color:var(--mute)">${t}</span>`;
-  };
-  const wykonanie = wyk.length ? wyk.map(w=>`
+  // Postęp: ćwiczenia główne × tygodnie, w komórce najlepsza seria
+  // (Filip 2026-09-30: „tydzień pierwszy ile robili, tydzień drugi ile")
+  const pg = a.postep;
+  const postep = pg && pg.wiersze.length ? `
     <div class="sekcja">
-      <h2>${esc(w.date)} · Trening ${esc(w.trening)} <span class="ilez">tydz. ${w.week}</span></h2>
-      <p class="podpis">${esc(w.plan)} · ${w.zrobione} ${ile(w.zrobione,"seria","serie","serii")}
+      <h2>Postęp <span class="ilez">${esc(pg.plan)}</span></h2>
+      <div class="card postep"><table>
+        <thead><tr><th></th>${Array.from({length: pg.weeks}, (_, i) => `<th>W${i+1}</th>`).join("")}</tr></thead>
+        <tbody>${pg.wiersze.map(r=>`<tr data-act="open_plan" data-id="${esc(pg.plan_id)}">
+          <th><b>${esc(r.exercise)}</b><span>${esc(r.trening)}${r.slot?" · "+esc(r.slot):""}</span></th>
+          ${Array.from({length: pg.weeks}, (_, i) => `<td>${esc(r.tyg[String(i+1)] || "")}</td>`).join("")}
+        </tr>`).join("")}</tbody>
+      </table></div>
+    </div>` : "";
+  // trening jak na telefonie: sekcje w kolorach, kółko z numerem, dawka z
+  // RPE, serie jako kafelki, notatka zawodnika (Filip 2026-09-30); wszystko
+  // się zwija, na start zwinięty tylko Movement Prep
+  const wOtw = (key, dom) => S.wOtw[key] === undefined ? dom : S.wOtw[key];
+  const dawkaW = (d) => esc(d || "").replace(/@ RPE [\d,.\-–]+/g, (m) => `<i>${m}</i>`);
+  // kafelek serii bez numeru — „1 × 5” czytało się jak dawka; kolejność od lewej
+  const seriaCh = (x) => {
+    if(x.stan === "skip") return `<span class="wch skip">pominięta</span>`;
+    const t = (x.kg && x.reps) ? `${esc(x.kg)} kg × ${esc(x.reps)}` : x.kg ? `${esc(x.kg)} kg`
+            : x.reps ? `${esc(x.reps)} powt.` : "✓";
+    return `<span class="wch ${x.stan === "ok" ? "ok" : "szara"}">${t}${x.rpe ? `<i>@${esc(x.rpe)}</i>` : ""}</span>`;
+  };
+  const wykonanie = postep + (wyk.length ? wyk.map(w=>{
+    const kt = `${w.plan_id}|${w.trening}|${w.week}`, otw = wOtw(kt, true);
+    return `<div class="wtr">
+      <button class="wtrh" data-act="wotw" data-k="${esc(kt)}" aria-expanded="${otw}">
+        <b>${esc(w.date)} · Trening ${esc(w.trening)}</b><span class="ilez">tydz. ${w.week}</span><s>${otw?"▾":"▸"}</s></button>
+      <p class="podpis"><span>${esc(w.plan)} · ${w.zrobione} ${ile(w.zrobione,"seria","serie","serii")}
         ${w.pominiete?` · ${w.pominiete} ${ile(w.pominiete,"pominięta","pominięte","pominiętych")}`:""}
-        · ${esc(w.status)}</p>
-      <div class="card">${w.pozycje.map(p=>`
-        <div class="planrow" data-act="open_plan" data-id="${esc(w.plan_id)}">
-          <b>${p.slot?esc(p.slot)+" ":""}${esc(p.exercise)}</b>
-          <span class="pmeta">${p.serie.map(seriaTxt).join(" · ")}${p.note?" · "+esc(p.note):""}</span>
-        </div>`).join("")}</div>
-    </div>`).join("")
-    : `<div class="card"><div class="pusto">Brak wpisów.</div></div>`;
+        · ${esc(w.status)}</span><button class="wplan" data-act="open_plan" data-id="${esc(w.plan_id)}">Otwórz plan →</button></p>
+      ${otw ? `<div class="card">${(w.sekcje || []).map(sec=>{
+        const ks = `${kt}|${sec.key}`, so = wOtw(ks, sec.key !== "Prep");
+        return `<div class="wsek" style="--acc:${esc(sec.acc)}">
+          <button class="wsekh" data-act="wotw" data-k="${esc(ks)}" aria-expanded="${so}"><i></i><span>${esc(sec.tytul)}</span>
+            <em>${sec.wpisane}/${sec.pozycje.length} ${ile(sec.pozycje.length,"ćwiczenie","ćwiczenia","ćwiczeń")}</em><s>${so?"▾":"▸"}</s></button>
+          ${so ? sec.pozycje.map(p=>`<div class="wpoz">
+            <span class="wslot${p.slot?"":" pusty"}">${esc(p.slot || "–")}</span>
+            <div class="wtresc"><div class="wnaz"><b>${esc(p.exercise)}</b><span class="wdawka">${dawkaW(p.dawka)}</span></div>
+              <div class="wserie">${p.serie.length ? p.serie.map(seriaCh).join("") : `<span class="wbrak">bez wpisu</span>`}</div>
+              ${p.note ? `<div class="wnota">✎ ${esc(p.note)}</div>` : ""}</div></div>`).join("") : ""}
+        </div>`;}).join("")}</div>` : ""}
+    </div>`;}).join("")
+    : `<div class="card"><div class="pusto">Brak wpisów.</div></div>`);
 
   return `<div class="page">
     <button class="wroc" data-act="close_athlete">← Podopieczni</button>
@@ -1548,6 +1645,11 @@ document.addEventListener("click", e=>{
       S.hiddenOpen = !S.hiddenOpen; render(); break;
     case "prof_tab":
       S.profTab = b.dataset.v; render(); break;
+    case "wotw": {
+      // zwijanie treningu / sekcji w Wykonaniu — domyślnie otwarte, Prep zwinięty
+      const el = b.getAttribute("aria-expanded") === "true";
+      S.wOtw[b.dataset.k] = !el; render(); break;
+    }
     case "roster_edit":
       S.rosterEdit = !S.rosterEdit; render(); break;
     case "new_athlete":
@@ -1601,6 +1703,9 @@ document.addEventListener("click", e=>{
       // Przegląd od nowa tylko przy wejściu w inną osobę; powrót do tej
       // samej zostaje na zakładce, na której byłem
       if(!D.athlete || D.athlete.name !== b.dataset.name) S.profTab = "przeglad";
+      act("open_athlete", {name: b.dataset.name}); break;
+    case "open_wykonanie":
+      S.profTab = "wykonanie";
       act("open_athlete", {name: b.dataset.name}); break;
     case "close_athlete":
       act("close_athlete"); break;

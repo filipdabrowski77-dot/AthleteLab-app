@@ -29,10 +29,10 @@ if _ws:
 if _token:
     try:
         _render_athlete_mode(_token)
-    except RuntimeError as e:
+    except RuntimeError:
         # zawodnik na telefonie ma zobaczyć zdanie, nie traceback
-        st.error("Nie mogę teraz wczytać planu — spróbuj za chwilę.")
-        st.caption(str(e))
+        from vald.ui_training import _zaw_bez_magazynu
+        _zaw_bez_magazynu()
 else:
     st.markdown(
         "<div style='max-width:420px;margin:80px auto;text-align:center;"

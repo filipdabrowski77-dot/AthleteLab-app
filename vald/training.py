@@ -36,6 +36,7 @@ Plik: <ValdLibrary>/training_plans.json → {"plans": [...]}. Zapis atomowy.
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -90,7 +91,9 @@ def _zbierz_wykonanie(data: dict) -> dict:
                     poz[_klucz_itemu(it, i)] = tyg
             sesje[s_.get("id") or ""] = poz
         out[p.get("id") or ""] = sesje
-    return out
+    # kopia: baza żyje dłużej niż odczyt (upsert_plan, SRV-02), a plan z tego
+    # odczytu jest potem zmieniany w miejscu (oznacz_start, ustaw_serie)
+    return copy.deepcopy(out)
 
 
 def _scal_plany(swieze: dict, moje: dict) -> dict:
@@ -121,6 +124,14 @@ def _scal_plany(swieze: dict, moje: dict) -> dict:
                 for wk, sw_pola in s_it.items():
                     par = (it.get("weeks") or {}).get(wk)
                     if par is None:
+                        # tydzień dziedziczony (bez własnej dawki), w którym
+                        # zawodnik wpisał serie po moim odczycie — w mojej
+                        # wersji tego klucza nie ma, a `continue` kasowało
+                        # wpis przy KAŻDYM zapisie trenera, też w planach,
+                        # których nie ruszał (audyt 2026-09-30, SRV-01).
+                        # Brak w bazie = dopisane później, nie skasowane przeze mnie
+                        if wk not in b_it and isinstance(it.get("weeks"), dict):
+                            it["weeks"][wk] = dict(sw_pola)
                         continue
                     for pole, sw in sw_pola.items():
                         m, bz = par.get(pole), (b_it.get(wk) or {}).get(pole)
@@ -176,12 +187,13 @@ def _save_all(data: dict) -> None:
         store.kv_put(_STORE_KEY, _scal_plany(swieze, data))
         return
     from .library import daily_backup
-    daily_backup(PLANS_PATH)
-    PLANS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = PLANS_PATH.with_suffix(".json.tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, PLANS_PATH)
+    with _ZAPIS:
+        daily_backup(PLANS_PATH)
+        PLANS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = PLANS_PATH.with_suffix(f".json.{os.getpid()}.{threading.get_ident()}.tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, PLANS_PATH)
 
 
 def new_id() -> str:
@@ -197,11 +209,25 @@ def get_all_plans() -> list[dict]:
     return _load_all()["plans"]
 
 
+# tryb plikowy (bez magazynu): trener i zawodnik to wątki jednego procesu —
+# dwa zapisy naraz przeplatały się we wspólnym .tmp i psuły plik (weryfikacja
+# 2026-09-30, OFF-V1-02). Odczyt-zmiana-zapis pod jedną blokadą.
+_ZAPIS = threading.RLock()
+
+
 def upsert_plan(plan: dict) -> None:
-    data = _load_all()
-    data["plans"] = [p for p in data["plans"] if p.get("id") != plan.get("id")]
-    data["plans"].append(plan)
-    _save_all(data)
+    with _ZAPIS:
+        stara = getattr(_watek, "baza", {})
+        data = _load_all()
+        # zapisywany plan zbudowano z WCZEŚNIEJSZEGO odczytu — jego wykonanie
+        # scalam względem tamtej bazy; baza z odczytu tuż przed zapisem
+        # zawierała już serie zawodnika, więc stara wartość trenera je
+        # kasowała (audyt 2026-09-30, SRV-02). Pozostałe plany: baza świeża.
+        if plan.get("id") in stara and isinstance(getattr(_watek, "baza", None), dict):
+            _watek.baza[plan.get("id")] = stara[plan.get("id")]
+        data["plans"] = [p for p in data["plans"] if p.get("id") != plan.get("id")]
+        data["plans"].append(plan)
+        _save_all(data)
 
 
 def upsert_plans(plans: list[dict]) -> None:
@@ -210,10 +236,15 @@ def upsert_plans(plans: list[dict]) -> None:
     PUT-ów całego magazynu do Supabase (2026-09-10: 160 KB × N)."""
     if not plans:
         return
-    data = _load_all()
-    ids = {p.get("id") for p in plans}
-    data["plans"] = [p for p in data["plans"] if p.get("id") not in ids] + list(plans)
-    _save_all(data)
+    with _ZAPIS:
+        stara = getattr(_watek, "baza", {})
+        data = _load_all()
+        ids = {p.get("id") for p in plans}
+        if isinstance(getattr(_watek, "baza", None), dict):   # jak w upsert_plan (SRV-02)
+            for pid in ids & set(stara):
+                _watek.baza[pid] = stara[pid]
+        data["plans"] = [p for p in data["plans"] if p.get("id") not in ids] + list(plans)
+        _save_all(data)
 
 
 # Kosz: w trybie chmury nie ma kopii dziennej (daily_backup działa tylko na
@@ -351,7 +382,12 @@ def week_params(it: dict, wk: int) -> dict:
                 p = {k: v for k, v in p.items() if k not in _EXEC_FIELDS}
             return p
         if p and w == int(wk) and any(p.get(k) for k in _EXEC_FIELDS):
-            return p        # sam wpis wykonania bez rozpiski — nie gubimy go
+            # sam wpis wykonania bez rozpiski: wykonanie z tego tygodnia,
+            # dawka z najbliższego wcześniejszego (audyt 2026-09-30 — zawodnik
+            # widział „—” zamiast dawki w tygodniu, w którym już coś wpisał)
+            wyk = {k: v for k, v in p.items() if k in _EXEC_FIELDS}
+            dawka = week_params(it, int(wk) - 1) if int(wk) > 1 else {}
+            return {**{k: v for k, v in dawka.items() if k not in _EXEC_FIELDS}, **wyk}
     return {}
 
 
@@ -512,22 +548,89 @@ def zapisz_cwiczenie(plan: dict, sess_id: str, item_i: int, wk: int,
     return True
 
 
-def oznacz_start(plan: dict, sess_id: str, wk: int) -> dict:
-    """„Zacznij trening" — trener widzi, że sesja jest w toku."""
+def oznacz_start(plan: dict, sess_id: str, wk: int, dzien: str = "") -> dict:
+    """„Zacznij trening" — trener widzi, że sesja jest w toku.
+    dzien: data z telefonu — seria zrobiona bez zasięgu dostawała datę
+    wysyłki, nie treningu (audyt 2026-09-30, SRV-07)."""
     sess = next((s for s in ensure_sessions(plan) if s["id"] == sess_id), None)
     if sess is not None:
-        sess.setdefault("started_weeks", {})[str(wk)] = str(date.today())
+        sess.setdefault("started_weeks", {})[str(wk)] = \
+            _data_z_telefonu(dzien) if dzien else str(date.today())
     return plan
 
 
-def oznacz_koniec(plan: dict, sess_id: str, wk: int) -> dict:
-    """„Zakończ trening" — to samo pole, którego używa zapis z desktopu."""
+def oznacz_koniec(plan: dict, sess_id: str, wk: int, dzien: str = "") -> dict:
+    """„Zakończ trening" — to samo pole, którego używa zapis z desktopu.
+    dzien: data z telefonu (wpis wysłany po powrocie zasięgu następnego dnia
+    ma datę treningu, nie wysyłki). Tydzień już zakończony zachowuje swoją
+    datę — ponowne „Zakończ” po poprawce wpisów nie przesuwa „W1 · 08.09”
+    na dziś (audyt 2026-09-30)."""
     sess = next((s for s in ensure_sessions(plan) if s["id"] == sess_id), None)
     if sess is not None:
-        dzis = str(date.today())
-        sess["done_date"] = dzis
-        sess.setdefault("done_weeks", {})[str(wk)] = dzis
+        dw = sess.setdefault("done_weeks", {})
+        if str(wk) in dw:
+            return plan
+        d = _data_z_telefonu(dzien)
+        sess["done_date"] = d
+        dw[str(wk)] = d
     return plan
+
+
+def _data_z_telefonu(dzien: str) -> str:
+    """Data RRRR-MM-DD z telefonu, jeśli wiarygodna (ostatnie 14 dni, nie
+    później niż jutro — strefa czasowa telefonu), inaczej dzisiejsza."""
+    from datetime import timedelta
+    dzis = date.today()
+    try:
+        d = date.fromisoformat(str(dzien or "").strip())
+    except ValueError:
+        return str(dzis)
+    return str(d) if dzis - timedelta(days=14) <= d <= dzis + timedelta(days=1) else str(dzis)
+
+
+_POLA_SERII = ("kg", "reps", "rpe", "stan")
+
+
+def scal_serie(baza: list, moje: list, obecne: list) -> list:
+    """Scalanie trójstronne serii jednego ćwiczenia w tygodniu, pole po polu.
+
+    baza — serie, które telefon widział, zanim coś zmienił; moje — serie
+    z telefonu; obecne — serie w planie teraz. Pole zmienione na telefonie
+    (moje ≠ baza) wygrywa, każde inne zostaje z planu. Trener i zawodnik
+    wpisujący w tym samym ćwiczeniu nie kasują sobie serii, a wpis wysłany
+    z opóźnieniem (brak zasięgu) nie cofa tego, czego telefon nie ruszał
+    (audyt 2026-09-30: A3-01, OFF-09)."""
+    def _s(lst, i):
+        x = lst[i] if isinstance(lst, list) and i < len(lst) else {}
+        return x if isinstance(x, dict) else {}
+
+    def _v(x, f, plan=False):
+        # stan z telefonu DOSŁOWNIE: "" z liczbami = „wpisane, bez ✓”;
+        # stan_serii zrobiłby z tego „zrobiona” (weryfikacja 2026-09-30:
+        # kg bez ✓ szło jako seria zrobiona, cofnięcia ✓ nie dało się zapisać).
+        # Tylko wpis z planu może być stary, bez pola `stan` (kg = zrobiona).
+        if f == "stan":
+            return stan_serii(x) if plan else (str(x.get("stan") or "").strip()
+                                               if x.get("stan") in (SERIA_OK, SERIA_SKIP) else "")
+        return str(x.get(f) or "").strip()
+
+    def _pole(b, m, c, f):
+        if _v(m, f) == _v(b, f):
+            return _v(c, f, plan=True)
+        # liczba wstawiona samym ✓ (podpowiedź) ustępuje wpisanej przez drugą
+        # stronę — ✓ trenera kasował 85×4 zawodnika (weryfikacja R1-02)
+        if f in (m.get("auto") or ()) and _v(c, f, plan=True):
+            return _v(c, f, plan=True)
+        return _v(m, f)
+
+    n = max(len(baza or []), len(moje or []), len(obecne or []))
+    out = []
+    for i in range(n):
+        b, m, c = _s(baza, i), _s(moje, i), _s(obecne, i)
+        out.append({f: _pole(b, m, c, f) for f in _POLA_SERII})
+    while out and not any(out[-1].values()):
+        out.pop()
+    return out
 
 
 # ── zmiany rozpiski z telefonu (tryb trenera, Filip 2026-09-28: „usunąć,
@@ -922,9 +1025,31 @@ def get_or_create_share_token(plan: dict) -> str:
 
 
 def regenerate_share_token(plan: dict) -> str:
+    """Nowy link — stary przestaje działać. Linki wcześniejszych bloków tej
+    osoby (ta sama nazwa i folder) też: po końcu bloku stary link przenosi
+    na aktualny plan, więc bez tego „nowy link” nikogo nie odcinał (SEC-1)."""
     plan["share_token"] = uuid.uuid4().hex + uuid.uuid4().hex[:8]
     upsert_plan(plan)
+    for p in get_plans(plan.get("athlete", "")):
+        # tylko ZAKOŃCZONE — tylko one przenoszą; link trwającego równolegle
+        # planu (np. bieganie obok siłowni) zostaje (weryfikacja V5-04)
+        end = plan_end(p)
+        if (p.get("id") != plan.get("id") and p.get("share_token")
+                and ten_sam_folder(p, plan) and end and end < date.today()
+                and (p.get("start_date") or "") <= (plan.get("start_date") or "")):
+            p["share_token"] = uuid.uuid4().hex + uuid.uuid4().hex[:8]
+            upsert_plan(p)
     return plan["share_token"]
+
+
+def ten_sam_folder(a: dict, b: dict) -> bool:
+    """Ta sama osoba w sensie linku: ta sama nazwa (wołający) i ten sam folder.
+    Dwóch „Michałów” z dwóch klubów się nie łączy (A6-04). „Pusty pasuje do
+    każdego” łączył prywatnego Michała z Michałem ze Ślepska — cudze wyniki
+    w „Ostatnio” i zapis do cudzego planu (weryfikacja R3-04), więc ściśle."""
+    ga = str(a.get("group") or "").strip().lower()
+    gb = str(b.get("group") or "").strip().lower()
+    return ga == gb
 
 
 def find_plan_by_token(token: str) -> dict | None:

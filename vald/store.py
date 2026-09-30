@@ -100,6 +100,9 @@ def _secret(name: str) -> str:
 
 _WS_KEY = "_aph_workspace"
 _WS_OVERRIDE: str | None = None
+# ?ws=_ w linku zawodnika = przestrzeń Filipa (pusta nazwa) w instancji, której
+# domyślna przestrzeń jest inna — konto Coach Filip w chmurze Maćka
+WS_GLOWNA = "_"
 
 
 def _czysta_ws(w: str) -> str:
@@ -130,7 +133,7 @@ def workspace() -> str:
         import streamlit as st
         w = st.session_state.get(_WS_KEY)
         if w:
-            return str(w)
+            return "" if w == WS_GLOWNA else str(w)
         # zalogowane konto (vald/konta.py) — pusta nazwa to przestrzeń Filipa,
         # więc liczy się sama obecność klucza, nie jego wartość
         if "_aph_ws_konto" in st.session_state:
@@ -138,7 +141,12 @@ def workspace() -> str:
     except Exception:
         pass
     if _WS_OVERRIDE:
-        return _WS_OVERRIDE
+        return "" if _WS_OVERRIDE == WS_GLOWNA else _WS_OVERRIDE
+    return domyslna_ws()
+
+
+def domyslna_ws() -> str:
+    """Przestrzeń instancji bez zalogowanego konta i bez linku (sekret)."""
     return _czysta_ws(_secret("workspace"))
 
 

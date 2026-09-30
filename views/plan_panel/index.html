@@ -347,7 +347,17 @@ function addRow(key) {
   S.workout.exercises.push({ section: key, slot: "", exercise: "", note: "", tempo: "", film: "", weeks: {} });
   commit();
 }
+// tygodnie, w których zawodnik coś wpisał (✓, ✕, kg, powt.) — pytania przed
+// usunięciem mówią o wynikach, bo po zapisie nie da się ich odzyskać (audyt A4-03)
+function tygodnieZWynikami(lista) {
+  const w = new Set();
+  for (const ex of lista || []) for (const [k, v] of Object.entries(ex.weeks || {}))
+    if (((v || {}).sets_done || []).some(s => s && (s.stan === "ok" || s.stan === "skip" || s.kg || s.reps))) w.add(+k);
+  return [...w].sort((a, b) => a - b);
+}
 function delRow(ex) {
+  const w = tygodnieZWynikami([ex]);
+  if (w.length && !confirm(`„${ex.exercise || "To ćwiczenie"}” ma wyniki zawodnika (W${w.join(", W")}).\nUsunąć z planu?`)) return;
   S.workout.exercises.splice(S.workout.exercises.indexOf(ex), 1); commit();
 }
 function commit() { S.pdfPng = ""; render(); SEND({ workout: S.workout }); }
@@ -882,7 +892,9 @@ document.addEventListener("click", (e) => {
   else if (act === "delrow") delRow(exById(id));
   else if (act === "addw")   insertWeek(w);
   else if (act === "delw") {
-    if (confirm("Usunąć Week " + w + " ze wszystkich treningów planu?\nNie da się cofnąć."))
+    const wPlanie = (S.plan.wyniki || []).includes(w) || tygodnieZWynikami(S.workout.exercises).includes(w);
+    const wyn = wPlanie ? "\nW planie są wyniki zawodnika z Week " + w + " (wszystkie treningi) — przepadną." : "";
+    if (confirm("Usunąć Week " + w + " ze wszystkich treningów planu?" + wyn + "\nNie da się cofnąć."))
       removeWeek(w);
   }
   else if (act === "cpw") {
@@ -898,7 +910,9 @@ document.addEventListener("click", (e) => {
     // kasuje całą rozpiskę — pytamy i mówimy, ile przepadnie
     // pozycje leżą w S.workout.exercises z polem section — nie pod kluczem sekcji
     const ile = (S.workout.exercises || []).filter(x => (x.exercise || "").trim()).length;
-    const co = ile ? `Przepadnie ${ile} ćwiczeń z rozpiską.` : "Ten trening jest pusty.";
+    const wyn = tygodnieZWynikami(S.workout.exercises);
+    const co = (ile ? `Przepadnie ${ile} ćwiczeń z rozpiską.` : "Ten trening jest pusty.")
+      + (wyn.length ? `\nPrzepadną też wyniki zawodnika z W${wyn.join(", W")}.` : "");
     if (confirm(`Usunąć „${S.workout.name || "ten trening"}" z planu?\n\n${co}`)) {
       SEND({ action: "usun_trening" });
     }

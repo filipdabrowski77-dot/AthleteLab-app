@@ -4339,15 +4339,19 @@ def _start_auto_refresh_daemon() -> bool:
     return True
 
 
-def _ikonka_trenera() -> None:
+def _ikonka_trenera(nazwa: str = "APH", manifest: bool = True) -> None:
     """Ikonka „APH" na ekranie początkowym telefonu (Safari →
     Udostępnij → „Do ekranu początkowego" na adresie z ?mode=gym).
     Streamlit oddaje pliki .html ze static/ jako text/plain, więc osobna
     strona-ikonka pokazywała się jako kod, a własnego <head> apka nie ma —
     dopisuję ikonę, nazwę i manifest do dokumentu apki z ramki komponentu
-    (ta sama domena). Adresy względne: w Streamlit Cloud apka siedzi pod /~/+/."""
+    (ta sama domena). Adresy względne: w Streamlit Cloud apka siedzi pod /~/+/.
+    Link zawodnika (2026-09-30): ta sama ikonka, nazwa „Trening”, BEZ manifestu —
+    jego start_url to tryb trenera, a nowsze iOS/Android otwierałyby ikonkę tam."""
+    import json as _json
     import streamlit.components.v1 as components
     components.html("""<script>
+    const NAZWA = """ + _json.dumps(nazwa) + """, MANIFEST = """ + ("true" if manifest else "false") + """;
     try {
       const w = window.parent, d = w.document;
       const u = p => new URL(p, w.location.href).href;
@@ -4360,8 +4364,8 @@ def _ikonka_trenera() -> None:
         d.head.appendChild(el);
       };
       dodaj("link", {rel: "apple-touch-icon", href: u("app/static/aph-trener-180.png")});
-      dodaj("link", {rel: "manifest", href: u("app/static/manifest.json")});
-      dodaj("meta", {name: "apple-mobile-web-app-title", content: "APH"});
+      if (MANIFEST) dodaj("link", {rel: "manifest", href: u("app/static/manifest.json")});
+      dodaj("meta", {name: "apple-mobile-web-app-title", content: NAZWA});
       dodaj("meta", {name: "apple-mobile-web-app-capable", content: "yes"});
       dodaj("meta", {name: "theme-color", content: "#000000"});
     } catch (e) {}
@@ -4369,7 +4373,11 @@ def _ikonka_trenera() -> None:
 
 
 def main() -> None:
-    if st.query_params.get("mode") == "gym":
+    if len(str(st.query_params.get("plan") or "")) >= 20:
+        _ikonka_trenera("Trening", manifest=False)   # link zawodnika na ekranie początkowym
+    else:
+        # cała apka na ekranie początkowym iPhone'a, nie tylko tryb trenera
+        # (Filip 2026-09-30: „chcę całą aplikację na pulpicie")
         _ikonka_trenera()
     # Publiczny adres instancji gościa — bez hasła wszedłby każdy, kto zna
     # link (Streamlit Cloud: jedna zamknięta apka na konto). Bez sekretu
@@ -4415,10 +4423,10 @@ def main() -> None:
     if st.session_state.get("_athlete_token"):
         try:
             _render_athlete_mode(st.session_state["_athlete_token"])
-        except RuntimeError as e:
+        except RuntimeError:
             # zawodnik na telefonie ma zobaczyć zdanie, nie traceback
-            st.error("Nie mogę teraz wczytać planu — spróbuj za chwilę.")
-            st.caption(str(e))
+            from vald.ui_training import _zaw_bez_magazynu
+            _zaw_bez_magazynu()
         return
 
     # Tryb SIŁOWNIA (telefon): pełny ekran bez top baru i sidebara

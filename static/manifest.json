@@ -1,7 +1,7 @@
 {
   "name": "Athletic Performance Hub",
   "short_name": "APH",
-  "start_url": "../../?mode=gym",
+  "start_url": "../../",
   "scope": "../../",
   "display": "standalone",
   "background_color": "#000000",

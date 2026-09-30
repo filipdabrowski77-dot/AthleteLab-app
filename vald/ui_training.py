@@ -60,6 +60,14 @@ def _tr_letter(i: int) -> str:
     return _TR_LETTERS[i] if i < len(_TR_LETTERS) else str(i + 1)
 
 
+def _tr_litera_treningu(s: dict, i: int) -> str:
+    """Tytuł z jedną literą jest literą treningu — sam „B" w planie
+    pokazywał się jako „A · B" (2026-09-30)."""
+    t = (s.get("title") or "").strip().upper()
+    m = re.fullmatch(r"(?:TRENING\s+)?([A-Z])", t)
+    return m.group(1) if m else _tr_letter(i)
+
+
 @st.dialog("Edytuj plan")
 def _tr_edit_plan_dialog(plan_id: str) -> None:
     plan = next((p for p in get_all_plans()
@@ -456,6 +464,11 @@ def _tr_workout_body(plan_id: str, sid: str) -> None:
                    and any(any((pw or {}).get(f) for f in _EXEC_F)
                            for pw in (o.get("weeks") or {}).values()
                            if isinstance(pw, dict))]
+        # archiwum w numeracji po zmianie tygodni — inaczej „(usunięte)”
+        # lądowało w cudzych tygodniach (weryfikacja V4-03)
+        if ops:
+            dropped = [{**o, "weeks": _pp_shift(dict(o.get("weeks") or {}), ops)}
+                       for o in dropped]
         nowa = dict(w)
         nowa.update({"id": sid,
                      "title": (_wk.get("name") or "").strip(),
@@ -468,12 +481,17 @@ def _tr_workout_body(plan_id: str, sid: str) -> None:
         for _k in ("done_weeks", "started_weeks"):
             if ops and nowa.get(_k):
                 nowa[_k] = _pp_shift(nowa[_k], ops)
+        if ops and w.get("removed_items"):
+            stare_arch = w.get("removed_items") or []
+            nowa["removed_items"] = [
+                {**o, "weeks": _pp_shift(dict(o.get("weeks") or {}), ops)}
+                for o in stare_arch] + list(nowa.get("removed_items") or [])[len(stare_arch):]
         sessions[idx] = nowa
         if ops:          # tygodnie planu sa wspolne — przesun tez inne treningi
             for j, s_ in enumerate(sessions):
                 if j == idx:
                     continue
-                for it in (s_.get("items") or []):
+                for it in (s_.get("items") or []) + (s_.get("removed_items") or []):
                     if isinstance(it.get("weeks"), dict):
                         it["weeks"] = _pp_shift(it["weeks"], ops)
                 for _k in ("done_weeks", "started_weeks"):
@@ -610,7 +628,15 @@ def _tr_workout_body(plan_id: str, sid: str) -> None:
     _sug = [{"name": e.get("name", ""), "url": e.get("url", "") or "",
              "cat": e.get("cat", "") or ""}
             for e in _exl_pp.exercises() if (e.get("name") or "").strip()]
-    plan_panel({"athlete": _ath_pp, "name": plan.get("name", "")},
+    # tygodnie z wynikami w CAŁYM planie: usunięcie tygodnia przesuwa wszystkie
+    # treningi, a pytanie widziało tylko otwarty (weryfikacja V4-01)
+    from .training import stan_serii as _st_pp
+    _wyn_pp = sorted({int(k) for s_ in sessions for it_ in (s_.get("items") or [])
+                      for k, v_ in (it_.get("weeks") or {}).items()
+                      if str(k).isdigit() and isinstance(v_, dict)
+                      and any(isinstance(x, dict) and (_st_pp(x) or x.get("kg") or x.get("reps"))
+                              for x in (v_.get("sets_done") or []))})
+    plan_panel({"athlete": _ath_pp, "name": plan.get("name", ""), "wyniki": _wyn_pp},
                _wk, key=f"pp_{key}", pdf_png=pdf_uri, pdf_err=pdf_err,
                ack=_ack, ui=ui, exlist=_sug,
                miejsce={"plan": plan_id, "sid": sid})   # wpis w historii (Wstecz)
@@ -677,37 +703,6 @@ def _pv_dawka(it: dict, wk: int) -> tuple[str, str]:
     return dawka, (p.get("intent") or "")
 
 
-def _pv_karta_html(it: dict, wk: int, idx: int, section: str, yt: dict) -> str:
-    from html import escape as _esc
-    acc, tint = _pv_sekcja_kolory(section)
-    nazwa = it.get("exercise", "")
-    url = yt.get(nazwa.strip().lower())
-    dawka, intent = _pv_dawka(it, wk)
-    nazwa_html = (f"<a class='pvname' href='{_esc(url)}' target='_blank'>{_esc(nazwa)}</a>"
-                  if url else f"<span class='pvname'>{_esc(nazwa)}</span>")
-    chip = f" <span class='pvintent'>{_esc(intent)}</span>" if intent else ""
-    det = []
-    if url:
-        det.append(f"<a href='{_esc(url)}' target='_blank'>▶ Zobacz film</a>")
-    if it.get("tempo"):
-        det.append(f"<span>Tempo: {_esc(it['tempo'])}</span>")
-    if it.get("note"):
-        det.append(f"<span>{_esc(it['note'])}</span>")
-    det_html = (f"<div class='pvdet'>{''.join(det)}</div>"
-                if (it.get("tempo") or it.get("note")) else "")
-    return (f"<div class='pvrow'><span class='pvslot' style='background:{tint};"
-            f"color:{acc};'>{_esc(_pv_slot_label(it, idx, section))}</span>"
-            f"<div class='pvcol'>{nazwa_html}<span class='pvdose'>{_esc(dawka)}{chip}</span>"
-            f"{det_html}</div></div>")
-
-
-def _pv_sekcja_html(section: str) -> str:
-    acc, _ = _pv_sekcja_kolory(section)
-    tytul = _PV_SEKCJE.get(section, (0, 0, section))[2]
-    return (f"<div class='pvsec' style='color:{acc};'><i style='background:{acc};'></i>"
-            f"{tytul}</div>")
-
-
 def _pv_status(sess: dict, wk: int) -> str:
     if str(wk) in (sess.get("done_weeks") or {}):
         return "Zapisany"
@@ -768,6 +763,15 @@ _PV_CSS = """<style>
             font-size:12px !important; font-weight:600 !important;
             border-radius:999px !important; min-height:44px !important;
             padding:6px 13px !important; }
+        /* telefon: „W1 · 08.09” i „B · Nogi i plecy” ucinało na 320 px
+           (weryfikacja 2026-09-30) — mniej paddingu i czcionki */
+        @media (max-width: 420px) {
+          .stApp [class*="st-key-gymwk_"] button,
+          .stApp [class*="st-key-gymt_"] button { padding:4px 2px !important; }
+          .stApp [class*="st-key-gymwk_"] button p,
+          .stApp [class*="st-key-gymt_"] button p { font-size:13px !important;
+            letter-spacing:-0.02em; white-space:nowrap; }
+        }
         </style>"""
 
 _GYM_CSS = """<style>
@@ -892,12 +896,19 @@ def _render_plan_workout_body(plan: dict, sub: str,
     sk = f"gym_sess_{plan['id']}"
     if st.session_state.get(sk) not in {s["id"] for s in sessions}:
         _dom = sessions[0]["id"]
-        if trener:
-            # trening z adresu, a bez niego pierwszy niezakończony w tym
-            # tygodniu — trener otwiera telefon i od razu ma dzisiejszy
-            _qt = str(st.query_params.get("t") or "")
-            _nz = next((s["id"] for s in sessions
-                        if str(wk) not in (s.get("done_weeks") or {})), _dom)
+        if trener or prowadzony:
+            # trening z adresu (tryb trenera), a bez niego pierwszy
+            # niezakończony w tym tygodniu — telefon po przeładowaniu wraca
+            # do dzisiejszego treningu, nie do A (audyt A1-09)
+            _qt = str(st.query_params.get("t") or "") if trener else ""
+            # najpierw zaczęty i niezakończony (zawodnik po przeładowaniu
+            # wracał do A zamiast do B, który robił — ZAW-06), potem pierwszy
+            # niezakończony z ćwiczeniami (pusty A zasłaniał B — ZAW-12)
+            _otw = [s for s in sessions if s.get("items")
+                    and str(wk) not in (s.get("done_weeks") or {})]
+            _nz = next((s["id"] for s in _otw
+                        if str(wk) in (s.get("started_weeks") or {})),
+                       _otw[0]["id"] if _otw else _dom)
             _dom = _qt if _qt in {s["id"] for s in sessions} else _nz
         st.session_state[sk] = _dom
     sel = st.session_state[sk]
@@ -908,13 +919,15 @@ def _render_plan_workout_body(plan: dict, sub: str,
                 st.query_params[_k] = _v
     # tryb trenera: na przycisku tygodnia data wykonania WYBRANEGO treningu
     # („W2 · 12.09"), na przyciskach treningów data z bieżącego tygodnia
-    _sel_s = next((s_ for s_ in sessions if s_["id"] == sel), None) if trener else None
+    _sel_s = (next((s_ for s_ in sessions if s_["id"] == sel), None)
+              if trener or prowadzony else None)
     for row_start in range(0, weeks_n, 4):
         row_weeks = list(range(row_start + 1, min(row_start + 4, weeks_n) + 1))
         wk_cols = st.columns(len(row_weeks))
         for t, col in zip(row_weeks, wk_cols):
+            # zawodnik: samo „W1” (Filip 2026-09-30), trener z datą wykonania
             _d = _trk_data(_sel_s, t) if trener else ""
-            lbl = f"W{t} · {_d}" if _d else (f"W{t}" if trener else f"Week {t}")
+            lbl = f"W{t} · {_d}" if _d else (f"W{t}" if trener or prowadzony else f"Week {t}")
             if col.button(lbl, key=f"gymwk_{plan['id']}_{t}",
                           use_container_width=True) and t != wk:
                 st.session_state[wkk] = t
@@ -930,16 +943,22 @@ def _render_plan_workout_body(plan: dict, sub: str,
         f"color:var(--aph-bone)!important;}}</style>",
         unsafe_allow_html=True,
     )
-    # wiersze po max 5 — przy 6+ treningach każdy musi być dostępny
-    for _t0 in range(0, len(sessions), 5):
+    # wiersze po max 5 — przy 6+ treningach każdy musi być dostępny; zawodnik
+    # z jednym treningiem nie dostaje pigułki, która nic nie wybiera
+    for _t0 in range(0, 0 if (prowadzony and not trener and len(sessions) == 1)
+                     else len(sessions), 5):
         _chunk = sessions[_t0:_t0 + 5]
         tcols = st.columns(len(_chunk))
         for s, col in zip(_chunk, tcols):
             i = sessions.index(s)
             _t = (s.get("title") or "").strip()
-            lbl = _tr_letter(i) + (f" · {_t}" if _t and _t.upper() != _tr_letter(i) else "")
+            _l = _tr_litera_treningu(s, i)
+            _sam = re.fullmatch(r"(?:trening\s+)?[a-z]", _t, re.I)   # „B”, „Trening B”
+            lbl = _l + (f" · {_t}" if _t and not _sam and not prowadzony else "")
             _d = _trk_data(s, wk) if trener else ""
-            lbl = (lbl[:16] + f" · {_d}") if _d else lbl[:16]
+            # z datą sama litera — „B · Nogi i plecy · 24.09” wychodziło
+            # poza przycisk (audyt A2-10); pełny tytuł jest w nagłówku
+            lbl = f"{_l} · {_d}" if _d else lbl[:16]
             if col.button(lbl, key=f"gymt_{s['id']}",
                           use_container_width=True) and s["id"] != sel:
                 st.session_state[sk] = s["id"]
@@ -985,27 +1004,20 @@ def _render_plan_workout_body(plan: dict, sub: str,
 
     if prowadzony:
         # nagłówek jak w podglądzie Mobile app: trening, zawodnik · plan, status
-        _lit = _tr_letter(sessions.index(w))
+        _lit = _tr_litera_treningu(w, sessions.index(w))
         _tyt = (w.get("title") or "").strip()
         _tyt = f"Trening {_lit}" if (not _tyt or _tyt.upper() == _lit) else _tyt
         st.markdown(
             f"<div class='pvhead'><div><div class='pvtitle'>{_html_esc(_tyt)}</div>"
-            f"<div class='pvsub'>{_html_esc(plan.get('athlete', ''))} · "
+            f"<div class='pvsub'>{_html_esc(plan.get('athlete', '')) + ' · ' if trener else ''}"
             f"{_html_esc(plan.get('name', ''))}</div></div>"
             f"<span class='pvbadge'>{_pv_status(w, wk)}"
-            f"{(' ' + _trk_data(w, wk)) if trener and _trk_data(w, wk) else ''}</span></div>",
+            f"{(' ' + _trk_data(w, wk)) if _trk_data(w, wk) else ''}</span></div>",
             unsafe_allow_html=True)
         if trener:
             _render_trener_panel(plan, w, wk)
-            return
-        if _render_trening_prowadzony(plan, w, wk, yt):
-            return
-        for sec, lst in (("Prep", prep), ("Plyo & Power", plyo), ("Main", mains)):
-            if not lst:
-                continue
-            st.markdown(_pv_sekcja_html(sec) + "".join(
-                _pv_karta_html(it, wk, i, sec, yt) for i, it in enumerate(lst)),
-                unsafe_allow_html=True)
+        else:
+            _render_zawodnik_panel(plan, w, wk)
         return
 
     # ── Prep / Plyo: tylko odczyt ───────────────────────────────────────
@@ -1144,237 +1156,6 @@ def _render_plan_workout_body(plan: dict, sub: str,
         st.rerun()
 
 
-# ── Tryb prowadzonego treningu (telefon zawodnika) ───────────────────────────
-# Filip 2026-09-18: „startujesz trening, przeklikujesz ćwiczenia, po serii
-# wpisujesz ciężar i powtórzenia; serię można też zamknąć bez wpisu i oznaczyć,
-# że jej nie zrobiłeś — a trener to widzi".
-_TRW_CSS = """<style>
-        /* audyt 2026-09-29: pola kg/powt. zlewały się z tłem i były niższe od ✓/✕ */
-        .stApp [class*="st-key-trw_kg_"] [data-baseweb="input"],
-        .stApp [class*="st-key-trw_rp_"] [data-baseweb="input"] {
-            border:1px solid #e3e0d8 !important; border-radius:10px !important;
-            background:#fdfdfb !important; min-height:44px; }
-        .stApp [class*="st-key-trw_kg_"] input, .stApp [class*="st-key-trw_rp_"] input {
-            font-size:16px !important; text-align:center; }
-        .stApp [class*="st-key-trw_"] button { min-height:44px !important; }
-        .stApp .trwprog { font-family: var(--aph-text); font-size: 12px;
-            color: var(--aph-dim); display:flex; justify-content:space-between;
-            align-items:center; margin: 2px 0 6px; }
-        .stApp .trwbar { height:6px; border-radius:3px; background:#e8ebef;
-            overflow:hidden; margin-bottom:14px; }
-        .stApp .trwbar i { display:block; height:100%; background:var(--aph-ink); }
-        .stApp .trwname { font-family: var(--aph-display); font-size:21px;
-            font-weight:800; color:var(--aph-ink); line-height:1.15;
-            margin:2px 0 4px; }
-        .stApp .trwname a { color:inherit; text-decoration:none;
-            border-bottom:2px solid #c9d2dd; }
-        .stApp .trwdose { font-family: var(--aph-text); font-size:14px;
-            color:var(--aph-dim); margin-bottom:2px; }
-        .stApp .trwnote { font-family: var(--aph-text); font-size:12.5px;
-            color:#8a5a12; background:#fdf3e3; border-radius:8px;
-            padding:6px 9px; margin:8px 0 2px; }
-        .stApp .trwset { font-family: var(--aph-text); font-size:13px;
-            font-weight:700; color:var(--aph-ink); padding-top:9px; }
-        .stApp .trwstan { font-family: var(--aph-text); font-size:12px;
-            padding-top:10px; }
-        .stApp .trwsum { font-family: var(--aph-text); font-size:13.5px;
-            color:var(--aph-ink); background:var(--aph-card);
-            border:1px solid #e6e9ee; border-radius:10px; padding:10px 12px;
-            margin:6px 0; }
-        </style>"""
-
-
-def _trw_dawka(it, wk):
-    """Rozpiska trenera na ten tydzień, jednym wierszem."""
-    from html import escape as _esc
-    p = week_params(it, wk)
-    s_n, r = p.get("sets_n", ""), p.get("reps", "")
-    txt = (f"{s_n} × {r}" if s_n and r else (r or s_n or ""))
-    for pole in ("intent", "rest"):
-        if p.get(pole):
-            txt += f" · {p[pole]}"
-    if it.get("tempo"):
-        txt += f" · {it['tempo']}"
-    return _esc(txt)
-
-
-def _trw_ile_serii(it, wk) -> int:
-    """Ile serii odklikać: tyle, ile rozpisał trener (minimum 1)."""
-    p = week_params(it, wk)
-    try:
-        return max(int(re.match(r"\d+", str(p.get("sets_n", ""))).group()), 1)
-    except Exception:
-        return max(len(p.get("sets_done") or []), 1)
-
-
-def _trw_karta(plan, sess, wk, it, item_i, yt):
-    """Jedno ćwiczenie: nazwa, film, rozpiska i serie do odklikania."""
-    from html import escape as _esc
-    from .training import SERIA_OK, SERIA_SKIP, stan_serii, ustaw_serie
-    nazwa = it.get("exercise", "")
-    url = yt.get(nazwa.strip().lower())
-    sekcja = it.get("section") or "Main"
-    acc, tint = _pv_sekcja_kolory(sekcja)
-    w_sekcji = [x for x in (sess.get("items") or []) if (x.get("section") or "Main") == sekcja]
-    idx = next((i for i, x in enumerate(w_sekcji) if x is it), 0)
-    slot = _pv_slot_label(it, idx, sekcja)
-    nazwa_html = (f"<a href='{_esc(url)}' target='_blank'>{_esc(nazwa)}</a>"
-                  if url else _esc(nazwa))
-    st.markdown(
-        f"<div class='pvrow' style='border:0;padding:0;margin:0 0 6px;align-items:center;'>"
-        f"<span class='pvslot' style='background:{tint};color:{acc};'>{_esc(slot)}</span>"
-        f"<div class='trwname' style='margin:0;'>{nazwa_html}</div></div>"
-        f"<div class='trwdose'>{_trw_dawka(it, wk)}</div>",
-        unsafe_allow_html=True)
-    if it.get("note"):
-        st.markdown(f"<div class='trwnote'>{_esc(it['note'])}</div>",
-                    unsafe_allow_html=True)
-
-    p = week_params(it, wk)
-    done = p.get("sets_done") or []
-    n = max(_trw_ile_serii(it, wk), len(done))
-    glowna = it.get("section") not in ("Prep", "Plyo & Power")
-    for si in range(n):
-        biezaca = done[si] if si < len(done) else {}
-        stan = stan_serii(biezaca)
-        if glowna:
-            c0, ckg, crep, cok, cno = st.columns([0.9, 1.25, 1.25, 0.8, 0.8])
-        else:
-            c0, cok, cno = st.columns([3.4, 0.8, 0.8])
-        c0.markdown(f"<div class='trwset'>Seria {si + 1}</div>",
-                    unsafe_allow_html=True)
-        kg_k = f"trw_kg_{sess['id']}_{item_i}_{si}_{wk}"
-        rep_k = f"trw_rp_{sess['id']}_{item_i}_{si}_{wk}"
-        if glowna:
-            ckg.text_input("kg", value=biezaca.get("kg", ""), placeholder="kg",
-                           key=kg_k, label_visibility="collapsed")
-            crep.text_input("powt", value=biezaca.get("reps", ""),
-                            placeholder=p.get("reps", "") or "powt.",
-                            key=rep_k, label_visibility="collapsed")
-        zrobiona, pominieta = stan == SERIA_OK, stan == SERIA_SKIP
-        if cok.button("✓", key=f"trw_ok_{sess['id']}_{item_i}_{si}_{wk}",
-                      use_container_width=True,
-                      type="primary" if zrobiona else "secondary",
-                      help="seria zrobiona"):
-            ustaw_serie(plan, sess["id"], item_i, wk, si,
-                        "" if zrobiona else SERIA_OK,
-                        reps=st.session_state.get(rep_k, "") if glowna else "",
-                        kg=st.session_state.get(kg_k, "") if glowna else "")
-            upsert_plan(plan)
-            st.rerun()
-        if cno.button("✕", key=f"trw_no_{sess['id']}_{item_i}_{si}_{wk}",
-                      use_container_width=True,
-                      type="primary" if pominieta else "secondary",
-                      help="nie zrobiłem tej serii"):
-            ustaw_serie(plan, sess["id"], item_i, wk, si,
-                        "" if pominieta else SERIA_SKIP)
-            upsert_plan(plan)
-            st.rerun()
-
-
-def _trw_podsumowanie(sess, wk):
-    from .training import wykonanie_sesji
-    poz = wykonanie_sesji(sess, wk)
-    ok = sum(p["zrobione"] for p in poz)
-    sk = sum(p["pominiete"] for p in poz)
-    return poz, ok, sk
-
-
-def _render_trening_prowadzony(plan, sess, wk, yt) -> bool:
-    """Prowadzony trening zawodnika. Zwraca True, gdy przejął ekran
-    (wtedy podgląd rozpiski się nie renderuje)."""
-    from html import escape as _esc
-    from .training import oznacz_koniec, oznacz_start
-    st.markdown(_TRW_CSS + _PV_CSS, unsafe_allow_html=True)
-    # kolejność sekcji jak w podglądzie i PDF — bez tego ćwiczenie dopisane
-    # do prepu po rozpisaniu Main wypadało na końcu treningu (audyt 2026-09-20).
-    # Trzymam (indeks_w_sesji, item): ustaw_serie adresuje po indeksie z sesji.
-    _sur = list(enumerate(sess.get("items") or []))
-    _kolejnosc = {"Prep": 0, "Plyo & Power": 1}
-    items = sorted(_sur, key=lambda p_: _kolejnosc.get(p_[1].get("section"), 2))
-    if not items:
-        return False
-    klucz = f"trw_on_{plan['id']}_{sess['id']}_{wk}"
-    idx_k = f"trw_i_{plan['id']}_{sess['id']}_{wk}"
-
-    if not st.session_state.get(klucz):
-        poz, ok, sk = _trw_podsumowanie(sess, wk)
-        if ok or sk:
-            st.markdown(
-                f"<div class='trwsum'>Zrobione: <b>{ok}</b> · "
-                f"pominięte: <b>{sk}</b></div>",
-                unsafe_allow_html=True)
-        if st.button("▶  Zacznij trening", type="primary",
-                     use_container_width=True,
-                     key=f"trw_go_{plan['id']}_{sess['id']}_{wk}"):
-            oznacz_start(plan, sess["id"], wk)
-            upsert_plan(plan)
-            st.session_state[klucz] = True
-            st.session_state[idx_k] = 0
-            st.rerun()
-        return False
-
-    i = max(0, min(int(st.session_state.get(idx_k, 0)), len(items)))
-    if i >= len(items):                      # ekran końcowy
-        poz, ok, sk = _trw_podsumowanie(sess, wk)
-        st.markdown(
-            f"<div class='trwname'>Koniec treningu</div>"
-            f"<div class='trwdose'>{ok} serii zrobionych"
-            f"{f', {sk} pominiętych' if sk else ''}</div>",
-            unsafe_allow_html=True)
-        for p_ in poz:
-            # audyt 2026-09-29: „×15" bez kg było nieczytelne
-            opis = ", ".join(
-                (f"{s['kg']} kg × {s['reps']}" if s["stan"] == "ok" and s["kg"] and s["reps"]
-                 else f"{s['reps']} powt." if s["stan"] == "ok" and s["reps"]
-                 else f"{s['kg']} kg" if s["stan"] == "ok" and s["kg"]
-                 else "✓" if s["stan"] == "ok" else "✕")
-                for s in p_["serie"]) or "—"
-            st.markdown(f"<div class='trwsum'><b>{_esc(p_['exercise'])}</b>"
-                        f"<br>{_esc(opis)}</div>", unsafe_allow_html=True)
-        c1, c2 = st.columns(2)
-        if c1.button("← Popraw wpisy", use_container_width=True,
-                     key=f"trw_back_{sess['id']}_{wk}"):
-            st.session_state[idx_k] = len(items) - 1
-            st.rerun()
-        if c2.button("✔  Zakończ trening", type="primary",
-                     use_container_width=True,
-                     key=f"trw_end_{sess['id']}_{wk}"):
-            oznacz_koniec(plan, sess["id"], wk)
-            upsert_plan(plan)
-            st.session_state[klucz] = False
-            st.success("Trening zapisany.")
-            st.rerun()
-        return True
-
-    _idx, it = items[i]
-    sekcja = it.get("section") or "Main"
-    st.markdown(
-        f"<div class='trwprog'><span>{_esc(sekcja)}</span>"
-        f"<span>{i + 1} / {len(items)}</span></div>"
-        f"<div class='trwbar'><i style='width:{(i) * 100 // len(items)}%'></i></div>",
-        unsafe_allow_html=True)
-    _trw_karta(plan, sess, wk, it, _idx, yt)
-
-    st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-    c1, c2 = st.columns([1, 1.6])
-    if c1.button("←", use_container_width=True, disabled=i == 0,
-                 key=f"trw_prev_{sess['id']}_{i}_{wk}"):
-        st.session_state[idx_k] = i - 1
-        st.rerun()
-    ostatnie = i == len(items) - 1
-    if c2.button("Gotowe, dalej →" if not ostatnie else "Podsumowanie →",
-                 type="primary", use_container_width=True,
-                 key=f"trw_next_{sess['id']}_{i}_{wk}"):
-        st.session_state[idx_k] = i + 1
-        st.rerun()
-    if st.button("Przerwij trening", use_container_width=True,
-                 key=f"trw_stop_{sess['id']}_{wk}"):
-        st.session_state[klucz] = False
-        st.rerun()
-    return True
-
-
 # ── Tryb trenera na telefonie (?mode=gym) ────────────────────────────────────
 # Filip 2026-09-27: „Prowadzę kogoś, mam jego treningi na telefonie i na
 # treningu jednym kliknięciem wpisuję, ile zrobił powtórzeń, na jakim ciężarze
@@ -1438,16 +1219,27 @@ def _trk_serie_plan(it: dict, wk: int) -> tuple:
     # gdy któryś człon nie ma „N x R" (np. „4 opuszczania"), zostaje jak dotąd
     if "+" in reps and not lista:
         czlony = [_TRK_N_X_R.search(c) for c in reps.split("+")]
-        if all(czlony):
+        # „Test ciężka piątka + 2 x 5”, „2x 8 + 1 seria ISO”: człon bez
+        # „N x R” to jedna seria (R4-01); bez żadnego „N x R” (np. „6 + 4
+        # opuszczania”) zostaje jak dotąd. „2x 3+3” to powtórzenia na stronę.
+        if any(czlony) and not re.match(r"\s*\d+\s*[x×]\s*\d+\s*\+\s*\d+\s*$", reps, re.I):
             na_serie = []
             for c in czlony:
-                na_serie += [_trk_powt_czlonu(c)] * int(c.group(1))
+                na_serie += [_trk_powt_czlonu(c)] * int(c.group(1)) if c else [""]
             na_serie = (na_serie or [""])[:_TRK_MAX_SERII]
             return len(na_serie), na_serie, reps
     m = re.match(r"\d+", str(p.get("sets_n") or "").strip())
-    n = int(m.group()) if m else (len(czesci) if lista else 1)
+    # dawka wpisana w polu powtórzeń („3x7 rpe 8”) przy pustej liczbie serii —
+    # 1 wiersz zamiast 3 (weryfikacja V6-03 na prawdziwych planach)
+    mr = None if (m or lista) else re.match(r"\s*" + _TRK_N_X_R.pattern, reps, re.I)
+    mc = None if (m or lista or mr) else re.search(r"cluster\s+(\d+)\s+seri", reps, re.I)
+    n = (int(m.group()) if m else int(mr.group(1)) if mr
+         else int(mc.group(1)) if mc else (len(czesci) if lista else 1))
     n = min(max(n, 1), _TRK_MAX_SERII)
-    if re.fullmatch(r"\d+", reps):
+    if mr:
+        # „2x 3+3” — powtórzenia na stronę, ✓ nie wstawia „3” (R3-07)
+        na_serie = [("" if reps[mr.end():].lstrip().startswith("+") else _trk_powt_czlonu(mr))] * n
+    elif re.fullmatch(r"\d+", reps):
         na_serie = [reps] * n
     elif lista:
         na_serie = [czesci[i] if i < len(czesci) and czesci[i].isdigit() else ""
@@ -1542,12 +1334,190 @@ def _trk_ostatnio(plan: dict, it: dict, wk: int, plany=(), sess: dict | None = N
     return "", ""
 
 
-def _trk_dane(plan: dict, sess: dict, wk: int, plany=()) -> dict:
+def _trk_historia(it: dict, wk: int, sess: dict | None) -> list:
+    """Inne tygodnie tego ćwiczenia z seriami ✓ i liczbami, rosnąco:
+    [„W1 · 08.09: 80×5 · 70×5”]. Filip 2026-09-30: zawodnik i trener mają
+    widzieć tydzień po tygodniu, ile było zrobione. Same ✓ bez liczb
+    (rozgrzewka) pomijam — nic by nie mówiły."""
+    from .training import SERIA_OK, stan_serii
+    ws = item_weeks(it)
+    out = []
+    for w_ in sorted(int(k) for k in ws if str(k).isdigit()):
+        if w_ == int(wk):
+            continue
+        ok = [x for x in ((ws.get(str(w_)) or {}).get("sets_done") or [])
+              if isinstance(x, dict) and stan_serii(x) == SERIA_OK]
+        if not any(str(x.get("kg") or "").strip() or str(x.get("reps") or "").strip()
+                   for x in ok):
+            continue
+        d_ = _trk_data(sess, w_)
+        out.append(f"W{w_}" + (f" · {d_}" if d_ else "") + ": "
+                   + " · ".join(_trk_seria_txt(x) for x in ok))
+    return out
+
+
+def _trk_dawka_pelna(p: dict) -> str:
+    """„1 × 5 @ RPE 8 + 2 × 7 @ RPE 8” — cała dawka jednym ciągiem; RPE zawsze
+    z małpką (Filip 2026-09-30), inna intencja po kropce („3 × 5 · easy”)."""
+    s_n, reps = str(p.get("sets_n") or "").strip(), str(p.get("reps") or "").strip()
+    intent = str(p.get("intent") or "").strip()
+    base = f"{s_n} x {reps}" if s_n and reps else (reps or s_n)
+    if intent and re.search(r"\brpe\b", intent, re.I):
+        txt = f"{base} @ {intent}" if base else intent
+    else:
+        txt = f"{base} · {intent}" if base and intent else (base or intent)
+    txt = re.sub(r"(?<=\d)\s*[x×]\s*(?=\d)", " × ", txt)
+    txt = re.sub(r"(?:@\s*)*\brpe\s*", "@ RPE ", txt, flags=re.I)
+    return re.sub(r"\s+", " ", txt).strip()
+
+
+def _trk_rpe_plan(it: dict, wk: int, n: int) -> list:
+    """RPE z rozpiski na każdą serię — podpowiedź w polu RPE (Filip 2026-09-30:
+    „1 × 5 RPE 8” → 8; top set „1 x 5 @ rpe 9 + 2 x 7 @ rpe 8” → 9, 8, 8)."""
+    p = week_params(it, wk)
+    s_n, reps = str(p.get("sets_n") or "").strip(), str(p.get("reps") or "").strip()
+    intent = str(p.get("intent") or "").strip()
+    pelna = " ".join(x for x in (f"{s_n} x {reps}" if s_n else reps,
+                                 f"@ {intent}" if intent else "") if x)
+    if not re.search(r"\brpe\b", pelna, re.I):
+        return []
+    out = []
+    for czlon in pelna.split("+"):
+        mn = re.search(r"(\d+)\s*[x×]", czlon)
+        mr = re.search(r"\brpe\s*(\d+(?:[.,]\d+)?(?:\s*-\s*\d+(?:[.,]\d+)?)?)", czlon, re.I)
+        out += [mr.group(1).replace(" ", "").replace(".", ",") if mr else ""] * (int(mn.group(1)) if mn else 1)
+    if len(out) == 1 and n > 1:
+        out *= n
+    return out[:n] + [""] * max(0, n - len(out))
+
+
+def _trk_przerwa(rest) -> int:
+    """Przerwa po serii w sekundach z kolumny Rest: „30 sec”, „2 min”,
+    „1:30”, „1,5 min”, „90 s”, „2-3 min” (dolna granica). 0 = bez timera.
+    Filip 2026-09-30: 1a→1b 30 s, po 1b 2 min — timer w trybie treningu."""
+    t = str(rest or "").strip().lower().replace(",", ".")
+    m = re.match(r"(\d+):(\d{2})\b", t)
+    if m:
+        return int(m.group(1)) * 60 + int(m.group(2))
+    m = re.match(r"(\d+(?:\.\d+)?)\s*(?:-\s*\d+(?:\.\d+)?)?\s*(min|m\b|'|sec|s\b|sek|\")?", t)
+    if not m or not m.group(1):
+        return 0
+    v = float(m.group(1))
+    jedn = m.group(2) or ("min" if v <= 5 else "s")
+    return int(round(v * 60)) if jedn in ("min", "m", "'") else int(round(v))
+
+
+_TRK_DNI = ("pn", "wt", "śr", "czw", "pt", "sb", "nd")
+_TRK_MIES = ("sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru")
+
+
+def _trk_temu(d) -> str:
+    """„dziś”, „wczoraj”, „6 dni temu”, „5 tyg. temu”, „3 mies. temu”."""
+    from datetime import date
+    n = (date.today() - d).days
+    if n < -1:
+        return ""
+    return ("dziś" if n <= 0 else "wczoraj" if n == 1 else f"{n} dni temu" if n < 14
+            else f"{n // 7} tyg. temu" if n < 60 else f"{n // 30} mies. temu")
+
+
+def _trk_serie_grupy(ok: list) -> list:
+    """Zrobione serie, kolejne jednakowe razem — „serie × powtórzenia”, kg,
+    RPE osobno (okienko rysuje je jak kafelki): [{"sr": „1 × 5”, "kg": „52,5”,
+    "rpe": „8”}, {"sr": „2 × 7”, "kg": „50 kg”, "rpe": „8”}]."""
+    from .training import przecinek_dziesietny
+    grupy = []
+    for y in ok:
+        klucz = (przecinek_dziesietny(y.get("kg")), str(y.get("reps") or "").strip(),
+                 przecinek_dziesietny(y.get("rpe")))
+        if grupy and grupy[-1][0] == klucz:
+            grupy[-1][1] += 1
+        else:
+            grupy.append([klucz, 1])
+    out = []
+    for (kg, reps, rpe), n in grupy:
+        if reps:
+            t = f"{n} × {reps}"
+        else:
+            t = f"{n} " + ("seria" if n == 1 else "serie" if 2 <= n % 10 <= 4
+                           and not 12 <= n % 100 <= 14 else "serii")
+        if re.fullmatch(r"\d+(?:,\d+)?", kg):
+            kg += " kg"
+        out.append({"sr": t, "kg": kg, "rpe": rpe})
+    return out
+
+
+def _trk_ostatnie(plan: dict, it: dict, wk: int, sess: dict | None, plany=()) -> list:
+    """Filip 2026-09-30: przy każdym ćwiczeniu, które już było robione,
+    „Ostatnie treningi” — 4 ostatnie razy z datą: serie × powtórzenia,
+    ciężar, RPE. Ten plan (inne tygodnie) i wcześniejsze plany tej osoby,
+    po nazwie ćwiczenia; najnowsze pierwsze.
+    [{"data": „24.09”, "dd": „24”, "mies": „wrz”, "dzien": „czw”,
+      "temu": „6 dni temu”, "skad": „Blok 2 · W4”,
+      "serie": [{"sr": „1 × 5”, "kg": „52,5 kg”, "rpe": „8”}, …]}]"""
+    from datetime import date, timedelta
+    from .training import SERIA_OK, stan_serii
+    nazwa = (it.get("exercise") or "").strip().lower()
+    if not nazwa:
+        return []
+    kand = {}
+
+    def _dodaj(p_, s_, x, pref):
+        for k, tyg in item_weeks(x).items():
+            if not str(k).isdigit() or (p_ is plan and s_ is sess and int(k) == int(wk)):
+                continue
+            ok = [y for y in ((tyg or {}).get("sets_done") or [])
+                  if isinstance(y, dict) and stan_serii(y) == SERIA_OK]
+            if not any(str(y.get("kg") or "").strip() or str(y.get("reps") or "").strip() for y in ok):
+                continue
+            iso = ((s_.get("done_weeks") or {}).get(str(k)) or
+                   (s_.get("started_weeks") or {}).get(str(k)) or "")
+            try:
+                start = date.fromisoformat(p_.get("start_date") or "")
+                przyb = str(start + timedelta(days=7 * (int(k) - 1)))
+            except ValueError:
+                przyb = ""
+            # data tylko z Zakończ / rozpoczęcia — z kalendarza planu jest do
+            # kolejności, na kafelku byłaby zmyślona (przegląd 2026-09-30)
+            try:
+                d_ = date.fromisoformat(str(iso)[:10])
+                data_ = {"data": f"{d_:%d.%m}" + (f".{d_:%Y}" if d_.year != date.today().year else ""),
+                         "dd": str(d_.day), "dzien": _TRK_DNI[d_.weekday()], "temu": _trk_temu(d_),
+                         "mies": _TRK_MIES[d_.month - 1] + (f" {d_:%y}" if d_.year != date.today().year else "")}
+            except ValueError:
+                data_ = {"data": "", "dd": f"W{k}", "dzien": "", "temu": "bez daty", "mies": ""}
+            # to samo ćwiczenie dwa razy w treningu (np. top set i back-off
+            # osobnymi wierszami) — jeden dzień, jeden wpis
+            klucz = (p_.get("id"), s_.get("id"), str(k))
+            if klucz in kand:
+                kand[klucz][3].extend(_trk_serie_grupy(ok))
+            else:
+                kand[klucz] = (iso or przyb, data_, f"{pref}W{k}", _trk_serie_grupy(ok))
+
+    for p_ in [plan] + [q for q in plany if q.get("id") != plan.get("id")]:
+        pref = "" if p_ is plan else f"{p_.get('name', '')} · "
+        for s_ in ensure_sessions(p_):
+            for x in (s_.get("items") or []):
+                if (x.get("exercise") or "").strip().lower() == nazwa:
+                    _dodaj(p_, s_, x, pref)
+    wpisy = sorted(kand.values(), key=lambda t: t[0], reverse=True)
+    return [dict(d_, skad=k_, serie=s_) for _, d_, k_, s_ in wpisy[:4]]
+
+
+def _trk_film(url) -> str:
+    """Tylko http(s) — adres z Bazy trafia do href (audyt XSS-2)."""
+    u = str(url or "").strip()
+    return u if u.lower().startswith(("https://", "http://")) else ""
+
+
+def _trk_dane(plan: dict, sess: dict, wk: int, plany=(), zawodnik: bool = False) -> dict:
     """Wszystko, czego komponent trybu trenera potrzebuje do narysowania
     treningu. Bez adresów URL — w trybie trenera nie ma filmów.
     Karta: i = indeks pozycji w sesji (adres zapisu), slot = treść kółka.
     Stary Load wpisany tekstem (bez serii) idzie do szczegółów — trener musi
-    widzieć, co już jest zapisane w tym tygodniu."""
+    widzieć, co już jest zapisane w tym tygodniu.
+    zawodnik=True (link zawodnika): do tego film z Bazy, bez listy nazw
+    (zawodnik nie zmienia rozpiski)."""
     from .training import load_tekstowy, przecinek_dziesietny, stan_serii
     items = sess.get("items") or []
     obecne: list = []
@@ -1558,6 +1528,7 @@ def _trk_dane(plan: dict, sess: dict, wk: int, plany=()) -> dict:
         _TRK_KOLEJNOSC.index(s_) if s_ in _TRK_KOLEJNOSC else len(_TRK_KOLEJNOSC),
         obecne.index(s_)))
     sekcje, karty = [], []
+    yt = __import__("vald.exlib", fromlist=["url_map"]).url_map() if zawodnik else {}
     for sec in kolejnosc:
         acc, tint = _pv_sekcja_kolory(sec)
         sekcje.append({"key": sec, "tytul": _PV_SEKCJE.get(sec, (0, 0, sec))[2],
@@ -1568,11 +1539,12 @@ def _trk_dane(plan: dict, sess: dict, wk: int, plany=()) -> dict:
             p = week_params(it, wk)
             dawka, intent = _pv_dawka(it, wk)
             load_txt = load_tekstowy(p)
+            # uwagi trenera osobno: w liście ikonka, treść po stuknięciu
+            # (Filip 2026-09-30)
             det = " · ".join(x for x in (
                 f"Load {load_txt}" if load_txt else "",
                 f"Rest {p['rest']}" if p.get("rest") else "",
-                f"Tempo {it['tempo']}" if it.get("tempo") else "",
-                str(it.get("note") or "").strip()) if x)
+                f"Tempo {it['tempo']}" if it.get("tempo") else "") if x)
             n_plan, reps_plan, reps_hint = _trk_serie_plan(it, wk)
             ostatnio, kg_hint = _trk_ostatnio(plan, it, wk, plany, sess)
             serie = []
@@ -1589,16 +1561,29 @@ def _trk_dane(plan: dict, sess: dict, wk: int, plany=()) -> dict:
                 "reps_plan": reps_plan, "reps_hint": reps_hint,
                 "ostatnio": ostatnio, "kg_hint": kg_hint, "serie": serie,
                 "notatka": str(p.get("session_note") or "").strip(),
+                "historia": _trk_historia(it, wk, sess),
+                "ostatnie": _trk_ostatnie(plan, it, wk, sess, plany) if zawodnik else [],
+                "slot_plan": str(it.get("slot") or ""),
+                "uwagi": str(it.get("note") or "").strip(),
+                "dawka_pelna": _trk_dawka_pelna(p),
+                "rpe_plan": _trk_rpe_plan(it, wk, n_plan),
+                # timer dopiero od Main Strength (Filip 2026-09-30)
+                "przerwa": 0 if sec in _TRK_ZWINIETE else _trk_przerwa(p.get("rest")),
+                "film": _trk_film(yt.get((it.get("exercise") or "").strip().lower())),
             })
     iso = (sess.get("done_weeks") or {}).get(str(wk), "")
     try:
         data = f"{pd.Timestamp(iso):%d.%m}" if iso else ""
     except Exception:
         data = str(iso)
+    _ss = ensure_sessions(plan)
+    _lit = _tr_litera_treningu(sess, next((i for i, x in enumerate(_ss) if x is sess), 0))
+    _tyt = (sess.get("title") or "").strip()
     return {"ctx": {"plan_id": plan.get("id", ""), "sess_id": sess.get("id", ""),
                     "wk": int(wk)},
-            "sekcje": sekcje, "karty": karty, "nazwy": _trk_nazwy(),
-            "status": {"stan": _pv_status(sess, wk), "data": data}}
+            "sekcje": sekcje, "karty": karty, "nazwy": [] if zawodnik else _trk_nazwy(),
+            "status": {"stan": _pv_status(sess, wk), "data": data,
+                       "tytul": f"Trening {_lit}" if (not _tyt or _tyt.upper() == _lit) else _tyt}}
 
 
 def _trk_nazwy() -> list:
@@ -1631,30 +1616,78 @@ def _trk_op_cwiczenie(plan: dict, sess: dict, wk: int, op: dict) -> str:
         czyste.append({"kg": _trk_tekst(s.get("kg"), 12),
                        "reps": _trk_tekst(s.get("reps"), 12),
                        "rpe": _trk_tekst(s.get("rpe"), 5),
-                       "stan": s.get("stan") or ""})
+                       "stan": s.get("stan") or "",
+                       # pola wstawione samym ✓ (podpowiedź) — scal_serie
+                       "auto": [f for f in (s.get("auto") or []) if f in ("kg", "reps")]
+                       if isinstance(s.get("auto"), list) else []})
     notatka = op.get("notatka")
     notatka = None if notatka is None else _trk_tekst(notatka, 500)
     try:
         i = int(op.get("i"))
     except (TypeError, ValueError):
         i = -1                                  # zostaje szukanie po nazwie
+    baza = op.get("baza")
+    if isinstance(baza, list):
+        # telefon podaje, od czego zaczął: scalam pole po polu z tym, co jest
+        # w planie teraz — trener i zawodnik w tym samym ćwiczeniu nie kasują
+        # sobie serii, spóźniony wpis (brak zasięgu) nie cofa cudzych zmian
+        from .training import _znajdz_item, scal_serie
+        j = _znajdz_item(sess, i, str(op.get("exercise") or ""))
+        items_ = sess.get("items") or []
+        try:
+            n_op = int(op.get("n"))
+        except (TypeError, ValueError):
+            n_op = -1
+        # nazwy ćwiczeń, które telefon widział w tym treningu: jeśli na pozycji
+        # i stoi jedno z nich, to nie zamiana w miejscu, tylko przesunięcie
+        # (usunięte + dodane) — przysiad lądował w wyciskaniu (SRV-04)
+        znane = {str(x or "").strip().lower() for x in op.get("nazwy")} \
+            if isinstance(op.get("nazwy"), list) else set()
+        if j < 0 and 0 <= i < len(items_) and n_op == len(items_) \
+                and (items_[i].get("section") or "Main") == op.get("section") \
+                and str(items_[i].get("exercise") or "").strip().lower() not in znane:
+            # trener zmienił nazwę albo zamienił ćwiczenie w tym miejscu (ta
+            # sama liczba ćwiczeń, ta sama sekcja na tej pozycji) — wpis idzie
+            # do ćwiczenia, które tu teraz jest (V4-02, R2-01)
+            j = i
+        if j < 0:
+            return "Plan zmienił się — wpisz ponownie"
+        i = j
+        tyg = week_params(sess["items"][i], wk)
+        czyste = scal_serie(baza[:_TRK_MAX_SERII], czyste, tyg.get("sets_done") or [])
+        # notatka: druga strona dopisała swoją w międzyczasie — obie zostają
+        # (zawodnik bez zasięgu kasował notatkę trenera, R1-05)
+        obecna = str(tyg.get("session_note") or "").strip()
+        nb = op.get("notatka_baza")
+        if notatka is not None and isinstance(nb, str) and obecna \
+                and obecna != nb.strip() and notatka.strip() != nb.strip():
+            if notatka.strip() and obecna.endswith(" · " + notatka.strip()):
+                # ponowienie po zgubionym potwierdzeniu (nowa sesja nie zna
+                # id) — notatka już dopisana, druga kopia to śmieć (OFF-A4)
+                notatka = obecna
+            elif obecna not in notatka:
+                notatka = _trk_tekst(f"{obecna} · {notatka}" if notatka.strip() else obecna, 500)
+        op = dict(op, exercise=sess["items"][i].get("exercise", ""))
     if not zapisz_cwiczenie(plan, sess["id"], i, wk, czyste, notatka=notatka,
                             exercise=str(op.get("exercise") or "")):
         return "Plan zmienił się — wpisz ponownie"
     if any(s["stan"] == SERIA_OK for s in czyste) \
-            and str(wk) not in (sess.get("started_weeks") or {}):
-        oznacz_start(plan, sess["id"], wk)      # trener na desktopie: „w toku"
+            and str(wk) not in (sess.get("started_weeks") or {}) \
+            and str(wk) not in (sess.get("done_weeks") or {}):
+        oznacz_start(plan, sess["id"], wk, str(op.get("d") or ""))   # trener na desktopie: „w toku"
     return ""
 
 
 def _trk_op_koniec(plan: dict, sess: dict, wk: int, op: dict) -> str:
     from .training import oznacz_koniec
-    oznacz_koniec(plan, sess["id"], wk)
+    oznacz_koniec(plan, sess["id"], wk, str(op.get("d") or ""))
     return ""
 
 
 def _trk_op_usun(plan: dict, sess: dict, wk: int, op: dict) -> str:
     from .training import usun_cwiczenie
+    if not str(op.get("exercise") or "").strip():
+        return "Brak nazwy ćwiczenia"
     try:
         i = int(op.get("i"))
     except (TypeError, ValueError):
@@ -1677,6 +1710,8 @@ def _trk_op_dodaj(plan: dict, sess: dict, wk: int, op: dict) -> str:
 
 def _trk_op_zamien(plan: dict, sess: dict, wk: int, op: dict) -> str:
     from .training import zamien_cwiczenie
+    if not str(op.get("exercise") or "").strip():
+        return "Brak nazwy ćwiczenia"
     nazwa = _trk_tekst(op.get("nowe"), 80)
     if not nazwa:
         return "Wpisz nazwę ćwiczenia"
@@ -1697,7 +1732,7 @@ _TRK_OPY = {"cwiczenie": _trk_op_cwiczenie, "koniec": _trk_op_koniec,
             "usun": _trk_op_usun, "dodaj": _trk_op_dodaj, "zamien": _trk_op_zamien}
 
 
-def _trk_zastosuj(ops, zastosowane: list) -> dict:
+def _trk_zastosuj(ops, zastosowane: list, dozwolone: dict | None = None) -> dict:
     """Operacje z komponentu → plany; czysta logika, bez Streamlita.
 
     Komponent wysyła WSZYSTKIE niepotwierdzone operacje (kolejka na
@@ -1706,7 +1741,17 @@ def _trk_zastosuj(ops, zastosowane: list) -> dict:
     plan. Błąd magazynu (odczyt albo zapis): nic nowego nie jest
     potwierdzone ani odrzucone, wpisy zostają w kolejce telefonu i przyjdą
     ponownie (każda operacja to pełny stan).
+    dozwolone: {"plan_id": zbiór id, "typy"} — link zawodnika: tylko jego plany i tylko
+    serie/koniec (plan_id z operacji przychodzi z telefonu, audyt SEC-4).
     Zwraca {"ack": [id], "odrzucone": [{"id","powod"}], "blad": str}."""
+    from .training import _ZAPIS
+    with _ZAPIS:
+        # odczyt planów i zapis pod jedną blokadą: dwa wątki (trener i
+        # zawodnik) czytały ten sam stan i drugi zapis kasował pierwszy (R3-02)
+        return _trk_zastosuj_bez_blokady(ops, zastosowane, dozwolone)
+
+
+def _trk_zastosuj_bez_blokady(ops, zastosowane: list, dozwolone: dict | None) -> dict:
     ack: list = []
     odrzucone: list = []
     blad = ""
@@ -1718,6 +1763,10 @@ def _trk_zastosuj(ops, zastosowane: list) -> dict:
         oid = str(op["id"])
         if oid in zastosowane:
             ack.append(oid)
+            continue
+        if dozwolone is not None and (op.get("typ") not in dozwolone["typy"]
+                                      or op.get("plan_id") not in dozwolone["plan_id"]):
+            odrzucone.append({"id": oid, "powod": "Niedozwolone"})
             continue
         if plany is None and not blad:
             from . import store
@@ -1773,17 +1822,28 @@ def _trk_zastosuj(ops, zastosowane: list) -> dict:
     return {"ack": ack, "odrzucone": odrzucone, "blad": blad}
 
 
-def _trk_konsumuj() -> None:
+def _trk_konsumuj(klucz: str = "trk", dozwolone: dict | None = None) -> bool:
     """Wartość komponentu z poprzedniego wysłania — PRZED jego narysowaniem
     (wartość trwa między rerunami: bez seq zapis poszedłby dwa razy, a bez
-    konsumpcji przed renderem komponent dostałby dane o krok wstecz)."""
-    val = st.session_state.get("trk_panel")
+    konsumpcji przed renderem komponent dostałby dane o krok wstecz).
+    Pusta lista operacji = „ping” komponentu co ~20 s: świeży odczyt planów,
+    żeby trener i zawodnik widzieli nawzajem swoje wpisy (audyt A3-04).
+    klucz: "trk" tryb trenera, "zaw" link zawodnika. True = było wysłanie."""
+    val = st.session_state.get(f"{klucz}_panel")
     if not isinstance(val, dict) or not val.get("seq") \
-            or val.get("seq") == st.session_state.get("trk_seq"):
-        return
-    st.session_state["trk_seq"] = val["seq"]
-    zast = st.session_state.setdefault("trk_zastosowane", [])
-    st.session_state["trk_wynik"] = _trk_zastosuj(val.get("ops") or [], zast)
+            or val.get("seq") == st.session_state.get(f"{klucz}_seq"):
+        return False
+    st.session_state[f"{klucz}_seq"] = val["seq"]
+    if klucz == "zaw" and isinstance(val.get("wybor"), dict):
+        st.session_state["_zaw_wybor"] = val["wybor"]
+    ops = val.get("ops") or []
+    if not ops:
+        from . import store
+        if store.enabled():
+            store.invalidate("training_plans")
+    zast = st.session_state.setdefault(f"{klucz}_zastosowane", [])
+    st.session_state[f"{klucz}_wynik"] = _trk_zastosuj(ops, zast, dozwolone)
+    return True
 
 
 def _render_trener_panel(plan: dict, sess: dict, wk: int) -> None:
@@ -1798,13 +1858,100 @@ def _render_trener_panel(plan: dict, sess: dict, wk: int) -> None:
     trener_panel(dane, key="trk_panel")
 
 
+def _render_zawodnik_panel(plan: dict, sess: dict, wk: int) -> None:
+    """Trening zawodnika w tym samym komponencie co tryb trenera (lista,
+    serie po stuknięciu, kolejka w telefonie). Filip 2026-09-30: zapis ma
+    działać bez zasięgu i wysłać się po jego powrocie — widżety Streamlita
+    potrzebują serwera przy każdym stuknięciu (audyt: 0/4 scenariuszy)."""
+    from views.trener_panel import trener_panel
+    dane = _trk_dane(plan, sess, wk, _plany_tej_osoby(plan), zawodnik=True)
+    wynik = st.session_state.get("zaw_wynik") or {}
+    dane.update(ack=list(wynik.get("ack") or []),
+                odrzucone=list(wynik.get("odrzucone") or []),
+                blad=wynik.get("blad") or "", rola="zawodnik",
+                # klucz kolejki w telefonie: plan z LINKU, nie po przeniesieniu —
+                # inaczej kolejka starego bloku nigdy by się nie wysłała (V5-03)
+                kolejka=_klucz_kolejki(plan))
+    trener_panel(dane, key="zaw_panel")
+
+
+def _klucz_kolejki(plan: dict) -> str:
+    """Kolejka w telefonie na OSOBĘ (nazwa + folder), nie na plan: wpis bez
+    zasięgu zrobiony w linku starego bloku wysyła się z każdego linku tej
+    osoby, także po „nowym linku” (R1-04). Skrót — bez nazwiska w kluczu."""
+    import hashlib
+    k = f"{(plan.get('athlete') or '').strip().lower()}|{(plan.get('group') or '').strip().lower()}"
+    return hashlib.sha1(k.encode("utf-8")).hexdigest()[:12]
+
+
+def _plany_tej_osoby(plan: dict) -> list:
+    """Plany tego samego zawodnika: ta sama nazwa i zgodny folder.
+    Sama nazwa łączyła dwóch „Michałów” z różnych klubów — stary link
+    przenosił do cudzego planu (audyt A6-04)."""
+    from .training import ten_sam_folder
+    return [p for p in get_plans(plan.get("athlete", "")) if ten_sam_folder(p, plan)]
+
+
+def _plan_zawodnika(token: str) -> tuple:
+    """(plan, info) z linku; po końcu bloku — nowszy plan tej samej osoby."""
+    plan = find_plan_by_token(token)
+    if not plan:
+        return None, ""
+    # Stary link po końcu bloku: jeśli ten sam zawodnik ma nowszy plan,
+    # przekieruj na niego — zawodnik zawsze ląduje w aktualnym bloku,
+    # nawet gdy trener nie zdążył wysłać nowego linku.
+    _today = pd.Timestamp.now().date()
+    _end = plan_end(plan)
+    if _end and _today > _end:
+        cand = [p for p in _plany_tej_osoby(plan) if p.get("id") != plan.get("id")]
+        succ = next((p for p in cand if is_current(p)), None)
+        if succ is None:
+            later = sorted(
+                (p for p in cand
+                 if (p.get("start_date") or "") > (plan.get("start_date")
+                                                   or "")),
+                key=lambda p: p.get("start_date", ""))
+            # najnowszy ROZPOCZĘTY (przy kilku zakończonych link lądował
+            # w drugim z kolei — V6-04), a w przerwie między blokami najbliższy
+            # przyszły, nie najdalszy (R3-08)
+            _dzis = str(_today)
+            ruszyly = [p for p in later if (p.get("start_date") or "") <= _dzis]
+            succ = ruszyly[-1] if ruszyly else (later[0] if later else None)
+        if succ is not None:
+            return succ, (f"Poprzedni blok zakończony. Aktualny plan: {succ.get('name', '')}."
+                          if is_current(succ) else f"Najnowszy plan: {succ.get('name', '')}.")
+    return plan, ""
+
+
 def _render_athlete_mode(token: str) -> None:
     """Widok PODOPIECZNEGO z sekretnego linku (?plan=<token>): wyłącznie
     JEDEN plan — bez selektorów, sidebara i dostępu do reszty aplikacji.
     Zawodnik widzi rozpiskę (z filmami), wpisuje kg/powtórzenia per seria
     i zapisuje — trener widzi Load i ✓ wykonania w edytorze."""
     st.markdown(_GYM_CSS, unsafe_allow_html=True)
-    plan = find_plan_by_token(token)
+    # okno Streamlita „Connection error” zasłaniało trening przy braku zasięgu;
+    # widok zawodnika nie ma żadnych okien, więc chowam je na stałe
+    st.markdown("<style>[data-testid='stDialog']{display:none!important}</style>",
+                unsafe_allow_html=True)
+    plan, info = _plan_zawodnika(token)
+    # wpis z ostatniego dnia bloku wysłany po jego końcu (brak zasięgu) idzie
+    # do starego bloku — dozwolone są plany tej osoby, nie tylko bieżący (V5-03)
+    if plan and _trk_konsumuj("zaw", {"plan_id": {p.get("id") for p in _plany_tej_osoby(plan)}
+                                      | {plan.get("id")},
+                                      "typy": ("cwiczenie", "koniec")}):
+        plan, info = _plan_zawodnika(token)   # świeży stan po zapisie
+    # telefon po przeładowaniu podaje trening, który był otwarty (komponent
+    # pamięta go w localStorage) — wracał do pierwszego zaczętego (R1-07)
+    wyb = st.session_state.pop("_zaw_wybor", None)
+    if plan and isinstance(wyb, dict) and wyb.get("plan_id") == plan.get("id"):
+        _ids = {s_.get("id") for s_ in ensure_sessions(plan)}
+        try:
+            _wk = int(wyb.get("wk"))
+        except (TypeError, ValueError):
+            _wk = 0
+        if wyb.get("sess_id") in _ids and 1 <= _wk <= int(plan.get("weeks") or 0):
+            st.session_state[f"gym_sess_{plan['id']}"] = wyb["sess_id"]
+            st.session_state[f"gym_wk_{plan['id']}"] = _wk
     if not plan:
         st.markdown(
             "<div style='max-width:420px;margin:80px auto;text-align:center;"
@@ -1816,26 +1963,8 @@ def _render_athlete_mode(token: str) -> None:
             unsafe_allow_html=True,
         )
         return
-    # Stary link po końcu bloku: jeśli ten sam zawodnik ma nowszy plan,
-    # przekieruj na niego — zawodnik zawsze ląduje w aktualnym bloku,
-    # nawet gdy trener nie zdążył wysłać nowego linku.
-    _today = pd.Timestamp.now().date()
-    _end = plan_end(plan)
-    if _end and _today > _end:
-        cand = [p for p in get_plans(plan.get("athlete", ""))
-                if p.get("id") != plan.get("id")]
-        succ = next((p for p in cand if is_current(p)), None)
-        if succ is None:
-            later = sorted(
-                (p for p in cand
-                 if (p.get("start_date") or "") > (plan.get("start_date")
-                                                   or "")),
-                key=lambda p: p.get("start_date", ""))
-            succ = later[0] if later else None
-        if succ is not None:
-            plan = succ
-            st.info(f"Poprzedni blok zakończony. Aktualny plan: "
-                    f"{plan.get('name', '')}.")
+    if info:
+        st.info(info)
     first = (plan.get("athlete", "") or "").split(" ")[0]
     _render_plan_workout_body(
         plan, f"{plan.get('name', '')} · Twój plan",
@@ -1974,6 +2103,22 @@ def _trk_bez_magazynu(e: Exception) -> None:
                   "odrzucone": list(wynik.get("odrzucone") or []),
                   "blad": wynik.get("blad") or str(e) or "Brak połączenia"},
                  key="trk_panel")
+
+
+def _zaw_bez_magazynu() -> None:
+    """Link zawodnika, magazyn chwilowo nie odpowiada: zdanie, „Spróbuj
+    ponownie” i komponent bez treningu — jego ping sam wraca do planu, gdy
+    magazyn wróci (sam st.error zostawał na ekranie na stałe, SRV-06).
+    Bez str(e): komunikat magazynu niesie ścieżkę serwera (OFF-V1-02)."""
+    from views.trener_panel import trener_panel
+    from . import store
+    st.error("Nie mogę teraz wczytać planu. Wpisy czekają w telefonie.")
+    if st.button("Spróbuj ponownie", key="zaw_ponow", type="primary"):
+        store.invalidate()
+        st.rerun()
+    trener_panel({"ctx": None, "sekcje": [], "karty": [], "status": {},
+                  "ack": [], "odrzucone": [], "blad": "", "rola": "zawodnik"},
+                 key="zaw_panel")
 
 
 def _trk_widok() -> None:

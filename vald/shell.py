@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import base64
 import json
+import html
 import socket
 from datetime import date
 from pathlib import Path
@@ -277,10 +278,14 @@ def _share_url(plan: dict) -> str:
     """Link dla zawodnika. W instancji gościa doklejam &ws=<przestrzeń>:
     apka zawodnika czyta domyślną przestrzeń i bez tego nie znajdowała planu
     („Ten link jest nieaktywny", choć token był dobry) — audyt 2026-09-20."""
-    from .store import workspace
+    from .store import WS_GLOWNA, domyslna_ws, workspace
     url = f"{_share_base()}/?plan={get_or_create_share_token(plan)}"
     ws = workspace()
-    return f"{url}&ws={ws}" if ws else url
+    if ws:
+        return f"{url}&ws={ws}"
+    # konto z pustą przestrzenią (Coach Filip) w instancji z inną domyślną:
+    # bez znacznika link szukał planu w przestrzeni Maćka (2026-09-30)
+    return f"{url}&ws={WS_GLOWNA}" if domyslna_ws() else url
 
 
 def _all_names() -> list[str]:
@@ -377,7 +382,7 @@ def _wykonanie_profilu(plany: list[dict]) -> list[dict]:
 
     Jeden wpis = jeden trening w jednym tygodniu: serie z ciężarem i powtórzeniami
     plus to, czego zawodnik świadomie nie zrobił (Filip 2026-09-18)."""
-    from .training import wykonanie_sesji
+    from .training import przecinek_dziesietny, wykonanie_sesji
     out = []
     for p in plany:
         sesje = ensure_sessions(p)
@@ -386,10 +391,21 @@ def _wykonanie_profilu(plany: list[dict]) -> list[dict]:
             zaczete = s.get("started_weeks") or {}
             for wk in range(1, int(p.get("weeks") or 4) + 1):
                 poz = wykonanie_sesji(s, wk)
+                # ćwiczenie usunięte z planu zostaje w historii (removed_items
+                # było tylko zapisywane — wyniki znikały z Wykonania, A4-04)
+                for x in wykonanie_sesji({"items": s.get("removed_items") or []}, wk):
+                    x["exercise"] = f"{x['exercise']} (usunięte)"
+                    poz.append(x)
                 if not poz:
                     continue
+                # „67.5” z telefonu obok „62,5” z trybu trenera (audyt A2-14)
+                for x in poz:
+                    for sr in x["serie"]:
+                        sr["kg"] = przecinek_dziesietny(sr["kg"])
+                        sr["rpe"] = przecinek_dziesietny(sr["rpe"])
                 iso = zrobione.get(str(wk)) or zaczete.get(str(wk)) or ""
                 out.append({
+                    "sekcje": _wykonanie_sekcje(s, wk),
                     "plan": p.get("name", ""),
                     "plan_id": p.get("id", ""),
                     "trening": (s.get("title") or "").strip() or chr(65 + i),
@@ -403,7 +419,113 @@ def _wykonanie_profilu(plany: list[dict]) -> list[dict]:
                     "pozycje": poz,
                 })
     out.sort(key=lambda r: (r["iso"], r["week"]), reverse=True)
-    return out[:12]
+    # bez limitu: 12 wpisów przy 3 treningach w tygodniu gubiło W1 już po
+    # czterech tygodniach, a licznik „(12)” udawał całość (audyt A4-02)
+    return out
+
+
+def _wykonanie_sekcje(s: dict, wk: int) -> list[dict]:
+    """Trening z tygodnia wk ułożony jak na telefonie (Filip 2026-09-30):
+    sekcje z kolorami, w każdej ćwiczenia z dawką, zrobionymi seriami
+    i notatką zawodnika; ćwiczenie bez wpisu też jest — widać, czego nie
+    zrobił. Usunięte z planu tylko z wpisami, z dopiskiem."""
+    from .training import przecinek_dziesietny, stan_serii, week_params
+    from .ui_training import (_PV_SEKCJE, _TRK_KOLEJNOSC, _pv_sekcja_kolory,
+                              _pv_slot_label, _trk_dawka_pelna)
+    pozycje = [(it, False) for it in (s.get("items") or [])]
+    pozycje += [(it, True) for it in (s.get("removed_items") or [])]
+    obecne = []
+    for it, _ in pozycje:
+        if (it.get("section") or "Main") not in obecne:
+            obecne.append(it.get("section") or "Main")
+    kolejnosc = sorted(obecne, key=lambda x: (_TRK_KOLEJNOSC.index(x) if x in _TRK_KOLEJNOSC
+                                              else len(_TRK_KOLEJNOSC), obecne.index(x)))
+    out = []
+    for sec in kolejnosc:
+        acc, tint = _pv_sekcja_kolory(sec)
+        wiersze, idx = [], 0
+        for it, usuniete in pozycje:
+            if (it.get("section") or "Main") != sec:
+                continue
+            p = week_params(it, wk)
+            serie = [{"kg": przecinek_dziesietny(x.get("kg")),
+                      "reps": str(x.get("reps") or "").strip(),
+                      "rpe": przecinek_dziesietny(x.get("rpe")), "stan": stan_serii(x)}
+                     for x in (p.get("sets_done") or []) if isinstance(x, dict)]
+            serie = [x for x in serie if x["stan"] or x["kg"] or x["reps"] or x["rpe"]]
+            nota = str(p.get("session_note") or "").strip()
+            if usuniete and not (serie or nota):
+                continue
+            wiersze.append({
+                "slot": "" if usuniete else _pv_slot_label(it, idx, sec),
+                "exercise": it.get("exercise", "") + (" (usunięte)" if usuniete else ""),
+                "dawka": _trk_dawka_pelna(p), "serie": serie, "note": nota})
+            if not usuniete:
+                idx += 1
+        if wiersze:
+            out.append({"key": sec, "tytul": _PV_SEKCJE.get(sec, (0, 0, sec))[2],
+                        "acc": acc, "tint": tint, "pozycje": wiersze,
+                        "zrobione": sum(1 for w in wiersze for x in w["serie"] if x["stan"] == "ok"),
+                        "wpisane": sum(1 for w in wiersze if w["serie"])})
+    return out
+
+
+def _najlepsza_seria(serie: list) -> str:
+    """„87,5×3” — najcięższa zrobiona seria (przy równym ciężarze więcej
+    powtórzeń); bez kg najwięcej powtórzeń („×8”), same ✓ — „✓”."""
+    from .training import SERIA_OK, przecinek_dziesietny, stan_serii
+
+    def _liczba(v) -> float:
+        try:
+            return float(str(v or "").replace(",", ".").strip())
+        except ValueError:
+            return -1.0
+
+    ok = [x for x in serie if isinstance(x, dict) and stan_serii(x) == SERIA_OK]
+    if not ok:
+        return ""
+    best = max(ok, key=lambda x: (_liczba(x.get("kg")), _liczba(x.get("reps"))))
+    kg, reps = przecinek_dziesietny(best.get("kg")), str(best.get("reps") or "").strip()
+    return f"{kg}×{reps}" if kg and reps else f"{kg} kg" if kg else f"×{reps}" if reps else "✓"
+
+
+def _postep_profilu(plany: list[dict], biezacy: dict | None) -> dict | None:
+    """Filip 2026-09-30: „dostaję gotowe wyniki week by week — tydzień
+    pierwszy ile robili, tydzień drugi ile zrobili”. Tabela bieżącego planu
+    (bez niego — ostatniego z wpisami): ćwiczenia główne × tygodnie, w komórce
+    najlepsza seria. Prep i Plyo pomijam — tam są same ✓."""
+    from .training import item_weeks
+
+    def _wiersze(p: dict) -> list:
+        out = []
+        for i, s in enumerate(ensure_sessions(p)):
+            tr = (s.get("title") or "").strip() or chr(65 + i)
+            usuniete = [{**x, "exercise": f"{x.get('exercise', '')} (usunięte)"}
+                        for x in (s.get("removed_items") or []) if isinstance(x, dict)]
+            for it in (s.get("items") or []) + usuniete:
+                if it.get("section") in ("Prep", "Prep 2", "Plyo & Power"):
+                    continue
+                ws = item_weeks(it)
+                tyg = {str(w): _najlepsza_seria((ws.get(str(w)) or {}).get("sets_done") or [])
+                       for w in range(1, int(p.get("weeks") or 4) + 1)}
+                tyg = {k: v for k, v in tyg.items() if v}
+                if tyg:
+                    out.append({"exercise": it.get("exercise", ""), "trening": tr,
+                                "slot": str(it.get("slot") or ""), "tyg": tyg})
+        return out
+
+    kolejne = ([biezacy] if biezacy else []) + sorted(
+        (p for p in plany if p.get("id") != (biezacy or {}).get("id")),
+        key=lambda p: p.get("start_date") or p.get("created") or "", reverse=True)
+    for p in kolejne:
+        w = _wiersze(p)
+        if w:
+            # kolumny do ostatniego tygodnia z wynikami — puste przyszłe
+            # tygodnie spychały bieżące poza ekran telefonu (V4-08)
+            ost = max(int(k) for r in w for k in r["tyg"])
+            return {"plan": p.get("name", ""), "plan_id": p.get("id", ""),
+                    "weeks": ost, "wiersze": w}
+    return None
 
 
 def _profil_pelny(name: str, plans: list[dict]) -> dict:
@@ -433,6 +555,7 @@ def _profil_pelny(name: str, plans: list[dict]) -> dict:
         "name": name,
         "initials": _initials(name),
         "wykonanie": _wykonanie_profilu(d["plans"]),
+        "postep": _postep_profilu(d["plans"], d["current"]),
         "current": _plan(d["current"]) if d["current"] else None,
         "upcoming": [_plan(p) for p in przyszle],
         "plans": [_plan(p) for p in minione],
@@ -560,6 +683,25 @@ def build_data(screen: str) -> dict:
                          "dni": (koniec - dzis).days, "_k": koniec})
     konczace.sort(key=lambda k: k.pop("_k"))
     data["konczace"] = konczace
+    # Powiadomienia (Filip 2026-09-30): kto zakończył który trening —
+    # „Zakończ trening” (done_weeks) z ostatnich 14 dni, najnowsze pierwsze
+    powiad = []
+    for p in moje_plany:
+        for i, s in enumerate(ensure_sessions(p)):
+            for wk, iso in (s.get("done_weeks") or {}).items():
+                try:
+                    d_ = date.fromisoformat(str(iso)[:10])
+                except ValueError:
+                    continue
+                # -1: data z telefonu o dzień do przodu (strefa czasowa serwera)
+                if not -1 <= (dzis - d_).days <= 14 or not str(wk).isdigit():
+                    continue
+                powiad.append({"athlete": p.get("athlete", ""), "plan": p.get("name", ""),
+                               "trening": (s.get("title") or "").strip() or chr(65 + i),
+                               "week": int(wk), "date": f"{d_:%d.%m}",
+                               "_k": (d_.isoformat(), int(wk))})
+    powiad.sort(key=lambda n: n.pop("_k"), reverse=True)
+    data["powiadomienia"] = powiad[:8]
     data["queue"] = [{
         "id": t["id"],
         "date": _d(t.get("due"), "%d.%m") if t.get("due") else "—",
@@ -1440,9 +1582,10 @@ def _render_workout_page(plan_id: str, sid: str) -> None:
                 st.session_state.pop("tr_open_workout", None)
             st.rerun()
         c2.markdown(
-            f"<div class='aph-wk-eyebrow'>{plan.get('athlete', '')} · "
-            f"{plan.get('name', '')} · "
-            f"{ses[idx].get('title') or 'Trening ' + _letter(idx)}</div>",
+            # escape: nazwa planu z iframe srcdoc wykonywała skrypt (audyt XSS-1)
+            f"<div class='aph-wk-eyebrow'>{html.escape(plan.get('athlete', ''))} · "
+            f"{html.escape(plan.get('name', ''))} · "
+            f"{html.escape(ses[idx].get('title') or 'Trening ' + _letter(idx))}</div>",
             unsafe_allow_html=True)
     _tr_workout_body(plan_id, sid)
 
