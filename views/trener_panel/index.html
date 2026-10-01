@@ -778,12 +778,12 @@ function htmlEdycja(k) {
   if (!ed) return "";
   const dk = `data-k="${esc(k)}"`;
   // „puste = bez zmian" w tytule: w podpowiedzi pola ucinało się na telefonie (audyt 2026-09-28)
-  return `<div class="edycja"><div class="tyt">Zamień na · dawka od W${esc(S.ctx.wk)} <span style="white-space:nowrap">(puste = bez zmian)</span></div>`
+  return `<div class="edycja"><div class="tyt">Zamień ćwiczenie lub dawkę od W${esc(S.ctx.wk)} <span style="white-space:nowrap">(puste = bez zmian)</span></div>`
     + `<input class="edp" ${dk} data-ed="nowe" list="nazwy" type="text" autocomplete="off"`
     + ` autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="80"`
     + ` placeholder="Nazwa ćwiczenia" value="${esc(ed.nowe)}">`
     + `<input class="edp" ${dk} data-ed="dawka" type="text" autocomplete="off" maxlength="40"`
-    + ` placeholder="Dawka, np. 3 x 8 @ rpe 8" value="${esc(ed.dawka)}">`
+    + ` placeholder="Dawka, np. 3 x 8 @ rpe 8 / 3 x 30 sec" value="${esc(ed.dawka)}">`
     + `<div class="edbtn"><button type="button" class="glowny" data-act="zamien" ${dk}>Zamień</button>`
     + `<button type="button" class="usun${ed.pewny ? " pewny" : ""}" data-act="usun" ${dk}>`
     + (ed.pewny ? "Na pewno usuń" : "Usuń z planu") + `</button>`
@@ -805,7 +805,7 @@ function htmlDodaj(sek) {
     + ` autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="80"`
     + ` placeholder="Nazwa ćwiczenia" value="${esc(d.nowe)}">`
     + `<input class="edp" ${ds} data-ed="dawka" type="text" autocomplete="off" maxlength="40"`
-    + ` placeholder="Dawka, np. 3 x 8 @ rpe 8" value="${esc(d.dawka)}">`
+    + ` placeholder="Dawka, np. 3 x 8 @ rpe 8 / 3 x 30 sec" value="${esc(d.dawka)}">`
     + `<div class="edbtn"><button type="button" class="glowny" data-act="dodaj" ${ds}>Dodaj</button>`
     + `<button type="button" class="anuluj" data-act="dodaj_anuluj" ${ds}>Anuluj</button></div></div>`;
 }
@@ -1640,13 +1640,14 @@ root.addEventListener("click", (e) => {
     case "zamien": {
       const ed = S.ed[k], karta = S.meta[k], c = S.metaCtx[k];
       if (!ed || !karta) return;
-      if (!txt(ed.nowe)) { fokus(`input.edp[data-k="${CSS.escape(k)}"][data-ed="nowe"]`); return; }
+      // Filip 2026-10-01: sama dawka (np. seria na ISO) — nazwa pusta = to samo ćwiczenie
+      if (!txt(ed.nowe) && !txt(ed.dawka)) { fokus(`input.edp[data-k="${CSS.escape(k)}"][data-ed="nowe"]`); return; }
       zdejmijFokus();
       S.ed[k] = null;
       S.odrz[k] = "";
       kolejkujEd({ id: nowyId(), typ: "zamien", t: Date.now(), plan_id: c.plan_id,
         sess_id: c.sess_id, wk: c.wk, i: karta.i, exercise: karta.exercise || "",
-        nowe: txt(ed.nowe), dawka: txt(ed.dawka) });
+        nowe: txt(ed.nowe) || karta.exercise || "", dawka: txt(ed.dawka) });
       break;
     }
     case "usun": {
