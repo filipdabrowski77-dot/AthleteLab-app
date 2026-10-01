@@ -86,16 +86,32 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 
 /* zwinięta sekcja (Prep, Plyo): jeden wiersz na ćwiczenie */
 .mini{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;background:#fff;border:1px solid #ebe9e2;border-radius:14px;padding:9px 12px;margin:0 0 8px;text-align:left;overflow:hidden}
-.mini.zrobione{background:#f7faf5;border-color:#d9e6d3}
+/* stan ćwiczenia na liście (Filip 2026-10-01): zielony = wszystkie serie,
+   pomarańcz = część, czerwony = nic nie zrobione, same ✕ */
+.mini.zrobione{background:#f1f8ee;border-color:#cfe3c6}
+.mini.czesc{background:#fffaf1;border-color:#f0d6ab}
+.mini.pominiete{background:#fdf4f3;border-color:#efc9c3}
 .mini .minibtn{display:flex;align-items:center;gap:12px;flex:1;min-width:0;min-height:44px;border:0;background:transparent;padding:0;text-align:left}
 .mini .ost{font-size:12.5px}
 .mini .chevo{min-width:44px;min-height:44px;margin:-9px -12px -9px 0;border:0;border-left:1px solid #f0eee8;background:transparent;color:#a09c92;font-size:16px}
 .mini .fajka{width:26px;height:26px;border-radius:999px;border:1px solid #d8d5cc;display:inline-flex;align-items:center;justify-content:center;font-size:14px;color:transparent;flex-shrink:0}
-.mini.zrobione .fajka{background:#1c1b18;border-color:#1c1b18;color:#fff}
-.akcja.nota-btn.jest{border-style:solid;color:#1c1b18}
+.mini.zrobione .fajka{background:#3f9a50;border-color:#3f9a50;color:#fff}
+.akcja.nota-btn.jest{border-style:solid;border-color:#bcd0f7;background:#eef4ff;color:#2453b8}
 .mdose{font-size:13px;font-weight:600;color:#6f6b61;font-variant-numeric:tabular-nums}
 .licz{font-size:13px;font-weight:700;color:#8a867c;white-space:nowrap;font-variant-numeric:tabular-nums}
-.licz.pelny{color:oklch(.5 .12 155)}
+.licz.pelny{color:#3f9a50}
+.licz.czesc{color:#c46a0c}
+.licz.pominiete{color:#c0392b}
+/* notatka przy ćwiczeniu — widać ją na liście (Filip 2026-10-01) */
+.notznak{display:inline-flex;align-items:center;justify-content:center;margin-left:6px;padding:1px 7px;border-radius:999px;background:#e8f0fe;color:#2453b8;font-size:12px;font-weight:700;vertical-align:2px}
+/* ciężar z poprzedniej serii: mały przycisk wewnątrz pola kg */
+.kgpole{position:relative;display:block;min-width:0}
+.kopiuj{position:absolute;top:5px;right:4px;bottom:5px;width:28px;border:0;border-radius:7px;background:#f1efe9;color:#8a867c;display:flex;align-items:center;justify-content:center;padding:0}
+/* „Cofnij wszystko” z potwierdzeniem */
+.potw{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-2px 0 10px;padding:8px 8px 8px 12px;border:1px solid #efc9c3;border-radius:12px;background:#fdf4f3;font-size:14px;font-weight:600;color:#7a2e24}
+.potw span{flex:1;min-width:160px}
+.potw button{min-height:40px;padding:0 16px;border-radius:999px;border:1px solid #e5a9a0;background:#fff;color:#a33b2c;font-weight:700;font-size:14px}
+.potw button.tak{background:#c0392b;border-color:#c0392b;color:#fff}
 
 .pasek,.edczeka{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;font-weight:600;border-radius:12px;padding:4px 4px 4px 12px;margin:4px 0 8px;background:#fdf6e3;color:#7a5b16;border:1px solid #ecdfc4}
 .edczeka{font-size:14px;font-weight:600;border-radius:12px;padding:4px 4px 4px 12px;background:#fdf6e3;color:#7a5b16;border:1px solid #ecdfc4}
@@ -109,7 +125,9 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 /* kółeczko = osobny przycisk: cel 44 px, widoczne koło 30 px */
 .mini button.fajka{position:relative;flex:none;width:44px;height:44px;min-width:44px;margin:-8px -6px -8px 0;padding:0;border:0;background:transparent;color:transparent;font-size:0;cursor:pointer}
 .mini button.fajka::before{content:"✓";position:absolute;left:7px;top:7px;width:30px;height:30px;box-sizing:border-box;border-radius:999px;border:1.5px solid #cfcbc1;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:transparent;background:#fff}
-.mini.zrobione button.fajka::before{background:#1c1b18;border-color:#1c1b18;color:#fff}
+.mini.zrobione button.fajka::before{background:#3f9a50;border-color:#3f9a50;color:#fff}
+.mini.czesc button.fajka::before{border-color:#e3a14a;color:#e3a14a}
+.mini.pominiete button.fajka::before{content:"✕";border-color:#e5a9a0;color:#c0392b}
 .ost.hist{border:0;background:transparent;padding:0;text-align:left;font:inherit;font-size:13px;color:#54514a;min-height:32px;cursor:pointer}
 .karta{position:relative}
 .odstep{height:14px}
@@ -176,8 +194,8 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 #arkusz{position:absolute;left:0;right:0;top:0;z-index:50}
 #arkusz[hidden]{display:none}
 .atlo{position:absolute;inset:0;background:rgba(28,27,24,.38);animation:afade .18s ease-out}
-.arkusz{position:absolute;left:0;right:0;bottom:0;max-height:calc(100% - 12px);overflow:auto;overscroll-behavior:contain;background:#faf9f6;border-radius:20px 20px 0 0;padding:8px 14px 18px;box-shadow:0 -8px 30px rgba(0,0,0,.14);animation:awjazd .24s cubic-bezier(.2,.8,.2,1)}
-.auchwyt{width:40px;height:4px;border-radius:4px;background:#dcd9d1;margin:2px auto 12px}
+/* „Ostatnie treningi” — kafelek na środku widocznej części ekranu (Filip 2026-10-01) */
+.arkusz{position:absolute;left:12px;right:12px;top:50%;transform:translateY(-50%);max-height:calc(100% - 32px);overflow:auto;overscroll-behavior:contain;background:#faf9f6;border-radius:20px;padding:16px 14px 16px;box-shadow:0 12px 40px rgba(0,0,0,.18);animation:apop .2s cubic-bezier(.2,.8,.2,1)}
 .ahead{display:flex;align-items:flex-start;gap:10px;margin:0 2px 14px}
 .ahead>div{flex:1;min-width:0}
 .aeyebrow{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#a09c92}
@@ -198,7 +216,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .aser span.brak{color:#c3c0b8}
 .aser i{font-style:normal;white-space:nowrap;font-size:12px;font-weight:700;color:oklch(.5 .13 60);background:oklch(.96 .04 75);border-radius:999px;padding:3px 9px}
 @keyframes afade{from{opacity:0}}
-@keyframes awjazd{from{transform:translateY(48px);opacity:.3}}
+@keyframes apop{from{transform:translateY(-50%) scale(.96);opacity:0}}
 .ostd{display:flex;flex-direction:column;line-height:1.25}
 .ostd b{font-size:14px;font-weight:750;color:#1c1b18;font-variant-numeric:tabular-nums}
 .ostd small,.osts small{font-size:11.5px;color:#8a867c}
@@ -270,7 +288,7 @@ const S = {
   odrzSek: {},   // sekcja → powód odrzucenia dodania
   kolejka: {},   // miejsce („c|plan|sesja|tydz|i", „k|plan|sesja|tydz") → operacja
   zapisane: {}, odrz: {}, odrzKoniec: "", blad: "",
-  wcisniety: false, ostWys: 0, tWys: null, tKrok: 0,
+  wcisniety: false, ostWys: 0, tWys: null, tKrok: 0, doDomkniecia: new Set(), domknijCzeka: false, potwCofnij: null,
   rola: "trener",  // „zawodnik” = link zawodnika: bez zmian rozpiski, z filmami
   baza: {},        // klucz karty → serie z serwera, od których zaczął telefon
   notBaza: {},     // klucz karty → notatka z serwera, od której zaczął telefon
@@ -376,6 +394,42 @@ function ileOk(k) {
   let o = 0;
   for (let si = 0; si < n; si++) if (stanW(st, si) === "ok") o++;
   return o;
+}
+// stan ćwiczenia na liście: zrobione (wszystkie ✓) / czesc / pominiete (same ✕) / ""
+function stanKarty(k) {
+  const st = S.stan[k], n = ileWierszy(k), o = ileOk(k);
+  if (o === n) return "zrobione";
+  if (o > 0) return "czesc";
+  for (let si = 0; si < n; si++) if (stanW(st, si) === "skip") return "pominiete";
+  return "";
+}
+// Filip 2026-10-01: ciężar i powtórzenia wpisane we wszystkich seriach =
+// ćwiczenie zrobione — odhaczam je i zwijam kartę. Tylko gdy to wpisanie
+// domknęło ćwiczenie: ręczne ✓/✕ zostawia kartę otwartą jak dotąd. Nie przy
+// otwartej notatce ani formularzu zamiany.
+function domknij(k) {
+  const st = S.stan[k];
+  if (S.tr || !st) return false;
+  const n = ileWierszy(k);
+  for (let si = 0; si < n; si++) {
+    const s = st.serie[si] || {};
+    if (s.stan === "skip" || !txt(s.kg) || !txt(s.reps)) return false;
+  }
+  let zmiana = false;
+  for (let si = 0; si < n; si++) { const s = seria(st, si); if (!s.stan) { s.stan = "ok"; zmiana = true; } }
+  if (zmiana && S.otwarte[k] && !S.notOtw[k] && !S.ed[k]) S.otwarte[k] = false;
+  return zmiana;
+}
+// po wyjściu z pól (klawiatura schowana, stuknięcie gdzie indziej): sprawdzam
+// ćwiczenia, w których coś wpisano. Przejście do kolejnego pola nic nie zwija.
+function sprobujDomknac() {
+  const akt = document.activeElement;
+  if (document.hasFocus() && akt && akt.classList && akt.classList.contains("pole")) return;
+  if (S.wcisniety) { S.domknijCzeka = true; return; }     // najpierw obsługa stuknięcia
+  let zm = false;
+  for (const k of S.doDomkniecia) if (domknij(k)) { kolejkuj(k); zm = true; }
+  S.doDomkniecia.clear();
+  if (zm) { render(); SEND(); }
 }
 function rozstrzygnieta(k) {
   const st = S.stan[k], n = ileWierszy(k);
@@ -563,6 +617,29 @@ function htmlSlot(k, sek) {
   const karta = S.meta[k];
   return `<span class="pvslot" style="${esc(styl)}">${esc(karta.slot)}</span>`;
 }
+const IKONA_KOPIUJ = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"`
+  + ` stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
+  + `<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>`;
+// Filip 2026-10-01: „powielić ciężar, żeby nie wpisywać każdej serii” — mały
+// przycisk w pustym polu kg, gdy poprzednia seria ma ciężar
+const kgDoKopii = (k, si, s) => si > 0 && !txt(s.kg) && s.stan !== "skip" ? poprzednia(S.stan[k], si, "kg") : "";
+const htmlKopiuj = (a, kop) => `<button type="button" class="kopiuj" data-act="kopiuj" ${a}`
+  + ` aria-label="Ciężar z poprzedniej serii: ${esc(kop)} kg">${IKONA_KOPIUJ}</button>`;
+function poleKg(k, si, a, s, ph) {
+  const kop = kgDoKopii(k, si, s);
+  return `<span class="kgpole">${pole(a, "kg", s.kg, ph, "decimal", 12, "kg")}${kop ? htmlKopiuj(a, kop) : ""}</span>`;
+}
+// w trakcie pisania (bez przerysowania): przycisk pojawia się w kolejnych
+// seriach, gdy w poprzedniej jest już ciężar, i znika po wpisaniu własnego
+function odswiezKopie(k) {
+  const st = S.stan[k];
+  if (!st) return;
+  root.querySelectorAll(`.kgpole input.pole[data-k="${CSS.escape(k)}"][data-f="kg"]`).forEach((el) => {
+    const si = +el.dataset.si, kop = kgDoKopii(k, si, st.serie[si] || {}), kb = el.parentNode.querySelector(".kopiuj");
+    if (kop && !kb) el.insertAdjacentHTML("afterend", htmlKopiuj(`data-k="${esc(k)}" data-si="${si}"`, kop));
+    else if (!kop && kb) kb.remove();
+  });
+}
 function pole(a, f, v, ph, tryb, max, etyk) {
   return `<input class="pole" ${a} data-f="${f}" type="text" inputmode="${tryb}"`
     + ` enterkeyhint="next" autocomplete="off" autocorrect="off" autocapitalize="off"`
@@ -589,7 +666,7 @@ function htmlKarta(k, sek, wZwinietej) {
     const s = st.serie[si] || {}, p = podpowiedzi(k, si), a = `${dk} data-si="${si}"`;
     const cel = S.tr && S.cel && S.cel.k === k && S.cel.si === si ? " cel" : "";
     h += `<div class="sr${s.stan ? " " + s.stan : ""}${cel}"><span class="nr">${si + 1}</span>`
-      + pole(a, "kg", s.kg, p.kg, "decimal", 12, "kg")
+      + poleKg(k, si, a, s, p.kg)
       + pole(a, "reps", s.reps, p.reps, "numeric", 12, "powtórzenia")
       + pole(a, "rpe", s.rpe, p.rpe, "decimal", 5, "RPE")
       + `<button type="button" class="btn-ok" data-act="ok" ${a} aria-pressed="${s.stan === "ok"}"`
@@ -657,7 +734,7 @@ function renderArkusz() {
     const sek = S.sekcje.find((x) => x.key === karta.section) || { acc: "#1c1b18", tint: "#f1efe9" };
     el.innerHTML = `<div class="atlo" data-act="arkusz_zamknij"></div>`
       + `<div class="arkusz" role="dialog" aria-modal="true" aria-label="Ostatnie treningi" style="--acc:${esc(sek.acc)};--tint:${esc(sek.tint)}">`
-      + `<div class="auchwyt"></div><div class="ahead"><div><div class="aeyebrow">${IKONA_WYKRES.replace(/20/g, "14")} Ostatnie treningi</div>`
+      + `<div class="ahead"><div><div class="aeyebrow">${IKONA_WYKRES.replace(/20/g, "14")} Ostatnie treningi</div>`
       + `<div class="anazwa">${esc(karta.exercise)}</div></div>`
       + `<button type="button" class="azamknij" data-act="arkusz_zamknij" aria-label="Zamknij">✕</button></div>`
       + `<div class="alista">` + ost.map((o, i) => `<div class="awpis${i ? "" : " pierwszy"}">`
@@ -742,22 +819,24 @@ function htmlMini(k, sek) {
   // Filip 2026-09-30: stuknięcie w ćwiczenie otwiera jego panel (uwagi, film,
   // serie), kółeczko odhacza; ⓘ w wierszu mówi tylko, że są uwagi
   const karta = S.meta[k], n = ileWierszy(k), o = ileOk(k), dk = `data-k="${esc(k)}"`;
+  const stan = stanKarty(k), kl_ = stan ? " " + stan : "";
   const tresc = `${htmlSlot(k, sek)}<span class="pvcol"><span class="pvname">${esc(karta.exercise)}`
-    + (karta.uwagi ? ` <span class="uwznak" aria-label="są uwagi">ⓘ</span>` : "") + `</span>`
+    + (karta.uwagi ? ` <span class="uwznak" aria-label="są uwagi">ⓘ</span>` : "")
+    + (txt((S.stan[k] || {}).notatka) ? `<span class="notznak" aria-label="jest notatka">✎</span>` : "") + `</span>`
     + `<span class="mdose">${htmlDawka(karta)}</span>`
     + (karta.ostatnio && !sek.zwinieta && S.rola !== "zawodnik" ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "")
     + (S.odrz[k] ? `<span class="odrzmini">${esc(S.odrz[k])}</span>` : "")
     + `</span><span class="kropka" data-kropka="${esc(k)}"></span>`;
   if (sek.zwinieta) {
     // Prep / Plyo: kółeczko = zrobione (wszystkie serie jednym stuknięciem)
-    return `<div class="mini${o === n ? " zrobione" : ""}"><button type="button" class="minibtn" data-act="otworz" ${dk}>`
+    return `<div class="mini${kl_}"><button type="button" class="minibtn" data-act="otworz" ${dk}>`
       + tresc + `</button><button type="button" class="fajka" data-act="odhacz_wiersz" ${dk}`
       + ` aria-label="Zrobione" aria-pressed="${o === n}">✓</button></div>`;
   }
   // Main: plan widać od razu, serie po stuknięciu w ćwiczenie
-  return `<button type="button" class="mini" data-act="otworz" ${dk}>` + tresc
-    // zawodnik: licznik dopiero po pierwszej serii — „0/3 ✓” to szum
-    + (o || S.rola !== "zawodnik" ? `<span class="licz${o === n ? " pelny" : ""}">${o}/${n} ✓</span>` : "") + `</button>`;
+  return `<button type="button" class="mini${kl_}" data-act="otworz" ${dk}>` + tresc
+    // zawodnik: licznik dopiero po pierwszej serii (albo ✕) — „0/3 ✓” to szum
+    + (o || stan || S.rola !== "zawodnik" ? `<span class="licz${o === n ? " pelny" : kl_}">${o}/${n} ✓</span>` : "") + `</button>`;
 }
 function wszystkoZrobione(ks) {
   return ks.every(rozstrzygnieta) && ks.some((k) => ileOk(k) > 0);
@@ -772,7 +851,12 @@ function htmlSekcja(sek, ks, zwinieta) {
   } else {
     h += `<span class="sektyt">${tyt}</span>`;
   }
-  return h + `</div>`;
+  h += `</div>`;
+  // Filip 2026-10-01: „Cofnij wszystko” najpierw pyta
+  if (S.potwCofnij === sek.key) h += `<div class="potw"><span>Czy na pewno cofnąć zapisane serie?</span>`
+    + `<button type="button" class="tak" data-act="wszystko_tak" data-s="${esc(sek.key)}">Tak</button>`
+    + `<button type="button" data-act="wszystko_nie" data-s="${esc(sek.key)}">Nie</button></div>`;
+  return h;
 }
 function render() {
   for (const karta of S.karty) {
@@ -948,7 +1032,7 @@ function htmlKrok(krok, nastepny) {
   const sek = S.sekcje.find((x) => x.key === karta.section) || { acc: "#1c1b18", tint: "#f1efe9", tytul: karta.section };
   const n = ileWierszy(k), s = S.stan[k].serie[si] || {}, p = podpowiedzi(k, si), a = `data-k="${esc(k)}" data-si="${si}"`;
   const pola = sek.zwinieta ? "" : `<div class="kpola">`
-    + `<label><span>kg</span>${pole(a, "kg", s.kg, p.kg, "decimal", 12, "kg")}</label>`
+    + `<label><span>kg</span>${poleKg(k, si, a, s, p.kg)}</label>`
     + `<label><span>powt.</span>${pole(a, "reps", s.reps, p.reps, "numeric", 12, "powtórzenia")}</label>`
     + `<label><span>RPE</span>${pole(a, "rpe", s.rpe, p.rpe, "decimal", 5, "RPE")}</label></div>`;
   return `<div class="krok${nastepny ? " nast" : ""}">`
@@ -1331,6 +1415,8 @@ root.addEventListener("click", (e) => {
   if (edycjaCzeka() && b.dataset.act !== "ponow" && b.dataset.act !== "ed_anuluj") return;
   const k = b.dataset.k, si = +b.dataset.si, s = b.dataset.s;
   if (b.dataset.act !== "koniec" && S.pewnyKoniec) { S.pewnyKoniec = false; renderStopka(); }
+  const potw = S.potwCofnij;
+  S.potwCofnij = null;                // pytanie „Cofnij wszystko” znika przy każdym innym stuknięciu
   if (b.dataset.act !== "minus") S.minusK = null;
   switch (b.dataset.act) {
     case "ok":
@@ -1448,12 +1534,18 @@ root.addEventListener("click", (e) => {
       if (!S.sekOtw[s]) for (const karta of S.karty) if (karta.section === s) S.otwarte[kl(karta)] = false;
       render();
       break;
-    case "wszystko": {
+    case "wszystko":
+    case "wszystko_tak": {
       // zwinięta sekcja jednym stuknięciem: te same reguły co pojedyncze ✓;
       // ✕ (seria niezrobiona) zostaje, „Cofnij" zdejmuje tylko ✓
       zdejmijFokus();
       const ks = S.karty.filter((karta) => karta.section === s).map(kl);
       const cofnij = wszystkoZrobione(ks);
+      if (cofnij && b.dataset.act === "wszystko") {   // najpierw pytanie (drugie stuknięcie chowa)
+        S.potwCofnij = potw === s ? null : s;
+        render();
+        break;
+      }
       for (const kk of ks) {
         const n = ileWierszy(kk), st = S.stan[kk];
         for (let i = 0; i < n; i++) {
@@ -1487,6 +1579,25 @@ root.addEventListener("click", (e) => {
       zapiszLS();
       render();
       SEND();
+      break;
+    }
+    case "wszystko_nie":
+      render();
+      break;
+    case "kopiuj": {
+      // ciężar z poprzedniej serii; kursor od razu na powtórzenia tej serii
+      if (!S.stan[k]) return;
+      const v = poprzednia(S.stan[k], si, "kg");
+      if (!v) return;
+      const sr = seria(S.stan[k], si);
+      sr.kg = v;
+      if (sr.auto) { sr.auto = sr.auto.filter((f) => f !== "kg"); if (!sr.auto.length) delete sr.auto; }
+      S.odrz[k] = "";
+      if (txt(sr.reps)) domknij(k);
+      kolejkuj(k);
+      render();
+      SEND();
+      if (!txt(sr.reps)) { fokus(`input.pole[data-k="${CSS.escape(k)}"][data-si="${si}"][data-f="reps"]`); S.doDomkniecia.add(k); }
       break;
     }
     case "ponow":
@@ -1583,10 +1694,16 @@ root.addEventListener("input", (e) => {
   }
   if (!k || !S.stan[k]) return;
   const st = S.stan[k];
-  if (el.dataset.f === "notatka") { st.notatka = el.value; st.notZm = true; autoWys(el); }
+  if (el.dataset.f === "notatka") {
+    st.notatka = el.value; st.notZm = true; autoWys(el);
+    // przycisk notatki od razu niebieski (Filip 2026-10-01: „notatka się podświetla”)
+    const nb = root.querySelector(`.nota-btn[data-k="${CSS.escape(k)}"]`), jest = !!txt(el.value);
+    if (nb && nb.classList.contains("jest") !== jest) { nb.classList.toggle("jest", jest); nb.textContent = "✎ " + (jest ? "Notatka" : "Dodaj notatkę"); }
+  }
   else {
     const sr = seria(st, +el.dataset.si);
     sr[el.dataset.f] = el.value;
+    if (el.dataset.f === "kg") odswiezKopie(k);
     if (sr.auto) { sr.auto = sr.auto.filter((f) => f !== el.dataset.f); if (!sr.auto.length) delete sr.auto; }
     odswiezPodpowiedzi(k);
   }
@@ -1602,6 +1719,7 @@ root.addEventListener("input", (e) => {
 root.addEventListener("focusout", (e) => {
   const k = e.target.dataset && e.target.dataset.k;
   if (k && S.brudne[k]) { kolejkuj(k); planujWysylke(); }
+  if (k && e.target.classList.contains("pole")) { S.doDomkniecia.add(k); setTimeout(sprobujDomknac, 60); }
   setTimeout(sprobujOdlozone, 60);
 });
 root.addEventListener("keydown", (e) => {
@@ -1617,7 +1735,13 @@ root.addEventListener("keydown", (e) => {
   if (i >= 0 && i + 1 < pola.length) pola[i + 1].focus(); else e.target.blur();
 });
 root.addEventListener("pointerdown", () => { S.wcisniety = true; });
-const puszczony = () => { S.wcisniety = false; setTimeout(sprobujOdlozone, 400); };
+const puszczony = () => {
+  S.wcisniety = false;
+  setTimeout(() => {
+    if (S.domknijCzeka) { S.domknijCzeka = false; sprobujDomknac(); }
+    sprobujOdlozone();
+  }, 400);
+};
 window.addEventListener("pointerup", puszczony);
 window.addEventListener("pointercancel", puszczony);
 // stuknięcie poza ramką (tydzień, trening, ← Zawodnicy) — wyślij, zanim
