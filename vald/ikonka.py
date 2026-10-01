@@ -27,14 +27,21 @@ def wstaw(nazwa: str = "APH", manifest: bool = True) -> None:
         Object.entries(at).forEach(([k, v]) => el.setAttribute(k, v));
       };
       ustaw("link", 'link[rel="apple-touch-icon"]', {rel: "apple-touch-icon", href: u("app/static/aph-trener-180.png")}, true);
-      // manifest tylko, gdy apka jest całą stroną (Mac, tunel); w Streamlit Cloud
-      // jego start_url wskazałby gołą ramkę /~/+/, a manifest opakowania to
-      // nazwa i ikona Streamlita — zdejmuję go
-      const man = d.head.querySelector('link[rel="manifest"]');
-      if (w === app) { if (MANIFEST) ustaw("link", 'link[rel="manifest"]', {rel: "manifest", href: u("app/static/manifest.json")}); }
-      else if (man) man.remove();
+      if (w === app) {
+        // Mac / tunel: apka jest całą stroną — manifest trybu trenera, pełny ekran
+        if (MANIFEST) ustaw("link", 'link[rel="manifest"]', {rel: "manifest", href: u("app/static/manifest.json")});
+        ustaw("meta", 'meta[name="apple-mobile-web-app-capable"]', {name: "apple-mobile-web-app-capable", content: "yes"});
+      } else {
+        // Streamlit Cloud: manifest opakowania ma start_url "/" i tryb pełnoekranowy —
+        // ikonka z linku planu otwierała goły adres („Brak dostępu”, Filip 2026-10-01),
+        // a pełny ekran gubi logowanie Streamlita (przekierowanie przez share.streamlit.io
+        // wychodzi poza apkę). Mój manifest: bez start_url (= ten adres, z ?plan=),
+        // otwiera się w Safari jak zakładka.
+        ustaw("link", 'link[rel="manifest"]', {rel: "manifest", href: u("app/static/manifest-chmura.json")}, true);
+        const cap = d.head.querySelector('meta[name="apple-mobile-web-app-capable"]');
+        if (cap) cap.remove();
+      }
       ustaw("meta", 'meta[name="apple-mobile-web-app-title"]', {name: "apple-mobile-web-app-title", content: NAZWA}, true);
-      ustaw("meta", 'meta[name="apple-mobile-web-app-capable"]', {name: "apple-mobile-web-app-capable", content: "yes"});
       ustaw("meta", 'meta[name="theme-color"]', {name: "theme-color", content: "#000000"});
     } catch (e) {}
     </script>""", height=0)
