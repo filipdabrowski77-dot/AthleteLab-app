@@ -27,6 +27,8 @@ if _ws:
     _store.set_workspace(_ws)
 
 if _token:
+    from vald.ikonka import wstaw  # noqa: E402
+    wstaw("Trening", manifest=False)   # czarne logo APH na ekranie telefonu
     try:
         _render_athlete_mode(_token)
     except RuntimeError:

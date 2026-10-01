@@ -4340,36 +4340,12 @@ def _start_auto_refresh_daemon() -> bool:
 
 
 def _ikonka_trenera(nazwa: str = "APH", manifest: bool = True) -> None:
-    """Ikonka „APH" na ekranie początkowym telefonu (Safari →
-    Udostępnij → „Do ekranu początkowego" na adresie z ?mode=gym).
-    Streamlit oddaje pliki .html ze static/ jako text/plain, więc osobna
-    strona-ikonka pokazywała się jako kod, a własnego <head> apka nie ma —
-    dopisuję ikonę, nazwę i manifest do dokumentu apki z ramki komponentu
-    (ta sama domena). Adresy względne: w Streamlit Cloud apka siedzi pod /~/+/.
-    Link zawodnika (2026-09-30): ta sama ikonka, nazwa „Trening”, BEZ manifestu —
-    jego start_url to tryb trenera, a nowsze iOS/Android otwierałyby ikonkę tam."""
-    import json as _json
-    import streamlit.components.v1 as components
-    components.html("""<script>
-    const NAZWA = """ + _json.dumps(nazwa) + """, MANIFEST = """ + ("true" if manifest else "false") + """;
-    try {
-      const w = window.parent, d = w.document;
-      const u = p => new URL(p, w.location.href).href;
-      const dodaj = (tag, at) => {
-        const sel = tag + Object.entries(at).filter(([k]) => k !== "href" && k !== "content")
-          .map(([k, v]) => `[${k}="${v}"]`).join("");
-        if (d.head.querySelector(sel)) return;
-        const el = d.createElement(tag);
-        Object.entries(at).forEach(([k, v]) => el.setAttribute(k, v));
-        d.head.appendChild(el);
-      };
-      dodaj("link", {rel: "apple-touch-icon", href: u("app/static/aph-trener-180.png")});
-      if (MANIFEST) dodaj("link", {rel: "manifest", href: u("app/static/manifest.json")});
-      dodaj("meta", {name: "apple-mobile-web-app-title", content: NAZWA});
-      dodaj("meta", {name: "apple-mobile-web-app-capable", content: "yes"});
-      dodaj("meta", {name: "theme-color", content: "#000000"});
-    } catch (e) {}
-    </script>""", height=0)
+    """Ikonka „APH" na ekranie początkowym telefonu (Safari → Udostępnij →
+    „Do ekranu początkowego"). Link zawodnika: nazwa „Trening”, BEZ manifestu —
+    jego start_url to Start apki trenera. Logika w vald/ikonka.py (wspólna
+    z athlete_app.py)."""
+    from vald.ikonka import wstaw
+    wstaw(nazwa, manifest)
 
 
 def main() -> None:
