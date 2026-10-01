@@ -1839,8 +1839,22 @@ document.addEventListener("click", e=>{
         else if(document.execCommand("copy")) ok();
       }catch(_){}
       } break;
-    case "copy_link":     { const u=D.plan.share_url; try{ navigator.clipboard && navigator.clipboard.writeText(u); }catch(_){}
-                            act("copy_link",{url:u}); } break;
+    case "copy_link": {
+      // toast „Link skopiowany” szedł zawsze, a zapis do schowka w ramce na
+      // iPhonie bywa po cichu blokowany — w schowku zostawał stary adres
+      // (Filip 2026-10-01). Telefon: arkusz udostępniania; inaczej schowek,
+      // a gdy się nie da — zaznaczony link do ręcznego skopiowania.
+      const u = D.plan.share_url, inp = document.querySelector(".sharebar input");
+      const ok = () => { b.textContent = "Skopiowano ✓"; act("copy_link",{url:u}); };
+      const recznie = () => {
+        if(inp){ inp.focus(); inp.select(); try{ if(document.execCommand("copy")) return ok(); }catch(_){} }
+        b.textContent = "Zaznaczony — skopiuj";
+      };
+      const schowek = () => { try{ if(navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(u).then(ok, recznie); else recznie(); }catch(_){ recznie(); } };
+      if(navigator.share && matchMedia("(pointer: coarse)").matches)
+        navigator.share({title: D.plan.name || "Plan", url: u}).catch(e => { if(!e || e.name !== "AbortError") schowek(); });
+      else schowek();
+      } break;
     case "add_workout":   act("add_workout",{plan_id:D.plan.id}); break;
     case "new_exercise":
       FORM["ex.id"]=""; FORM["ex.name"]=""; FORM["ex.cat2"]=""; FORM["ex.cat3"]=""; FORM["ex.cat4"]=""; FORM["ex.cat"]=(D.categories&&D.categories[0]?D.categories[0].name:"Movement Prep");
