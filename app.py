@@ -4339,10 +4339,10 @@ def _start_auto_refresh_daemon() -> bool:
     return True
 
 
-def _ikonka_trenera(nazwa: str = "APH", manifest: bool = True) -> None:
+def _ikonka_trenera(nazwa: str = "APH training app", manifest: bool = True) -> None:
     """Ikonka „APH" na ekranie początkowym telefonu (Safari → Udostępnij →
-    „Do ekranu początkowego"). Link zawodnika: nazwa „Trening”, BEZ manifestu —
-    jego start_url to Start apki trenera. Logika w vald/ikonka.py (wspólna
+    „Do ekranu początkowego"), nazwa „APH training app” (Filip 2026-10-03).
+    Link zawodnika BEZ manifestu — jego start_url to Start apki trenera. Logika w vald/ikonka.py (wspólna
     z athlete_app.py)."""
     from vald.ikonka import wstaw
     wstaw(nazwa, manifest)
@@ -4350,7 +4350,7 @@ def _ikonka_trenera(nazwa: str = "APH", manifest: bool = True) -> None:
 
 def main() -> None:
     if len(str(st.query_params.get("plan") or "")) >= 20:
-        _ikonka_trenera("Trening", manifest=False)   # link zawodnika na ekranie początkowym
+        _ikonka_trenera(manifest=False)   # link zawodnika na ekranie początkowym
     else:
         # cała apka na ekranie początkowym iPhone'a, nie tylko tryb trenera
         # (Filip 2026-09-30: „chcę całą aplikację na pulpicie")

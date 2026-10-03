@@ -1,7 +1,17 @@
 {
+  "name": "APH training app",
+  "short_name": "APH training app",
   "icons": [
-    {"src": "aph-trener-180.png", "sizes": "180x180", "type": "image/png"},
-    {"src": "aph-trener-512.png", "sizes": "512x512", "type": "image/png"}
+    {
+      "src": "aph-trener-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "aph-trener-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ],
   "display": "browser",
   "background_color": "#000000",
