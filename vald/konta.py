@@ -18,8 +18,10 @@ Zamiast hasła: sól + PBKDF2-SHA256.
 - `pt` — czy konto widzi Performance testing (dane VALD);
 - `rola: "admin"` — przełącznik podglądu wszystkich kont.
 
-Brak dokumentu `konta` (albo magazynu) = stare zachowanie: brama z jednym
-hasłem z sekretu `haslo`, nic się u nikogo nie zmienia.
+Brak magazynu (tryb plikowy, Mac bez kluczy) = stare zachowanie: brama
+z jednym hasłem z sekretu `haslo`. Magazyn skonfigurowany, a kont z hasłem
+brak albo dokument nieczytelny → brama zamknięta (2026-10-03: apka trenera
+jest publiczna, patrz brama.sprawdz_haslo).
 """
 from __future__ import annotations
 
@@ -48,6 +50,12 @@ S_WYLOGOWANY = "_aph_wylogowany"  # ta karta się wylogowała — bez wejścia z
 # a klucz wynika z sekretu magazynu, którego przeglądarka nie zna.
 CIASTKO = "aph_sesja"
 CIASTKO_DNI = 30
+# „Znane urządzenie” (wzorzec OWASP device cookie): przeglądarka, w której
+# konto raz weszło poprawnym hasłem, ma przy logowaniu własny licznik prób —
+# obcy, który co 30 s zgaduje hasło, nie zabierze jej okienka (przegląd
+# 2026-10-03). Wylogowanie go nie kasuje; zmiana hasła unieważnia.
+URZADZENIE = "aph_urz"
+URZADZENIE_DNI = 365
 
 
 def _skrot(haslo: str, sol: str) -> str:
@@ -55,22 +63,32 @@ def _skrot(haslo: str, sol: str) -> str:
                                bytes.fromhex(sol), _ITER).hex()
 
 
-def wszystkie() -> list[dict]:
-    """Konta z magazynu. Magazyn niedostępny albo pusty → [] (stara brama)."""
+def stan() -> tuple[list[dict], bool]:
+    """(konta, awaria) z JEDNEGO odczytu. awaria = magazyn skonfigurowany,
+    a dokumentu kont nie da się przeczytać albo ma zły kształt (awaria
+    Supabase, 5xx/429, zerwana sieć). Brama decyduje na tej jednej wartości:
+    dwa osobne odczyty (błąd, potem sukces) otwierały wejście (przegląd
+    2026-10-03)."""
     from . import store
     if not store.enabled():
-        return []
+        return [], False
     try:
         d = store.kv_get(KLUCZ) or {}
-    except (RuntimeError, OSError):
-        return []
-    return [k for k in (d.get("konta") or [])
-            if isinstance(k, dict) and k.get("id")]
+        return [k for k in (d.get("konta") or [])
+                if isinstance(k, dict) and k.get("id")], False
+    except (RuntimeError, OSError, AttributeError, TypeError, KeyError):
+        return [], True
 
 
-def aktywne() -> bool:
+def wszystkie() -> list[dict]:
+    """Konta z magazynu. Magazyn niedostępny albo pusty → []."""
+    return stan()[0]
+
+
+def aktywne(lista: "list[dict] | None" = None) -> bool:
     """Logowanie kontami działa, gdy choć jedno konto ma ustawione hasło."""
-    return any(k.get("skrot") and k.get("sol") for k in wszystkie())
+    return any(k.get("skrot") and k.get("sol")
+               for k in (wszystkie() if lista is None else lista))
 
 
 def _po_id(kid: str) -> dict | None:
@@ -141,11 +159,34 @@ def token_sesji(k: dict) -> str:
     return f"{k['id']}.{waznosc}.{_podpis(k['id'], waznosc, k.get('skrot') or '')}"
 
 
-def _ciastko() -> str:
+def _ciastko(nazwa: str = CIASTKO) -> str:
     try:
-        return urllib.parse.unquote(st.context.cookies.get(CIASTKO) or "")
+        return urllib.parse.unquote(st.context.cookies.get(nazwa) or "")
     except Exception:
         return ""
+
+
+def _podpis_urzadzenia(kid: str, skrot: str) -> str:
+    return _podpis(kid, 0, "urz|" + skrot)
+
+
+def token_urzadzenia(k: dict) -> str:
+    return f"{k['id']}.{_podpis_urzadzenia(k['id'], k.get('skrot') or '')}"
+
+
+def znane_urzadzenie(kid: str) -> bool:
+    """Ta przeglądarka weszła już kiedyś poprawnym hasłem na konto `kid`."""
+    try:
+        kid_c, podpis = _ciastko(URZADZENIE).rsplit(".", 1)
+    except ValueError:
+        return False
+    # isascii: compare_digest na tekście z nie-ASCII rzuca TypeError (traceback
+    # dla gościa z podrobionym ciasteczkiem, przegląd 2026-10-03)
+    if kid_c != kid or not podpis.isascii():
+        return False
+    k = _po_id(kid)
+    return bool(k and k.get("skrot") and hmac.compare_digest(
+        podpis, _podpis_urzadzenia(kid, k["skrot"])))
 
 
 def z_ciastka() -> dict | None:
@@ -157,7 +198,7 @@ def z_ciastka() -> dict | None:
         waznosc = int(waznosc)
     except ValueError:
         return None
-    if waznosc < time.time():
+    if waznosc < time.time() or not podpis.isascii():
         return None
     k = _po_id(kid)
     if not k or not k.get("skrot") or not hmac.compare_digest(

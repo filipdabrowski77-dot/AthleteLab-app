@@ -22,6 +22,7 @@ Tabela w Supabase (SQL Editor, raz):
 """
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import time
@@ -204,7 +205,10 @@ def _kv_name(name: str) -> str:
 
 # zrywy sieci/TLS: SSLError i ConnectionError to OSError, ale NIE URLError —
 # bez tego traceback leciał na ekran zamiast komunikatu (Filip 2026-09-20)
-_SIEC = (urllib.error.URLError, TimeoutError, ValueError, OSError)
+# http.client.HTTPException: ucięta odpowiedź (IncompleteRead) nie dziedziczy
+# po OSError i szła tracebackiem do niezalogowanego gościa (przegląd 2026-10-03)
+_SIEC = (urllib.error.URLError, TimeoutError, ValueError, OSError,
+         http.client.HTTPException)
 
 
 def _z_ponowieniem(op, opis: str):
