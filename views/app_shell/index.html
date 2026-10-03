@@ -1308,7 +1308,7 @@ function screenAthlete(){
   // RPE, serie jako kafelki, notatka zawodnika (Filip 2026-09-30); wszystko
   // się zwija, na start zwinięty tylko Movement Prep
   const wOtw = (key, dom) => S.wOtw[key] === undefined ? dom : S.wOtw[key];
-  const dawkaW = (d) => esc(d || "").replace(/@ RPE [\d,.\-–]+/g, (m) => `<i>${m}</i>`);
+  const dawkaW = (d) => esc(d || "").replace(/@ RPE [\d,.\-–\/]+/g, (m) => `<i>${m}</i>`);
   // kafelek serii bez numeru — „1 × 5” czytało się jak dawka; kolejność od lewej
   const seriaCh = (x) => {
     if(x.stan === "skip") return `<span class="wch skip">pominięta</span>`;

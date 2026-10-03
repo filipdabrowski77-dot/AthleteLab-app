@@ -179,8 +179,9 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .uw.otw{color:#1c1b18}
 .mini .uw{margin:-9px 0}
 .uwmini{margin:-4px 0 10px;padding:8px 12px;border-radius:10px;background:#f1f5fd;color:#2b3a55;font-size:13.5px;line-height:1.4}
-.uwagi{display:block;margin-top:2px;padding:6px 10px;border-radius:8px;background:#f1f5fd;color:#2b3a55;font-size:13px;line-height:1.4}
-.uwagi b{color:#2563eb;font-weight:700}
+.uwagi{display:block;margin:6px 0 2px;padding:10px 12px 10px 13px;border-left:3px solid #6f9cf0;border-radius:4px 12px 12px 4px;background:#f1f5fd;color:#1f2a44;font-size:15px;font-weight:500;line-height:1.45}
+.uwagi ul{margin:0;padding-left:17px}
+.uwagi li+li{margin-top:5px}
 .mini .kropka{display:none}
 .karta .glowa .kropka{position:absolute;top:2px;right:12px;pointer-events:none}
 .ost.hist b{font-weight:700;color:#a09c92}
@@ -489,7 +490,7 @@ function podpowiedzi(k, si) {
 // „1 × 5 @ RPE 8 + 2 × 7 @ RPE 8” — RPE jako żółta plakietka
 function htmlDawka(karta) {
   const t = txt(karta.dawka_pelna) || [txt(karta.dawka), txt(karta.intent)].filter((x) => x && x !== "—").join(" · ");
-  return esc(t).replace(/@ RPE ([\d,.\-]+)/g, '<span class="pvintent">@ RPE $1</span>');
+  return esc(t).replace(/@ RPE ([\d,.\-\/]+)/g, '<span class="pvintent">@ RPE $1</span>');
 }
 function wpisy(n) {
   const d = n % 10, s = n % 100;
@@ -646,6 +647,17 @@ function pole(a, f, v, ph, tryb, max, etyk) {
     + ` spellcheck="false" maxlength="${max}" aria-label="${etyk}"`
     + ` value="${esc(v)}" placeholder="${esc(ph)}">`;
 }
+// uwagi trenera z planu: tylko w linku zawodnika (Filip 2026-10-03: w trybie
+// prowadzenia treningu ich nie ma, tam jest jego własna notatka ✎); w karcie
+// po stuknięciu, zdanie pod zdaniem (kropka, średnik), żeby dało się je przeczytać w biegu
+const uwagiPlanu = (karta) => S.rola === "zawodnik" ? txt(karta.uwagi) : "";
+function htmlUwagi(karta) {
+  const zd = uwagiPlanu(karta).replace(/([.!?])\s+(?=[A-ZĄĆĘŁŃÓŚŹŻ])/g, "$1\n").replace(/;\s*/g, "\n").split("\n")
+    .map((z) => z.trim()).filter(Boolean).map((z) => z.charAt(0).toUpperCase() + z.slice(1));
+  if (!zd.length) return "";
+  const tresc = zd.length > 1 ? `<ul>${zd.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>` : esc(zd[0]);
+  return `<div class="uwagi">${tresc}</div>`;
+}
 function htmlKarta(k, sek, wZwinietej) {
   const karta = S.meta[k], st = S.stan[k], n = ileWierszy(k), dk = `data-k="${esc(k)}"`;
   // „‹ Wróć” zawsze na górze otwartego ćwiczenia (Filip 2026-09-30: „żeby
@@ -657,7 +669,7 @@ function htmlKarta(k, sek, wZwinietej) {
     + `<span class="pvdose">${htmlDawka(karta)}</span>`
     + htmlOstatnio(k)
     + (karta.det ? `<span class="det">${esc(karta.det)}</span>` : "")
-    + (karta.uwagi ? `<span class="uwagi"><b>ⓘ</b> ${esc(karta.uwagi)}</span>` : "")
+    + htmlUwagi(karta)
     + htmlFilm(karta)
     + `</div><span class="kropka" data-kropka="${esc(k)}"></span>`
     + `</div><div class="serie"><div class="sh" aria-hidden="true"><span></span>`
@@ -821,7 +833,7 @@ function htmlMini(k, sek) {
   const karta = S.meta[k], n = ileWierszy(k), o = ileOk(k), dk = `data-k="${esc(k)}"`;
   const stan = stanKarty(k), kl_ = stan ? " " + stan : "";
   const tresc = `${htmlSlot(k, sek)}<span class="pvcol"><span class="pvname">${esc(karta.exercise)}`
-    + (karta.uwagi ? ` <span class="uwznak" aria-label="są uwagi">ⓘ</span>` : "")
+    + (uwagiPlanu(karta) ? ` <span class="uwznak" aria-label="są uwagi">ⓘ</span>` : "")
     + (txt((S.stan[k] || {}).notatka) ? `<span class="notznak" aria-label="jest notatka">✎</span>` : "") + `</span>`
     + `<span class="mdose">${htmlDawka(karta)}</span>`
     + (karta.ostatnio && !sek.zwinieta && S.rola !== "zawodnik" ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "")
@@ -1042,7 +1054,7 @@ function htmlKrok(krok, nastepny) {
     + `<div class="knazwa">${esc(karta.exercise)}</div>`
     + `<div class="kdawka">${htmlDawka(karta)}</div>`
     + (karta.det ? `<div class="det">${esc(karta.det)}</div>` : "")
-    + (karta.uwagi ? `<div class="uwagi"><b>ⓘ</b> ${esc(karta.uwagi)}</div>` : "")
+    + htmlUwagi(karta)
     + (karta.film || htmlHistIkona(k) ? `<div class="klinki">${htmlFilm(karta)}${htmlHistIkona(k)}</div>` : "")
     + pola
     + `<div class="kprzyciski"><button type="button" class="kok" data-act="ok" ${a}>✓ Zrobione</button>`
