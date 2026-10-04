@@ -89,7 +89,12 @@ def sprawdz_haslo() -> bool:
             return True
         if link:
             return True
-        if konta.z_ciastka():
+        k = konta.z_ciastka()
+        if k:
+            # Safari przycina ciasteczka zapisane z JS do 7 dni — wejście
+            # z ciasteczka zapisuje je od nowa, okno się przesuwa (audyt 2026-10-04)
+            st.session_state[_DO_CIASTKA] = konta.token_sesji(k)
+            st.session_state[_DO_URZADZENIA] = konta.token_urzadzenia(k)
             return True
         _ekran_kont()
         return False

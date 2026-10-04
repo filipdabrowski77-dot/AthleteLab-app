@@ -19,3 +19,8 @@ enableStaticServing = true
 # hash; przy domyślnych 10 KB szło ~73 KB stylów na każde kliknięcie
 # (audyt 2026-09-28: 195 → 125 KB na klik)
 minCachedMessageSize = 1000
+
+[browser]
+# statystyki użycia Streamlita (page_profile) to ~40% danych każdego pingu
+# telefonu i zapytania do data.streamlit.io — wyłączone (audyt 2026-10-04)
+gatherUsageStats = false

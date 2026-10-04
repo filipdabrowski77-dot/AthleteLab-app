@@ -42,6 +42,7 @@ def wstaw(nazwa: str = "APH", manifest: bool = True) -> None:
         if (cap) cap.remove();
       }
       ustaw("meta", 'meta[name="apple-mobile-web-app-title"]', {name: "apple-mobile-web-app-title", content: NAZWA}, true);
-      ustaw("meta", 'meta[name="theme-color"]', {name: "theme-color", content: "#000000"});
+      // kolor tła apki (config.toml), nie czarny pas nad jasną apką na pełnym ekranie
+      ustaw("meta", 'meta[name="theme-color"]', {name: "theme-color", content: "#F6F8FB"}, true);
     } catch (e) {}
     </script>""", height=0)

@@ -642,6 +642,10 @@ def rozpiska_z_tekstu(dawka: str, inh: dict | None = None) -> dict:
     cell = (dawka or "").strip()
     if not cell:
         return {k: inh.get(k, "") for k in ("sets_n", "reps", "intent", "rest")}
+    # zapis z dyktanda („4x6 rpe 8”, „2x 8-12 rb 9”) do jednej notacji: bez
+    # tego RPE lądowało w powtórzeniach i ✓ nie wstawiał liczby (audyt 2026-10-04)
+    from .dyktando import normalizuj_dawke
+    cell = normalizuj_dawke(cell).strip() or cell
     intent = inh.get("intent", "")
     if "@" in cell:
         cell, _int = cell.split("@", 1)

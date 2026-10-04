@@ -1839,7 +1839,9 @@ def _trk_konsumuj(klucz: str = "trk", dozwolone: dict | None = None) -> bool:
     ops = val.get("ops") or []
     if not ops:
         from . import store
-        if store.enabled():
+        # plany pobrane przed chwilą w tym przebiegu (rozgrzej_magazyn) są
+        # świeże — bez tego ping ściągał całą bazę planów drugi raz (audyt 2026-10-04)
+        if store.enabled() and not store.swiezy("training_plans", 3.0):
             store.invalidate("training_plans")
     zast = st.session_state.setdefault(f"{klucz}_zastosowane", [])
     st.session_state[f"{klucz}_wynik"] = _trk_zastosuj(ops, zast, dozwolone)

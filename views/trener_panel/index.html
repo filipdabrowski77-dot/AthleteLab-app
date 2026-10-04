@@ -576,6 +576,7 @@ function kolejkuj(k) {
   S.kolejka[miejsceOp(op)] = op;   // nowsza wersja ćwiczenia zastępuje starszą
   S.brudne[k] = false;
   zapiszLS();
+  zapamietajTrening(c);
   aktualizujKropki();
 }
 // cofnięcie do wartości sprzed niepotwierdzonej wersji: bazą tego pola jest
@@ -928,9 +929,10 @@ function render() {
   wysokosc();
   renderArkusz();
   if (S.przewin) {
+    const dl = S.przewin === true ? 60 : +S.przewin;
     S.przewin = false;
     const el = root.querySelector(".sr.cel") || root.querySelector(".mini.cel") || root.querySelector(".karta");
-    if (el) setTimeout(() => { try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} }, 60);
+    if (el) setTimeout(() => { try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} }, dl);
   }
 }
 
@@ -981,6 +983,7 @@ function trZapisz() {
 }
 function trWejdz() {
   S.tr = true; S.trCtx = ctxKlucz(S.ctx); S.cel = pierwszyKrok(); S.przewin = true;
+  zapamietajTrening(S.ctx);
   trZapisz();
   trStyl(true); dzwiek(true); render();
 }
@@ -1156,7 +1159,7 @@ function renderStopka() {
     h = `<div class="zapisany">✓ Zapisany${S.status.data ? " " + esc(S.status.data) : ""}</div>`
       ;
   } else h = `<button type="button" class="zakoncz${S.pewnyKoniec ? " pewny" : ""}" data-act="koniec">`
-    + (S.pewnyKoniec ? "Nic nie odhaczone — zakończyć?" : "Zakończ trening") + `</button>`;
+    + (S.pewnyKoniec ? koniecPytanie() : "Zakończ trening") + `</button>`;
   if (S.odrzKoniec) h += `<div class="odrz">${esc(S.odrzKoniec)}</div>`;
   if (S.offline && !czeka) h += `<div class="maly">Brak zasięgu — wpisy czekają w telefonie</div>`;
   if (S.rola === "zawodnik") {
@@ -1168,6 +1171,16 @@ function renderStopka() {
       + `<span>Wpisy zapisują się same, także bez zasięgu</span></div>`;
   }
   el.innerHTML = h;
+}
+// „Zakończ trening” potwierdzany drugim stuknięciem: pusty trening (audyt
+// A1-11), a u zawodnika także niedokończony — stuknięcie przy przewijaniu
+// zamykało pół treningu i znikał tryb prowadzony (audyt 2026-10-04)
+function koniecPytanie() {
+  const cos = S.karty.some((karta) => (S.stan[kl(karta)] || { serie: [] }).serie.some((x) => x.stan));
+  if (!cos) return "Nic nie odhaczone — zakończyć?";
+  if (S.rola === "zawodnik" && S.karty.some((karta) => S.stan[kl(karta)] && !rozstrzygnieta(kl(karta))))
+    return "Nie wszystko odhaczone — zakończyć?";
+  return "";
 }
 function aktualizujKropki() {
   const teraz = Date.now();
@@ -1219,7 +1232,12 @@ function wPolu() {
     && document.hasFocus();
 }
 function zastosuj(a) {
-  if (ctxKlucz(a.ctx) !== ctxKlucz(S.ctx)) { S.odrzKoniec = ""; S.pewnyKoniec = false; }
+  if (ctxKlucz(a.ctx) !== ctxKlucz(S.ctx)) {
+    S.odrzKoniec = ""; S.pewnyKoniec = false;
+    // trener wraca do zawodnika: rozpoczęte ćwiczenie od razu pod kciukiem,
+    // a nie poza ekranem (audyt 2026-10-04); po zmianie wysokości ramki
+    if (S.rola !== "zawodnik" && a.ctx) S.przewin = 300;
+  }
   S.ctx = a.ctx || null;
   S.sekcje = a.sekcje || [];
   S.karty = a.karty || [];
@@ -1352,7 +1370,6 @@ window.addEventListener("message", (ev) => {
     && Date.now() - S.czekaWyborT < 15000;
   if (!czekam) S.czekaWybor = null;
   if (S.rola === "zawodnik" && a.ctx && !czekam) {
-    try { localStorage.setItem(LS.replace("outbox", "ctx"), JSON.stringify(Object.assign({ t: Date.now() }, a.ctx))); } catch (e) {}
     if (S.tr && ctxKlucz(a.ctx) !== S.trCtx) { trWyjdz(); render(); }
     else if (!S.tr && !S.trSprawdzony) {
       S.trSprawdzony = true;          // przeładowanie w trakcie treningu — tryb wraca
@@ -1397,6 +1414,13 @@ function ustawOffline(off) {
 
 // po przeładowaniu zawodnik wracał do pierwszego zaczętego treningu zamiast do
 // tego, który robił (R1-07) — telefon pamięta ostatni i prosi o niego Pythona
+// zapis tylko przy wpisie albo „Zacznij trening” — podejrzany tydzień był
+// ekranem startowym następnego otwarcia linku i zawodnik robił nie ten
+// trening (audyt 2026-10-04)
+function zapamietajTrening(c) {
+  if (S.rola !== "zawodnik" || !c) return;
+  try { localStorage.setItem(LS.replace("outbox", "ctx"), JSON.stringify(Object.assign({ t: Date.now() }, c))); } catch (e) {}
+}
 function zapamietanyTrening(ctx) {
   try {
     const z = JSON.parse(localStorage.getItem(LS.replace("outbox", "ctx")) || "null");
@@ -1575,13 +1599,13 @@ root.addEventListener("click", (e) => {
     case "koniec": {
       zdejmijFokus();
       splucz();
-      // pusty trening „zapisany” jednym stuknięciem wyglądał u trenera jak
-      // zrobiony (audyt A1-11) — bez żadnego wpisu drugie stuknięcie potwierdza
-      const cos = S.karty.some((karta) => (S.stan[kl(karta)] || { serie: [] }).serie.some((x) => x.stan));
-      if (!cos && !S.pewnyKoniec) { S.pewnyKoniec = Date.now(); renderStopka(); wysokosc(); break; }
+      // pusty albo (u zawodnika) niedokończony trening — drugie stuknięcie potwierdza
+      const pytaj = !!koniecPytanie();
+      if (pytaj && !S.pewnyKoniec) { S.pewnyKoniec = Date.now(); renderStopka(); wysokosc(); break; }
       // drugie stuknięcie tego samego dotyku nie potwierdza (ZAW-03)
-      if (!cos && Date.now() - S.pewnyKoniec < 700) break;
+      if (pytaj && Date.now() - S.pewnyKoniec < 700) break;
       S.pewnyKoniec = false;
+      zapamietajTrening(S.ctx);
       if (S.tr) trWyjdz();
       const c = S.ctx;
       const op = { id: nowyId(), typ: "koniec", t: Date.now(), d: dzisiaj(),

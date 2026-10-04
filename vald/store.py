@@ -22,6 +22,7 @@ Tabela w Supabase (SQL Editor, raz):
 """
 from __future__ import annotations
 
+import gzip
 import http.client
 import json
 import os
@@ -29,6 +30,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zlib
 
 _TABLE = "kv"
 # s — własne zapisy odświeżają cache od razu (kv_put), więc TTL dotyczy
@@ -222,6 +224,20 @@ def _z_ponowieniem(op, opis: str):
             time.sleep(0.4)
 
 
+def _czytaj(r) -> bytes:
+    """Treść odpowiedzi, rozpakowana z gzip. urllib domyślnie prosi
+    o „identity”, więc baza planów szła bez kompresji: 270 KB zamiast 30 KB
+    przy każdym pobraniu (audyt 2026-10-04)."""
+    dane = r.read()
+    naglowki = getattr(r, "headers", None) or {}
+    if (naglowki.get("Content-Encoding") or "").lower() == "gzip":
+        try:
+            dane = gzip.decompress(dane)
+        except (OSError, EOFError, zlib.error) as e:
+            raise ValueError(f"uszkodzona odpowiedź gzip: {e}") from e
+    return dane
+
+
 def _headers(key: str, extra: dict | None = None) -> dict:
     h = {"apikey": key, "Authorization": f"Bearer {key}",
          "Content-Type": "application/json"}
@@ -247,9 +263,9 @@ def kv_get(name: str) -> dict | None:
         def _raz():
             req = urllib.request.Request(
                 f"{url}/rest/v1/{_TABLE}?key=eq.{k}&select=value",
-                headers=_headers(key), method="GET")
+                headers=_headers(key, {"Accept-Encoding": "gzip"}), method="GET")
             with urllib.request.urlopen(req, timeout=10) as r:
-                return json.loads(r.read().decode("utf-8"))
+                return json.loads(_czytaj(r).decode("utf-8"))
         rows = _z_ponowieniem(_raz, f"przy odczycie '{k}'")
         return rows[0]["value"] if rows else None
 
@@ -281,10 +297,10 @@ def kv_get_many(names: "list[str]") -> dict:
     lista = ",".join(urllib.parse.quote(k, safe="") for k in pelne)
     req = urllib.request.Request(
         f"{url}/rest/v1/{_TABLE}?key=in.({lista})&select=key,value",
-        headers=_headers(key), method="GET")
+        headers=_headers(key, {"Accept-Encoding": "gzip"}), method="GET")
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
-            wiersze = json.loads(r.read().decode("utf-8"))
+            wiersze = json.loads(_czytaj(r).decode("utf-8"))
     except _SIEC:
         return {}          # cicho — wołający pobierze klucze pojedynczo
     teraz = time.monotonic()
@@ -313,6 +329,13 @@ def kv_put(name: str, value: dict) -> None:
             return r.read()
     _z_ponowieniem(_raz, f"przy zapisie '{name}'")
     _cache[name] = (time.monotonic(), _kopia(value))
+
+
+def swiezy(name: str, sekundy: float) -> bool:
+    """Wpis w cache młodszy niż `sekundy` — pobrany przed chwilą (np. przez
+    rozgrzej_magazyn na początku tego samego przebiegu)."""
+    hit = _cache.get(_kv_name(name))
+    return bool(hit) and (time.monotonic() - hit[0]) < sekundy
 
 
 def invalidate(name: str | None = None) -> None:
