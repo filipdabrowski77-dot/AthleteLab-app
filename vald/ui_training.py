@@ -879,6 +879,14 @@ def _render_plan_workout_body(plan: dict, sub: str,
         )
     if not sessions:
         st.info("Brak treningów.")
+        if prowadzony and not trener:
+            # link zawodnika: komponent bez treningu i tak powstaje — wpisy
+            # z kolejki telefonu (np. ze starego bloku) mają jak się wysłać
+            # (audyt 2026-10-06, jak _zaw_bez_magazynu)
+            from views.trener_panel import trener_panel
+            trener_panel({"ctx": None, "sekcje": [], "karty": [], "status": {},
+                          "ack": [], "odrzucone": [], "blad": "", "rola": "zawodnik"},
+                         key="zaw_panel")
         return
 
     # tydzień planu — przełączany, zmienia dawki WSZYSTKICH treningów;
@@ -1682,7 +1690,11 @@ def _trk_op_cwiczenie(plan: dict, sess: dict, wk: int, op: dict) -> str:
         # (usunięte + dodane) — przysiad lądował w wyciskaniu (SRV-04)
         znane = {str(x or "").strip().lower() for x in op.get("nazwy")} \
             if isinstance(op.get("nazwy"), list) else set()
-        if j < 0 and 0 <= i < len(items_) and n_op == len(items_) \
+        # bez listy nazw (wpis spuszczony po przełączeniu treningu) nie wiem,
+        # czy to zamiana w miejscu, czy przesunięcie — lepiej poprosić
+        # o ponowny wpis niż zapisać serie w cudzym ćwiczeniu (audyt 2026-10-06)
+        if j < 0 and isinstance(op.get("nazwy"), list) \
+                and 0 <= i < len(items_) and n_op == len(items_) \
                 and (items_[i].get("section") or "Main") == op.get("section") \
                 and str(items_[i].get("exercise") or "").strip().lower() not in znane:
             # trener zmienił nazwę albo zamienił ćwiczenie w tym miejscu (ta
