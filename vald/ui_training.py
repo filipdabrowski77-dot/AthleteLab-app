@@ -127,7 +127,7 @@ def _odmiana(n: int, poj: str, kilka: str, wiele: str) -> str:
 
 # bez zamykania Esc i kliknięciem obok: wklejony tekst trafia do Pythona
 # dopiero po wyjściu z pola, więc Esc kasował go bez śladu (audyt 2026-09-28)
-@st.dialog("Plan z dyktanda", width="large", dismissible=False)
+@st.dialog("Dyktafon", width="large", dismissible=False)
 def _tr_dyktando_dialog() -> None:
     """Dyktando (Wispr Flow) wprost w apce — bez terminala i bez asystenta.
     Parser `vald/dyktando.py` jest czystym Pythonem: liczebniki słowne,
@@ -142,12 +142,17 @@ def _tr_dyktando_dialog() -> None:
     from . import claude_plan as _cp
     if _cp.dostepny():
         rozm = ss.setdefault("dykt_claude", [])
-        for m in rozm[-4:]:
-            st.markdown(("**Ty:** " if m["role"] == "user" else "**Claude:** ")
-                        + (m["content"] if m["role"] == "user" or not _cp.wyciagnij_blok(m["content"])
-                           else "plan poniżej ↓"))
+        for m in rozm:
+            if m["role"] == "user":
+                st.markdown("**Ty:** " + m["content"])
+            elif _cp.wyciagnij_blok(m["content"]):
+                st.markdown("**Claude:** plan poniżej ↓ (popraw słowami albo zapisz)")
+            else:
+                st.markdown("**Claude:** " + m["content"])
         wpis = st.text_area("Do Claude", height=90, key="dykt_claude_wpis",
-                            placeholder="Powiedz, dla kogo i co ma być w planie",
+                            placeholder=("Powiedz, dla kogo i co ma być w planie — jak "
+                                         "w rozmowie. Potem poprawki: „1b na rpe 7”, "
+                                         "„dopisz dzień B”."),
                             label_visibility="collapsed")
         _k1, _k2 = st.columns([3, 1])
         if _k1.button("Ułóż z Claude", type="primary", use_container_width=True,
@@ -170,8 +175,13 @@ def _tr_dyktando_dialog() -> None:
             st.rerun()
         if rozm and _k2.button("Od nowa", use_container_width=True, key="dykt_claude_reset"):
             ss["dykt_claude"] = []
+            ss.pop("dykt_tekst", None)
             st.rerun()
         st.divider()
+    elif ss.get("dykt_pokaz_klucz", True):
+        st.caption("Claude w Dyktafonie włącza się po dodaniu sekretu "
+                   "`anthropic_api_key` w ustawieniach apki. Bez niego wklej gotową "
+                   "rozpiskę poniżej.")
     tekst = st.text_area("Dyktando", height=240, key="dykt_tekst",
                          placeholder=_DYKT_WZOR, label_visibility="collapsed")
     with st.expander("Wzór"):
@@ -206,12 +216,25 @@ def _tr_dyktando_dialog() -> None:
                 f"{p_['weeks'] or 4} tyg. · "
                 f"{_tr_n} {_odmiana(_tr_n, 'trening', 'treningi', 'treningów')} · "
                 f"{_poz} {_odmiana(_poz, 'pozycja', 'pozycje', 'pozycji')}")
+    _istn = dk.istniejacy_plan(p_["athlete"], p_["name"])
+    if _istn is not None:
+        _tyt = {(s.get("title") or "").strip().lower() for s in _istn.get("sessions") or []}
+        _nowe = [t["title"] for t in dane["treningi"] if (t["title"] or "").strip().lower() not in _tyt]
+        _pod = [t["title"] for t in dane["treningi"] if (t["title"] or "").strip().lower() in _tyt]
+        st.info("Ten plan już istnieje — dopiszę do niego"
+                + (f" nowe treningi: {', '.join(_nowe)}" if _nowe else "")
+                + (f"; podmienię rozpiskę: {', '.join(_pod)}" if _pod else "")
+                + ". Link zawodnika zostaje ten sam.")
     for it in niepewne:
         kand = [n for n, _ in it["kandydaci"]]
         opcje = kand + [n for n in nazwy if n not in kand] + [_DYKT_NOWE]
+        # bez kandydatów domyślny wybór to „nowe ćwiczenie”, nie pierwsze
+        # alfabetycznie z Bazy (kliknięte bez patrzenia szło do planu i do
+        # aliasów); klucz z treści — dopisana linia wyżej nie przesuwa wyboru
         it["_wybor"] = st.selectbox(
             f"„{it['tekst']}” — potwierdź (linia {it['linia']})", opcje,
-            key=f"dykt_w_{it['linia']}")
+            index=(0 if kand else len(opcje) - 1),
+            key=f"dykt_w_{abs(hash(it['tekst'].lower())) % 10**8}_{it['linia']}")
     with st.expander("Raport dopasowań", expanded=not niepewne):
         st.code(dk.raport(dane), language=None)
     if st.button("Utwórz plan", type="primary", use_container_width=True,
@@ -779,6 +802,13 @@ _GYM_CSS = """<style>
         #MainMenu, header[data-testid="stHeader"] { display: none !important; }
         .block-container { padding: 0.8rem 0.9rem 4rem !important;
             max-width: 640px !important; }
+        /* puste kontenery (same <style>/<script>, iframe o wysokości 0) trzymały
+           po 16 px odstępu każdy — ~80 px pustego pasa nad treścią na telefonie
+           (pomiar e2e 2026-10-06, iPhone 390×664) */
+        .stApp [data-testid="stElementContainer"]:has(> iframe[height="0"]),
+        .stApp [data-testid="stElementContainer"]:has(> iframe[title="st.iframe"][scrolling="no"]:not([height])),
+        .stApp [data-testid="stElementContainer"]:has([data-testid="stMarkdownContainer"] > style:only-child),
+        .stApp [data-testid="stElementContainer"]:empty { display: none !important; }
         .stApp .gymhead { font-family: var(--aph-display); font-size: 20px;
             letter-spacing: -0.02em; color: var(--aph-ink); }
         .stApp .gymsub { font-family: var(--aph-text); font-size: 12px;
@@ -1218,6 +1248,15 @@ def _trk_serie_plan(it: dict, wk: int) -> tuple:
     # top set w jednej komórce: „1 x 4 @ rpe 8 + 2 x 6-7" → serie po kolei;
     # gdy któryś człon nie ma „N x R" (np. „4 opuszczania"), zostaje jak dotąd
     if "+" in reps and not lista:
+        # split_dose odcina „2 x” od pierwszego członu („2 x 6 + 1 x 30 sec ISO”
+        # → sets_n=2, reps=„6 + 1 x 30 sec ISO”) — bez doklejenia pierwszy
+        # człon liczył się jako jedna seria (audyt 2026-10-06, Kadeci: 2 zamiast 3)
+        sn = re.match(r"\s*(\d+)\s*$", str(p.get("sets_n") or ""))
+        pierwszy = reps.split("+", 1)[0]
+        # tylko goła liczba/zakres („6”, „5-7”); „4 opuszczania + 1x 6-10” to
+        # jedna seria złożona z dwóch części — zostaje sets_n wierszy
+        if sn and re.fullmatch(r"\s*\d+(\s*-\s*\d+)?\s*", pierwszy):
+            reps = f"{sn.group(1)} x {reps.lstrip()}"
         czlony = [_TRK_N_X_R.search(c) for c in reps.split("+")]
         # „Test ciężka piątka + 2 x 5”, „2x 8 + 1 seria ISO”: człon bez
         # „N x R” to jedna seria (R4-01); bez żadnego „N x R” (np. „6 + 4

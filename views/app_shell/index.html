@@ -188,6 +188,7 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 .sharebar span{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
   color:var(--mute2);flex-shrink:0}
 .sharebar input{flex:1;min-width:0;font-size:12.5px;color:var(--dim);padding:7px 10px}
+.sharebar .qr{width:92px;height:92px;flex:0 0 auto;border:1px solid var(--line);border-radius:6px;background:#fff}
 
 /* ---- exercises ---- */
 .segrows{display:flex;flex-direction:column;align-items:stretch;gap:6px;margin-top:10px}
@@ -747,7 +748,7 @@ function screenPlans(){
     if(q && !(p.name.toLowerCase().includes(q)||p.athlete.toLowerCase().includes(q))) return false;
     if(S.grp==="Bez folderu") return !p.group;
     if(S.grp!=="Wszystkie")   return p.group===S.grp;
-    return q ? true : p.in_base === true;
+    return (q || S.pokazPoza) ? true : p.in_base === true;
   });
   const GRID = "grid-template-columns:86px minmax(140px,1fr) minmax(110px,170px) minmax(90px,150px) 96px 30px 26px;min-width:680px";
   const wybrany = grps.includes(S.grp);
@@ -788,7 +789,8 @@ function screenPlans(){
               // wtedy otworzyć tylko z wyszukiwarki albo z profilu (2026-09-20)
               (D.groups||[]).length
                 ? esc(D.plans.length)+" "+odm(D.plans.length,"plan","plany","planów")+" w folderach."
-                : esc(D.plans.length)+" "+odm(D.plans.length,"plan","plany","planów")+" poza bazą.")
+                : esc(D.plans.length)+" "+odm(D.plans.length,"plan","plany","planów")+" poza bazą. "
+                  +`<button class="btn ghost xs" data-act="pokaz_poza">Pokaż</button>`)
           : "Brak planów."}</div>`}
     </div>`;
 
@@ -824,7 +826,7 @@ function screenPlans(){
     <div class="pagehead">
       <div><h1>Training Plans</h1></div>
       <div style="display:flex;gap:9px">
-        <button class="btn ghost" data-act="dyktando">🎙 Z dyktanda</button>
+        <button class="btn ghost" data-act="dyktando">🎙 Dyktafon</button>
         <button class="btn primary" data-act="plantab" data-v="nowy">＋ Nowy plan</button>
       </div>
     </div>
@@ -854,7 +856,8 @@ function screenPlan(){
   const share = S.share ? `<div class="sharebar">
       <span>Link dla zawodnika</span>
       <input class="in" value="${esc(p.share_url)}" readonly>
-      <button class="btn primary sm" style="flex:0 0 auto" data-act="copy_link">Kopiuj</button></div>` : "";
+      <button class="btn primary sm" style="flex:0 0 auto" data-act="copy_link">Kopiuj</button>
+      ${p.share_qr ? `<img class="qr" src="${p.share_qr}" alt="Kod QR linku" title="Zawodnik skanuje telefonem">` : ""}</div>` : "";
 
   // powrót tam, skąd plan został otwarty — z profilu do profilu, ze Startu
   // na Start (Filip 2026-09-05: bez gubienia miejsca, w którym byłem)
@@ -1442,8 +1445,8 @@ function screenHelp(){
       "Dawka w kolumnie tygodnia, np. <code>3 x 8 @ rpe 8</code>. Pusty tydzień = jak poprzedni.",
       "Superseria: ten sam numer z literą, <code>1a</code> + <code>1b</code>.",
       "Na końcu <b>Zapisz</b>. <b>Podgląd</b> pokazuje widok zawodnika."]),
-    k("Z dyktanda", "Training Plans → 🎙 Z dyktanda", [
-      "Wklej gotową rozpiskę (np. przygotowaną z Claude).",
+    k("Dyktafon", "Training Plans → 🎙 Dyktafon", [
+      "Powiedz Claude, dla kogo i co ma być w planie (dyktuj głosem w pole) — albo wklej gotową rozpiskę.",
       "<b>Sprawdź dopasowania</b> — niepewne nazwy wybierasz z listy.",
       "Zapisz — plan pojawia się na liście."]),
     k("PDF i link dla zawodnika", "Otwarty plan → PDF / Udostępnij", [
@@ -1467,7 +1470,7 @@ function screenHelp(){
   // plan z Claude trenera (Filip 2026-09-28) — na razie przez wklejenie;
   // po zbudowaniu łącznika ta karta opisze podłączenie jednym adresem
   karty.push(`<div class="hcard hclaude"><h3>Plan z Claude</h3>
-    <div class="gdzie">Training Plans → 🎙 Z dyktanda</div><ol>
+    <div class="gdzie">Training Plans → 🎙 Dyktafon</div><ol>
       <li>Powiedz albo wpisz, dla kogo i co ma być w planie → <b>Ułóż z Claude</b>.</li>
       <li>Claude dopyta albo od razu wstawi plan → <b>Sprawdź dopasowania</b> → <b>Utwórz plan</b>.</li>
       <li>Wymaga klucza API Anthropic w sekretach apki (<code>anthropic_api_key</code>). Bez klucza zostaje wariant z claude.ai: instrukcja poniżej.</li></ol>
@@ -1745,6 +1748,7 @@ document.addEventListener("click", e=>{
     case "extab":   S.exTab   = b.dataset.v; render(); break;
     case "cat":     S.cat     = b.dataset.v; render(); break;
     case "share":   S.share = !S.share; S.menu = false; render(); break;
+    case "pokaz_poza": S.pokazPoza = true; render(); break;
     case "menu":    S.menu = !S.menu; render(); break;
     case "coachmenu": S.coachMenu = !S.coachMenu; render(); break;
     case "grp": S.grp = b.dataset.v; render(); break;

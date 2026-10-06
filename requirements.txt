@@ -10,3 +10,5 @@ pymupdf>=1.24
 pyarrow>=15
 # Claude w dyktandzie (vald/claude_plan.py) — działa tylko z sekretem anthropic_api_key
 anthropic>=0.125
+# kod QR linku zawodnika (vald/shell.py:_share_qr)
+qrcode>=8

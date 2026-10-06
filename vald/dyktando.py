@@ -421,8 +421,77 @@ def zbuduj_items(pozycje: list[dict]) -> list[dict]:
     return normalize_slots(items)
 
 
+def istniejacy_plan(athlete: str, name: str) -> dict | None:
+    """Plan tego zawodnika o tej nazwie (bez rozróżniania wielkości liter)."""
+    from .training import get_all_plans
+    a, n = (athlete or "").strip().lower(), (name or "").strip().lower()
+    if not (a and n):
+        return None
+    return next((p for p in sorted(get_all_plans(), key=lambda p: p.get("created", ""), reverse=True)
+                 if (p.get("athlete") or "").strip().lower() == a
+                 and (p.get("name") or "").strip().lower() == n), None)
+
+
+def _ma_wykonanie(items: list[dict]) -> bool:
+    """Czy zawodnik coś już w tych pozycjach odhaczył / wpisał."""
+    for it in items or []:
+        for w in (it.get("weeks") or {}).values():
+            if not isinstance(w, dict):
+                continue
+            if (w.get("load") or w.get("session_note")
+                    or any(isinstance(s, dict) and (s.get("stan") or s.get("kg") or s.get("reps"))
+                           for s in (w.get("sets_done") or []))):
+                return True
+    return False
+
+
+def _dawka_tekst(w: dict) -> str:
+    """Odwrotność _dawka_na_tydzien: {sets_n, reps, intent} → „3 x 8 @ rpe 8”."""
+    if not isinstance(w, dict):
+        return ""
+    s, r, i = (str(w.get("sets_n") or "").strip(), str(w.get("reps") or "").strip(),
+               str(w.get("intent") or "").strip())
+    d = f"{s} x {r}" if s and r else (r or s)
+    return f"{d} @ {i}" if d and i else d
+
+
+def plan_do_tekstu(plan: dict) -> str:
+    """Plan z apki → format dyktanda (ten sam, który czyta parsuj_dyktando).
+    Claude dostaje tak kontekst „co zawodnik ma teraz”, a trener może
+    poprawić plan słowami zamiast od zera."""
+    from .training import ensure_sessions
+    sek_na_naglowek = {"Prep": "prep", "Plyo & Power": "plyo", "Main": "main",
+                       "Conditioning": "conditioning"}
+    linie = [f"plan: {plan.get('athlete', '')} | {plan.get('name', '')} | "
+             f"{plan.get('start_date', '')} | {plan.get('weeks', 1)}"
+             + (f" | folder: {plan['group']}" if plan.get("group") else "")]
+    for s in ensure_sessions(plan):
+        linie.append(f"trening: {s.get('title', '')}")
+        sek = None
+        for it in s.get("items") or []:
+            if it.get("section") != sek:
+                sek = it.get("section")
+                linie.append(sek_na_naglowek.get(sek, "main"))
+            weeks = it.get("weeks") or {}
+            n = max([int(k) for k in weeks if str(k).isdigit()] or [0])
+            dawki = [_dawka_tekst(weeks.get(str(k), {})) for k in range(1, n + 1)]
+            while len(dawki) > 1 and not dawki[-1]:
+                dawki.pop()
+            pola = [f"{it.get('slot', '')} {it.get('exercise', '')}".strip()] + dawki
+            if it.get("tempo"):
+                pola.append(f"tempo: {it['tempo']}")
+            if it.get("note"):
+                pola.append(f"uwagi: {it['note']}")
+            linie.append("- " + " | ".join(pola))
+    return "\n".join(linie)
+
+
 def zapisz_plan(dane: dict, prog: float = 0.999) -> dict:
-    """Tworzy plan w bazie apki. Rzuca ValueError, gdy któraś nazwa nie jest
+    """Tworzy plan w bazie apki. Gdy zawodnik ma już plan o tej nazwie,
+    DOPISUJE do niego treningi (nowy tytuł = nowy trening; ten sam tytuł =
+    podmiana rozpiski, o ile zawodnik nic tam jeszcze nie odhaczył) — tak
+    Filip dokłada dzień A do planu, w którym jest już dzień C, bez
+    zakładania drugiego planu. Rzuca ValueError, gdy któraś nazwa nie jest
     rozstrzygnięta (pewność < prog) — najpierw popraw plik (`=> Nazwa` albo `!`)."""
     from . import exlib
     from .training import create_plan, new_id, upsert_plan
@@ -438,18 +507,37 @@ def zapisz_plan(dane: dict, prog: float = 0.999) -> dict:
     if niepewne:
         raise ValueError("nierozstrzygnięte nazwy: " + ", ".join(
             f"{it['tekst']!r} (linia {it['linia']})" for it in niepewne))
-    start = date.fromisoformat(p["start"]) if p["start"] else date.today()
-    plan = create_plan(p["athlete"], p["name"], start, int(p["weeks"] or 4),
-                       group=p.get("group", ""))
     import datetime as _dt
-    plan["created"] = _dt.datetime.now().isoformat(timespec="seconds")
-    plan["in_base"] = None
-    plan["sessions"] = []
-    for i, tr in enumerate(dane["treningi"]):
-        plan["sessions"].append({
-            "id": new_id(), "title": tr["title"] or f"Trening {chr(65 + i)}",
-            "items": zbuduj_items(tr["items"]), "done_date": "", "plan_date": ""})
-    upsert_plan(plan)
+    plan = istniejacy_plan(p["athlete"], p["name"])
+    if plan is not None:
+        from .training import ensure_sessions
+        sesje = ensure_sessions(plan)
+        for i, tr in enumerate(dane["treningi"]):
+            tytul = tr["title"] or f"Trening {chr(65 + len(sesje))}"
+            stara = next((s for s in sesje
+                          if (s.get("title") or "").strip().lower() == tytul.strip().lower()), None)
+            if stara is None:
+                sesje.append({"id": new_id(), "title": tytul, "items": zbuduj_items(tr["items"]),
+                              "done_date": "", "plan_date": ""})
+            elif _ma_wykonanie(stara.get("items")):
+                raise ValueError(f"trening „{tytul}” ma już wpisy zawodnika — "
+                                 "popraw go w edytorze, nie z dyktanda")
+            else:
+                stara["items"] = zbuduj_items(tr["items"])
+        plan["sessions"] = sesje
+        upsert_plan(plan)
+    else:
+        start = date.fromisoformat(p["start"]) if p["start"] else date.today()
+        plan = create_plan(p["athlete"], p["name"], start, int(p["weeks"] or 4),
+                           group=p.get("group", ""))
+        plan["created"] = _dt.datetime.now().isoformat(timespec="seconds")
+        plan["in_base"] = None
+        plan["sessions"] = []
+        for i, tr in enumerate(dane["treningi"]):
+            plan["sessions"].append({
+                "id": new_id(), "title": tr["title"] or f"Trening {chr(65 + i)}",
+                "items": zbuduj_items(tr["items"]), "done_date": "", "plan_date": ""})
+        upsert_plan(plan)
     # profil zawodnika — bez niego plan nie pokazuje się w Podopiecznych ani
     # w profilu, do którego zawodnik odklikuje treningi (2026-09-18:
     # plany z dyktanda były niewidoczne na liście podopiecznych)

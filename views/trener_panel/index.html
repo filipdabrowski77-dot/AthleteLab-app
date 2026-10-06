@@ -65,7 +65,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .sr.skip .btn-nie{background:#fdf3f2;border-color:#e5c3bd;color:#c0392b}
 .sr.skip .pole{opacity:.45}
 .akcje{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
-.akcja{min-height:44px;padding:0 14px;border:1px dashed #d8d5cc;border-radius:10px;background:transparent;font-size:14px;font-weight:600;color:#6f6b61}
+.akcja{min-height:44px;padding:0 12px;white-space:nowrap;border:1px dashed #d8d5cc;border-radius:10px;background:transparent;font-size:14px;font-weight:600;color:#6f6b61}
 .nota{display:block;width:100%;margin-top:8px;min-height:44px;border:1px solid #e3e0d8;border-radius:10px;background:#fdfdfb;font-size:16px;padding:10px 12px;resize:none;overflow:hidden;line-height:1.35;outline:none}
 .nota:focus{border-color:#e8c96a;box-shadow:0 0 0 2px #f6e8bd;background:#fff}
 .odrz{margin-top:8px;font-size:13px;font-weight:600;color:#a33b2c;background:#fdf3f2;border-radius:8px;padding:8px 10px}
@@ -699,7 +699,7 @@ function htmlKarta(k, sek, wZwinietej) {
     + (trener && n < MAX_SERII ? `<button type="button" class="akcja" data-act="plus" ${dk}>+ seria</button>` : "")
     + (trener && n > 1 ? `<button type="button" class="akcja" data-act="minus" ${dk}>${S.minusK === k ? "− usunąć?" : "− seria"}</button>` : "")
     + `<button type="button" class="akcja nota-btn${jestNota ? " jest" : ""}" data-act="notatka" ${dk}`
-    + ` aria-expanded="${nota}">✎ ${jestNota ? "Notatka" : "Dodaj notatkę"}</button>`
+    + ` aria-expanded="${nota}">✎ ${jestNota || trener ? "Notatka" : "Dodaj notatkę"}</button>`
     + (S.rola === "zawodnik" ? ""
       : `<button type="button" class="wiecej" data-act="wiecej" ${dk} aria-label="Zamień lub usuń ćwiczenie">⋯</button>`)
     + `</div>` + htmlEdycja(k)

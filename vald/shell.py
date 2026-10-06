@@ -281,6 +281,23 @@ def _share_base() -> str:
     return base
 
 
+def _share_qr(url: str) -> str:
+    """Kod QR linku jako data-URI (PNG) — zawodnik na sali skanuje telefonem
+    zamiast dostawać link na czacie. Bez biblioteki `qrcode` pusty string."""
+    try:
+        import base64
+        import io
+        import qrcode
+        q = qrcode.QRCode(border=1, box_size=4)
+        q.add_data(url)
+        q.make(fit=True)
+        buf = io.BytesIO()
+        q.make_image(fill_color="#0F1722", back_color="white").save(buf, format="PNG")
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return ""
+
+
 def _share_url(plan: dict) -> str:
     """Link dla zawodnika. W instancji gościa doklejam &ws=<przestrzeń>:
     apka zawodnika czyta domyślną przestrzeń i bez tego nie znajdowała planu
@@ -797,6 +814,7 @@ def build_data(screen: str) -> dict:
             "athlete": plan.get("athlete", ""), "status": _status(plan),
             "range": rng, "weeks": int(plan.get("weeks") or 4),
             "share_url": _share_url(plan), "workouts": workouts,
+            "share_qr": _share_qr(_share_url(plan)),
             "in_base": plan.get("in_base"),
             "skad": st.session_state.get("plan_skad") or "plans",
         }

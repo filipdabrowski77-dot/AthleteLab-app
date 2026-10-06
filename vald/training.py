@@ -73,6 +73,14 @@ def _klucz_itemu(it: dict, i: int) -> str:
     return f"{i}|{(it.get('exercise') or '').strip().lower()}"
 
 
+def _po_nazwie(sesja: dict, it: dict) -> dict:
+    """Wykonanie itemu po nazwie, gdy pozycja się przesunęła; {} gdy nazwa
+    nie jest jedyna albo jej nie ma."""
+    n = "|" + (it.get("exercise") or "").strip().lower()
+    traf = [k for k in sesja if k != "_sesja" and k.endswith(n)]
+    return sesja[traf[0]] if len(traf) == 1 else {}
+
+
 def _zbierz_wykonanie(data: dict) -> dict:
     """{plan_id: {sess_id: {"_sesja": {...}, klucz_itemu: {tydzień: {pola}}}}}"""
     out: dict = {}
@@ -105,10 +113,15 @@ def _scal_plany(swieze: dict, moje: dict) -> dict:
     """
     baza = getattr(_watek, "baza", {})
     swieze_w = _zbierz_wykonanie(swieze)
+    swieze_id = {p.get("id") for p in swieze.get("plans", [])}
     moje_id = {p.get("id") for p in moje.get("plans", [])}
     wynik = []
     for p in moje.get("plans", []):
         pid = p.get("id")
+        if pid in baza and pid not in swieze_id:
+            # był w moim odczycie, a w magazynie już go nie ma = ktoś usunął
+            # po moim odczycie; zapis z cache wskrzeszał plan (poza koszem)
+            continue
         s_plan, b_plan = swieze_w.get(pid, {}), baza.get(pid, {})
         for s_ in (p.get("sessions") or []):
             sid = s_.get("id") or ""
@@ -120,7 +133,11 @@ def _scal_plany(swieze: dict, moje: dict) -> dict:
                     s_[k] = sw
             for i, it in enumerate(s_.get("items") or []):
                 kl = _klucz_itemu(it, i)
-                s_it, b_it = s_sess.get(kl, {}), b_sess.get(kl, {})
+                # trener wstawił/usunął wiersz nad ćwiczeniem w oknie cache —
+                # klucz z indeksem nie trafia, a serie zawodnika ginęły;
+                # ta sama nazwa (jedyna w treningu) wystarcza (audyt 2026-10-06)
+                s_it = s_sess.get(kl) if kl in s_sess else _po_nazwie(s_sess, it)
+                b_it = b_sess.get(kl) if kl in b_sess else _po_nazwie(b_sess, it)
                 for wk, sw_pola in s_it.items():
                     par = (it.get("weeks") or {}).get(wk)
                     if par is None:
@@ -532,7 +549,11 @@ def zapisz_cwiczenie(plan: dict, sess_id: str, item_i: int, wk: int,
                         or done[-1].get("rpe") or done[-1]["stan"]):
         done.pop()
 
-    wlasny = str(wk) in item_weeks(it)
+    # „własny” = tydzień z własną ROZPISKĄ; sam wpis wykonania (zapisany
+    # niżej bez dawki) nie czyni tygodnia własnym — inaczej drugi zapis
+    # materializował odziedziczoną dawkę
+    _own = item_weeks(it).get(str(wk)) or {}
+    wlasny = any(str(v or "").strip() for k, v in _own.items() if k not in _EXEC_FIELDS)
     params = dict(week_params(it, wk))
     _ustaw_load(params, done)
     params["sets_done"] = done
@@ -543,6 +564,11 @@ def zapisz_cwiczenie(plan: dict, sess_id: str, item_i: int, wk: int,
             params.pop("session_note", None)
     if not wlasny and not any(params.get(k) for k in _EXEC_FIELDS):
         return True       # nic do zapisania — dziedziczenie rozpiski zostaje żywe
+    if not wlasny:
+        # tydzień bez własnej dawki: zapisuję SAMO wykonanie — kopia rozpiski
+        # z W1 zamrażała W2 (poprawka dawki w W1 nie schodziła niżej), a
+        # week_params umie złożyć „wykonanie + dawka z wcześniejszego tygodnia”
+        params = {k: v for k, v in params.items() if k in _EXEC_FIELDS}
     it["weeks"] = dict(item_weeks(it))
     it["weeks"][str(wk)] = params
     return True
@@ -721,6 +747,10 @@ def zamien_cwiczenie(plan: dict, sess_id: str, item_i: int, exercise: str,
     if j < 0:
         return False
     it = sess["items"][j]
+    if nazwa.strip().lower() != (it.get("exercise") or "").strip().lower():
+        # uwagi z planu („do przepalenia”) opisywały stare ćwiczenie — zawodnik
+        # widział je przy nowym (e2e 2026-10-06); notatka z sesji zostaje w weeks
+        it["note"] = ""
     it["exercise"] = nazwa
     if (dawka or "").strip():
         params = dict(week_params(it, wk))
@@ -1033,7 +1063,7 @@ def regenerate_share_token(plan: dict) -> str:
     osoby (ta sama nazwa i folder) też: po końcu bloku stary link przenosi
     na aktualny plan, więc bez tego „nowy link” nikogo nie odcinał (SEC-1)."""
     plan["share_token"] = uuid.uuid4().hex + uuid.uuid4().hex[:8]
-    upsert_plan(plan)
+    zmienione = [plan]
     for p in get_plans(plan.get("athlete", "")):
         # tylko ZAKOŃCZONE — tylko one przenoszą; link trwającego równolegle
         # planu (np. bieganie obok siłowni) zostaje (weryfikacja V5-04)
@@ -1042,7 +1072,8 @@ def regenerate_share_token(plan: dict) -> str:
                 and ten_sam_folder(p, plan) and end and end < date.today()
                 and (p.get("start_date") or "") <= (plan.get("start_date") or "")):
             p["share_token"] = uuid.uuid4().hex + uuid.uuid4().hex[:8]
-            upsert_plan(p)
+            zmienione.append(p)
+    upsert_plans(zmienione)
     return plan["share_token"]
 
 
