@@ -305,7 +305,9 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
         """Wiersze bloku + ich typy ('hdr' / 'tresc' / 'sep') + szerokości kolumn."""
         wiersze = b['w']
         if b.get('prosty'):
-            kol = [W * .30, W * .62, W * .08]
+            # 70 % szerokości, do lewej — pełna szerokość zostawiała pustkę
+            # między dawką a FILM (Filip 2026-10-10)
+            kol = [W * .30, W * .32, W * .08]
             dane = [[Paragraph('ĆWICZENIE', S.hdr_l), Paragraph('SERIE × POWTÓRZENIA', S.hdr_l),
                      Paragraph('FILM', S.hdr)]]
             typy = ['hdr']
@@ -337,8 +339,13 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
             i_tempo = len(kol) - 1
         reszta = 1 - sum(kol) / W - (.075 if ma_rest else 0) - .055
         n_t = max(1, int(getattr(S, 'n_tyg', 4)))
+        # kolumna tygodnia nie szersza niż przy 4 tygodniach — przy 1–2
+        # tygodniach rozciągała się na pół strony (Filip 2026-10-10); nadmiar
+        # idzie do UWAGI
+        szer_t = reszta / max(n_t, 4)
+        kol[2] += W * (reszta - szer_t * n_t)
         for i in range(1, n_t + 1):
-            kol.append(W * reszta / n_t)
+            kol.append(W * szer_t)
             # plan jednotygodniowy: bez „WEEK 1" — sama rozpiska
             gl.append(Paragraph('SERIE × POWTÓRZENIA' if n_t == 1
                                 else f'WEEK {i}', S.hdr))
@@ -383,7 +390,7 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
         return dane, typy, kol, len(kol) - 1, i_tempo
 
     def zloz(dane, typy, kol, wys=None, i_tempo=None):
-        t = Table(dane, colWidths=kol,
+        t = Table(dane, colWidths=kol, hAlign='LEFT',
                   rowHeights=[wys[y] for y in typy] if wys else None)
         sty = [('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                ('BACKGROUND', (0, 0), (-1, 0), JASNY),
@@ -431,7 +438,7 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
         lok['hdr'] = naglowek
 
     for b, (dane, typy, kol, _, i_tempo), wys in zip(d['bloki'], bloki, wys_blok):
-        tyt = Table([[Paragraph(b['t'], S.blok)]], colWidths=[W])
+        tyt = Table([[Paragraph(b['t'], S.blok)]], colWidths=[sum(kol)], hAlign='LEFT')
         tyt.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), CZERN), ('LEFTPADDING', (0, 0), (-1, -1), 8),
             ('TOPPADDING', (0, 0), (-1, -1), S.pad), ('BOTTOMPADDING', (0, 0), (-1, -1), S.pad)]))
