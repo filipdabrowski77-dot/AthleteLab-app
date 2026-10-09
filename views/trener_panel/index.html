@@ -121,6 +121,16 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .zakoncz{width:100%;min-height:52px;border:0;border-radius:999px;background:#1c1b18;color:#fff;font-size:16px;font-weight:700}
 .zakoncz[disabled]{opacity:.55}
 .film{display:inline-flex;align-items:center;min-height:36px;color:#2563eb;text-decoration:none;font-size:14px;font-weight:700;align-self:flex-start}
+/* link zawodnika (2026-10-10): tempo i film widać na liście; uwagi nadal po stuknięciu (Filip 03.10) */
+.mdet{font-size:12.5px;color:#8a867c;font-weight:500}
+.mfilm{flex:none;width:42px;height:42px;margin:-6px 0;border-radius:999px;background:#eef3fb;color:#2563eb;display:inline-flex;align-items:center;justify-content:center;font-size:15px;text-decoration:none}
+/* superseria (1a, 1b…) w jednej ramce z paskiem w kolorze sekcji, jak w PDF */
+.ss{border-left:3px solid var(--acc);padding-left:8px;margin-bottom:8px}
+.ss .mini:last-child,.ss .karta:last-child{margin-bottom:0}
+.postep{margin:2px 0 12px}
+.ptor{height:6px;background:#ebe9e2;border-radius:999px;overflow:hidden}
+.ptor i{display:block;height:100%;background:#3f9a50;border-radius:999px}
+.postep span{display:block;font-size:12px;font-weight:600;color:#8a867c;margin-top:5px}
 .uwznak{color:#2563eb;font-size:14px;font-weight:700}
 /* kółeczko = osobny przycisk: cel 44 px, widoczne koło 30 px */
 .mini button.fajka{position:relative;flex:none;width:44px;height:44px;min-width:44px;margin:-8px -6px -8px 0;padding:0;border:0;background:transparent;color:transparent;font-size:0;cursor:pointer}
@@ -147,7 +157,8 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .kdawka{font-size:15px;font-weight:600;color:#54514a;font-variant-numeric:tabular-nums}
 .kpola{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:6px}
 .kpola label{display:flex;flex-direction:column;gap:3px}
-.kpola label span{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#a09c92;text-align:center}
+/* tylko podpis nad polem — „label span” łapał też otoczkę pola kg (span.kgpole) i wpisany ciężar był szary jak podpowiedź (test linku 2026-10-09) */
+.kpola label>span:not(.kgpole){font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#a09c92;text-align:center}
 .kprzyciski{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .kok{min-height:56px;border:0;border-radius:999px;background:#1c1b18;color:#fff;font-size:18px;font-weight:700}
 .knie{min-height:44px;border:1px solid #e5c3bd;border-radius:999px;background:#fff;color:#a33b2c;font-size:14px;font-weight:700}
@@ -841,24 +852,32 @@ function htmlMini(k, sek) {
   // Filip 2026-09-30: stuknięcie w ćwiczenie otwiera jego panel (uwagi, film,
   // serie), kółeczko odhacza; ⓘ w wierszu mówi tylko, że są uwagi
   const karta = S.meta[k], n = ileWierszy(k), o = ileOk(k), dk = `data-k="${esc(k)}"`;
-  const stan = stanKarty(k), kl_ = stan ? " " + stan : "";
+  const stan = stanKarty(k), kl_ = stan ? " " + stan : "", zaw = S.rola === "zawodnik";
+  // zawodnik: film w wierszu (kółko ▶ obok ✓), tempo i uwagi pod dawką — wcześniej
+  // dopiero po stuknięciu w ćwiczenie (test linku 2026-10-09)
+  const film = zaw && karta.film ? `<a class="mfilm" href="${esc(karta.film)}" target="_blank" rel="noopener noreferrer"`
+    + ` aria-label="Film: ${esc(karta.exercise)}">▶</a>` : "";
   const tresc = `${htmlSlot(k, sek)}<span class="pvcol"><span class="pvname">${esc(karta.exercise)}`
     + (uwagiPlanu(karta) ? ` <span class="uwznak" aria-label="są uwagi">ⓘ</span>` : "")
     + (txt((S.stan[k] || {}).notatka) ? `<span class="notznak" aria-label="jest notatka">✎</span>` : "") + `</span>`
     + `<span class="mdose">${htmlDawka(karta)}</span>`
+    + (zaw && karta.det ? `<span class="mdet">${esc(karta.det)}</span>` : "")
     + (karta.ostatnio && !sek.zwinieta && S.rola !== "zawodnik" ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "")
     + (S.odrz[k] ? `<span class="odrzmini">${esc(S.odrz[k])}</span>` : "")
     + `</span><span class="kropka" data-kropka="${esc(k)}"></span>`;
   if (sek.zwinieta) {
     // Prep / Plyo: kółeczko = zrobione (wszystkie serie jednym stuknięciem)
     return `<div class="mini${kl_}"><button type="button" class="minibtn" data-act="otworz" ${dk}>`
-      + tresc + `</button><button type="button" class="fajka" data-act="odhacz_wiersz" ${dk}`
+      + tresc + `</button>${film}<button type="button" class="fajka" data-act="odhacz_wiersz" ${dk}`
       + ` aria-label="Zrobione" aria-pressed="${o === n}">✓</button></div>`;
   }
   // Main: plan widać od razu, serie po stuknięciu w ćwiczenie
-  return `<button type="button" class="mini${kl_}" data-act="otworz" ${dk}>` + tresc
-    // zawodnik: licznik dopiero po pierwszej serii (albo ✕) — „0/3 ✓” to szum
-    + (o || stan || S.rola !== "zawodnik" ? `<span class="licz${o === n ? " pelny" : kl_}">${o}/${n} ✓</span>` : "") + `</button>`;
+  // zawodnik: licznik dopiero po pierwszej serii (albo ✕) — „0/3 ✓” to szum
+  const licz = o || stan || S.rola !== "zawodnik" ? `<span class="licz${o === n ? " pelny" : kl_}">${o}/${n} ✓</span>` : "";
+  // z filmem: link obok przycisku (link w przycisku to zły HTML i stuknięcie w ▶ otwierało kartę)
+  if (film) return `<div class="mini${kl_}"><button type="button" class="minibtn" data-act="otworz" ${dk}>`
+    + tresc + licz + `</button>${film}</div>`;
+  return `<button type="button" class="mini${kl_}" data-act="otworz" ${dk}>` + tresc + licz + `</button>`;
 }
 function wszystkoZrobione(ks) {
   return ks.every(rozstrzygnieta) && ks.some((k) => ileOk(k) > 0);
@@ -889,6 +908,10 @@ function render() {
   let h = "";
   const gr = grupy();
   if (S.rola === "zawodnik" && S.ctx && S.karty.length && S.status.stan !== "Zapisany") {
+    // postęp: ile ćwiczeń już rozstrzygniętych (pasek dopiero po pierwszym)
+    const wsz = S.karty.map(kl), zr = wsz.filter(rozstrzygnieta).length;
+    if (zr) h += `<div class="postep"><div class="ptor"><i style="width:${Math.round(100 * zr / wsz.length)}%"></i></div>`
+      + `<span>${zr} z ${wsz.length} ćwiczeń</span></div>`;
     h += `<button type="button" class="start" data-act="start">▶ Zacznij trening</button>`;
   }
   const rozmiar = {};
@@ -902,11 +925,16 @@ function render() {
     h += htmlSekcja(sek, ks, zwinieta);
     // otwarta: stuknięta, albo w trakcie (część serii ✓) — po przeładowaniu
     // ramki i po zmianie rozpiski trener wraca do tego samego ćwiczenia
-    let poprz = "";
+    let poprz = "", wRamce = false;
     for (const k of ks) {
-      // wyraźny odstęp przed kolejnym blokiem superserii (1a 1b | 2a 2b)
+      // wyraźny odstęp przed kolejnym blokiem superserii (1a 1b | 2a 2b),
+      // a sama superseria w ramce z paskiem w kolorze sekcji
       const g = grupaK(S.meta[k]);
-      if (poprz && g !== poprz && (rozmiar[g] > 1 || rozmiar[poprz] > 1)) h += `<div class="odstep"></div>`;
+      if (g !== poprz) {
+        if (wRamce) { h += `</div>`; wRamce = false; }
+        if (poprz && (rozmiar[g] > 1 || rozmiar[poprz] > 1)) h += `<div class="odstep"></div>`;
+        if (rozmiar[g] > 1) { h += `<div class="ss" style="--acc:${esc(sek.acc)}">`; wRamce = true; }
+      }
       poprz = g;
       // decyzja „w trakcie → otwarta” raz, przy pierwszym narysowaniu — wpisy
       // drugiej strony (ping) otwierały i zamykały karty trenerowi (V3-03)
@@ -917,6 +945,7 @@ function render() {
       h += otw ? htmlKarta(k, sek, true) : htmlMini(k, sek);
       h += htmlEdCzeka((op) => op.typ !== "dodaj" && kartaOp(op) === k);
     }
+    if (wRamce) h += `</div>`;
     // „+ ćwiczenie" tylko w Main — Prep/Plyo zostają jedną listą (minimum tekstu)
     if (S.rola !== "zawodnik" && (!sek.zwinieta || S.dod[sek.key])) h += htmlDodaj(sek);
     h += htmlEdCzeka((op) => op.typ === "dodaj" && op.section === sek.key);

@@ -953,8 +953,13 @@ def item_has_content(it: dict) -> bool:
 
 
 def next_block_name(name: str) -> str:
-    """'GPP blok 2' → 'GPP blok 3'; bez liczby na końcu → dopisz ' 2'."""
+    """'GPP blok 2' → 'GPP blok 3'; 'Ola Mraz 1.0' → 'Ola Mraz 2.0' (system
+    wersji Filipa — dawało „1.1”, test linku 2026-10-09); bez liczby na
+    końcu → dopisz ' 2'."""
     import re as _re
+    w = _re.match(r"^(.*?)(\d+)\.\d+\s*$", name or "")
+    if w:
+        return f"{w.group(1)}{int(w.group(2)) + 1}.0"
     m = _re.match(r"^(.*?)(\d+)\s*$", name or "")
     if m:
         return f"{m.group(1)}{int(m.group(2)) + 1}"

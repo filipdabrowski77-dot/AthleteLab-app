@@ -718,6 +718,26 @@ def _pv_slot_label(it: dict, idx: int, section: str) -> str:
     return slot or str(idx + 1)
 
 
+def _pv_etykiety(w_sekcji: list, section: str) -> list:
+    """Treści kółek całej sekcji. Sekcja mieszana (część pozycji bez numeru,
+    część z 1a/1b — Plyo z dyktanda) numeruje się po kolei blokami: 1, 2, 3,
+    4a, 4b. Z osobna dawało „1, 2, 3” obok „1a, 1b” w jednej sekcji (test
+    linku 2026-10-09). Numer w Plyo i tak nie drukuje się w PDF."""
+    etyk = [_pv_slot_label(it, idx, section) for idx, (_, it) in enumerate(w_sekcji)]
+    sloty = [str(it.get("slot", "") or "").strip() for _, it in w_sekcji]
+    if _PV_SEKCJE.get(section, (0, 0, 0, False))[3] or all(sloty) or not any(sloty):
+        return etyk
+    out, nr, poprz = [], 0, None
+    for slot in sloty:
+        m = re.match(r"(\d+)(.*)", slot)
+        grupa = m.group(1) if m else None
+        if grupa is None or grupa != poprz:
+            nr += 1
+        poprz = grupa
+        out.append(f"{nr}{m.group(2)}" if m else str(nr))
+    return out
+
+
 def _pv_dawka(it: dict, wk: int) -> tuple[str, str]:
     """(dawka z ×, intent) dla tygodnia — przez week_params, więc dziedziczy."""
     p = week_params(it, wk)
@@ -966,6 +986,11 @@ def _render_plan_workout_body(plan: dict, sub: str,
             # zawodnik: samo „W1” (Filip 2026-09-30), trener z datą wykonania
             _d = _trk_data(_sel_s, t) if trener else ""
             lbl = f"W{t} · {_d}" if _d else (f"W{t}" if trener or prowadzony else f"Week {t}")
+            # zawodnik: ✓ przy tygodniu, w którym zrobił wszystkie treningi (2026-10-10)
+            if prowadzony and not trener and all(
+                    str(t) in (s_.get("done_weeks") or {}) for s_ in sessions if s_.get("items")) \
+                    and any(s_.get("items") for s_ in sessions):
+                lbl = f"W{t} ✓"
             if col.button(lbl, key=f"gymwk_{plan['id']}_{t}",
                           use_container_width=True) and t != wk:
                 st.session_state[wkk] = t
@@ -997,6 +1022,8 @@ def _render_plan_workout_body(plan: dict, sub: str,
             # z datą sama litera — „B · Nogi i plecy · 24.09” wychodziło
             # poza przycisk (audyt A2-10); pełny tytuł jest w nagłówku
             lbl = f"{_l} · {_d}" if _d else lbl[:16]
+            if prowadzony and not trener and str(wk) in (s.get("done_weeks") or {}):
+                lbl = f"{_l} ✓"          # zawodnik: trening zrobiony w tym tygodniu
             if col.button(lbl, key=f"gymt_{s['id']}",
                           use_container_width=True) and s["id"] != sel:
                 st.session_state[sk] = s["id"]
@@ -1582,6 +1609,7 @@ def _trk_dane(plan: dict, sess: dict, wk: int, plany=(), zawodnik: bool = False)
                        "acc": acc, "tint": tint, "zwinieta": sec in _TRK_ZWINIETE})
         w_sekcji = [(i, it) for i, it in enumerate(items)
                     if (it.get("section") or "Main") == sec]
+        etykiety = _pv_etykiety(w_sekcji, sec)
         for idx, (i, it) in enumerate(w_sekcji):
             p = week_params(it, wk)
             dawka, intent = _pv_dawka(it, wk)
@@ -1603,7 +1631,7 @@ def _trk_dane(plan: dict, sess: dict, wk: int, plany=(), zawodnik: bool = False)
                               "stan": stan_serii(s)})
             karty.append({
                 "i": i, "exercise": it.get("exercise", ""), "section": sec,
-                "slot": _pv_slot_label(it, idx, sec), "dawka": dawka,
+                "slot": etykiety[idx], "dawka": dawka,
                 "intent": intent, "det": det, "n_plan": n_plan,
                 "reps_plan": reps_plan, "reps_hint": reps_hint,
                 "ostatnio": ostatnio, "kg_hint": kg_hint, "serie": serie,

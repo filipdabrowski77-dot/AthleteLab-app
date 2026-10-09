@@ -561,6 +561,8 @@ const READY = () => parent.postMessage({isStreamlitMessage:true,type:"streamlit:
 const SETH  = h => parent.postMessage({isStreamlitMessage:true,type:"streamlit:setFrameHeight",height:h},"*");
 
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// „Trening A” z dyktanda dawało „Trening Trening A” — przedrostek tylko przy samej literze/nazwie bez niego
+const trNazwa = t => /^trening\b/i.test(String(t||"").trim()) ? String(t).trim() : "Trening " + String(t||"").trim();
 
 /* kolory kategorii i statusów — muszą zgadzać się z sekcjami panelu treningowego */
 const CAT = {
@@ -697,7 +699,7 @@ function screenStart(){
   const powiad = pow.length
     ? pow.map(n=>`<button class="nrow" data-act="open_wykonanie" data-name="${esc(n.athlete)}">
         <span class="d">${esc(n.date)}</span><span class="t"><b>${esc(n.athlete)}</b>
-        <s>Wykonany trening ${esc(n.trening)} · W${esc(n.week)} · ${esc(n.plan)}</s></span></button>`).join("")
+        <s>Wykonany ${esc(trNazwa(n.trening).replace(/^Trening/i,"trening"))} · W${esc(n.week)} · ${esc(n.plan)}</s></span></button>`).join("")
     : `<div class="empty">Nic nowego.</div>`;
 
   const recent = D.recent.map(r=>`<button class="rrow" data-act="open_plan" data-id="${esc(r.id)}">
@@ -1323,7 +1325,7 @@ function screenAthlete(){
     const kt = `${w.plan_id}|${w.trening}|${w.week}`, otw = wOtw(kt, true);
     return `<div class="wtr">
       <button class="wtrh" data-act="wotw" data-k="${esc(kt)}" aria-expanded="${otw}">
-        <b>${esc(w.date)} · Trening ${esc(w.trening)}</b><span class="ilez">tydz. ${w.week}</span><s>${otw?"▾":"▸"}</s></button>
+        <b>${esc(w.date)} · ${esc(trNazwa(w.trening))}</b><span class="ilez">tydz. ${w.week}</span><s>${otw?"▾":"▸"}</s></button>
       <p class="podpis"><span>${esc(w.plan)} · ${w.zrobione} ${ile(w.zrobione,"seria","serie","serii")}
         ${w.pominiete?` · ${w.pominiete} ${ile(w.pominiete,"pominięta","pominięte","pominiętych")}`:""}
         · ${esc(w.status)}</span><button class="wplan" data-act="open_plan" data-id="${esc(w.plan_id)}">Otwórz plan →</button></p>
