@@ -303,6 +303,7 @@ const S = {
   arkusz: null, arkuszSyg: "",   // okienko „Ostatnie treningi” (link zawodnika)
   offline: false,  // Streamlit zgłasza zerwane połączenie (disabled)
   pewnyKoniec: false, legenda: false,
+  wysylka: false,  // link zawodnika: zawodnik kazał wysłać („Wyślij” przy poprawkach)
   zalatwione: new Set(),   // id potwierdzone albo odrzucone — nie wracają z localStorage
 };
 const root = document.getElementById("root");
@@ -597,10 +598,18 @@ function splucz() {
   for (const k of Object.keys(S.brudne)) if (S.brudne[k]) { kolejkuj(k); jest = true; }
   return jest;
 }
+// link zawodnika: wpisy zostają w telefonie (kolejka + localStorage), na serwer
+// idzie cały trening dopiero po „Zakończ trening” albo „Wyślij” — każda
+// wysyłka to przebieg Streamlita i zapis całej bazy planów, telefon zawieszał
+// się przy każdej serii (Filip 2026-10-09: „zapisywać dopiero po skończeniu”)
+const wstrzymane = () => S.rola === "zawodnik" && !S.wysylka
+  && !Object.values(S.kolejka).some((op) => op.typ === "koniec");
 function SEND() {
   clearTimeout(S.tWys);
   const ops = Object.values(S.kolejka);
   if (!ops.length || !S.gotowy) return;
+  // wstrzymane: nic nie leci, ale „Wyślij” / „Wyślij poprawki” ma się pojawić od razu
+  if (wstrzymane()) { aktualizujPasek(); renderStopka(); return; }
   S.ostWys = Date.now();
   POST({ type: "streamlit:setComponentValue",
     value: { seq: nowyId(), iid: IID, ops }, dataType: "json" });
@@ -1156,8 +1165,10 @@ function renderStopka() {
   let h;
   if (czeka) h = `<button type="button" class="zakoncz" disabled>${S.offline ? "W telefonie — wyślę po powrocie zasięgu" : "Zapisuję…"}</button>`;
   else if (S.status.stan === "Zapisany") {
-    h = `<div class="zapisany">✓ Zapisany${S.status.data ? " " + esc(S.status.data) : ""}</div>`
-      ;
+    h = `<div class="zapisany">✓ Zapisany${S.status.data ? " " + esc(S.status.data) : ""}</div>`;
+    // zawodnik poprawił wpis po zapisie — poprawka też czeka w telefonie
+    if (wstrzymane() && Object.values(S.kolejka).some((op) => ctxKlucz(op) === ctxKlucz(S.ctx)))
+      h += `<button type="button" class="zakoncz" data-act="wyslij">Wyślij poprawki</button>`;
   } else h = `<button type="button" class="zakoncz${S.pewnyKoniec ? " pewny" : ""}" data-act="koniec">`
     + (S.pewnyKoniec ? koniecPytanie() : "Zakończ trening") + `</button>`;
   if (S.odrzKoniec) h += `<div class="odrz">${esc(S.odrzKoniec)}</div>`;
@@ -1168,7 +1179,7 @@ function renderStopka() {
       + `<span>Szare liczby to podpowiedź — wpisz swoje albo stuknij ✓</span>`
       + `<span><b>RPE 8</b> = zostają 2 powtórzenia w zapasie</span>`
       + `<span><b>1a, 1b</b> = superseria, robisz na zmianę</span>`
-      + `<span>Wpisy zapisują się same, także bez zasięgu</span></div>`;
+      + `<span>Wpisy zostają w telefonie — trener dostaje trening po „Zakończ trening”</span></div>`;
   }
   el.innerHTML = h;
 }
@@ -1187,7 +1198,7 @@ function aktualizujKropki() {
   root.querySelectorAll("[data-kropka]").forEach((el) => {
     const k = el.dataset.kropka;
     let t = "", c = "kropka";
-    if (S.kolejka["c|" + k]) t = S.offline ? "w telefonie" : "zapisuję…";
+    if (S.kolejka["c|" + k]) t = wstrzymane() ? "" : (S.offline ? "w telefonie" : "zapisuję…");
     else if (teraz - (S.zapisane[k] || 0) < ZAPISANE_MS) { t = "✓ zapisane"; c = "kropka ok"; }
     if (el.textContent !== t) el.textContent = t;
     el.className = c;
@@ -1198,6 +1209,16 @@ function aktualizujPasek() {
   const ops = Object.values(S.kolejka), n = ops.length;
   const dawno = ops.some((op) => Date.now() - (+op.t || 0) >= PASEK_MS);
   let h = "", c = "pasek";
+  if (wstrzymane()) {
+    // bieżący, niezakończony trening wysyła „Zakończ trening” na dole — pasek
+    // tylko dla wpisów z innego treningu albo poprawek po zapisie
+    const inne = ops.filter((op) => ctxKlucz(op) !== ctxKlucz(S.ctx) || S.status.stan === "Zapisany");
+    if (inne.length) h = `<span>${esc(wpisy(inne.length))}</span><button type="button" data-act="wyslij">Wyślij</button>`;
+    if (el.innerHTML !== h) el.innerHTML = h;
+    el.className = c;
+    el.hidden = !h;
+    return;
+  }
   if (S.offline && edycjaCzeka()) h = `<span>Brak zasięgu — zmiana planu czeka</span>`
     + `<button type="button" data-act="ed_anuluj">Anuluj zmianę</button>`;
   else if (S.offline) h = `<span>Brak zasięgu — wpisy czekają w telefonie${n ? ` (${n})` : ""}</span>`;
@@ -1307,6 +1328,7 @@ function przyjmij(a) {
   }
   S.blad = txt(a.blad);
   if (zmiana) zapiszLS();
+  if (!oczekujace()) S.wysylka = false;   // wysłane — kolejne wpisy znów czekają w telefonie
   return przerysuj;
 }
 // po zmianie rozpiski indeksy ćwiczeń się przesuwają — stan lokalny tego
@@ -1360,7 +1382,7 @@ window.addEventListener("message", (ev) => {
       S.ostWys = Date.now();
       S.czekaWybor = ctxKlucz(wybor); S.czekaWyborT = Date.now();
       POST({ type: "streamlit:setComponentValue", dataType: "json",
-        value: { seq: nowyId(), iid: IID, ops: Object.values(S.kolejka), wybor } });
+        value: { seq: nowyId(), iid: IID, ops: wstrzymane() ? [] : Object.values(S.kolejka), wybor } });
     } else if (oczekujace()) SEND();
   }
   // po przeładowaniu pierwszy render ma domyślny trening, robiony przychodzi
@@ -1640,6 +1662,13 @@ root.addEventListener("click", (e) => {
       splucz();
       SEND();
       break;
+    case "wyslij":
+      splucz();
+      S.wysylka = true;
+      SEND();
+      aktualizujPasek();
+      renderStopka();
+      break;
     case "ed_anuluj":
       // bez zasięgu zmiana rozpiski blokowała całą listę i nie dało się
       // jej odwołać (TEL-1); wpisy serii zostają w kolejce
@@ -1787,7 +1816,7 @@ window.addEventListener("blur", () => { if (splucz() || oczekujace()) SEND(); })
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") { if (splucz() || oczekujace()) SEND(); }
   else if (oczekujace()) SEND();
-  else { S.ostWys = 0; ping(); }     // telefon odblokowany — świeże dane
+  else { S.ostWys = 0; ping(true); }     // telefon odblokowany — świeże dane
 });
 window.addEventListener("pagehide", () => { splucz(); });
 window.addEventListener("online", () => { if (oczekujace()) SEND(); });
@@ -1809,7 +1838,11 @@ try {
   }
 } catch (e) {}
 const ostDotyk = () => { try { return +parent.__aphDotyk || 0; } catch (e) { return 0; } };
-function ping() {
+function ping(odblokowany) {
+  // zawodnik: bez odświeżania co 20 s (przebieg Streamlita i pobranie całej bazy
+  // planów — zawieszało telefon) i nigdy w trakcie treningu; świeże dane przy
+  // otwarciu linku i po odblokowaniu telefonu poza treningiem
+  if (S.rola === "zawodnik" && (!odblokowany || S.tr)) return;
   if (!S.gotowy || S.offline || oczekujace() || wPolu() || S.wcisniety
       || Date.now() - ostDotyk() < 3000
       || document.visibilityState !== "visible" || Date.now() - S.ostWys < PING_MS - 1000) return;
