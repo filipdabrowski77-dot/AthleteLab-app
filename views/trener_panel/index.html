@@ -30,7 +30,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .pvdose{font-size:15px;font-weight:700;color:#1c1b18;font-variant-numeric:tabular-nums}
 .pvintent{white-space:nowrap;display:inline-block;font-size:12px;font-weight:600;color:oklch(.5 .13 60);background:oklch(.96 .04 75);border-radius:6px;padding:2px 8px;vertical-align:1px;margin-left:2px}
 .pvcol{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
-.pvsec{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:16px 0 8px}
+.pvsec{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:22px 0 10px}
 .pvsec i{display:inline-block;width:4px;height:15px;border-radius:2px;flex-shrink:0}
 .sektyt,.sekbtn{display:inline-flex;align-items:center;gap:8px;min-height:44px}
 .sekbtn{border:0;background:transparent;padding:0 8px 0 0;font:inherit;color:inherit;letter-spacing:inherit;text-transform:inherit}
@@ -85,7 +85,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .dodajcw{width:100%;min-height:44px;margin:0 0 10px;border:1px dashed #d8d5cc;border-radius:12px;background:transparent;font-size:14px;font-weight:600;color:#6f6b61}
 
 /* zwinięta sekcja (Prep, Plyo): jeden wiersz na ćwiczenie */
-.mini{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;background:#fff;border:1px solid #ebe9e2;border-radius:14px;padding:9px 12px;margin:0 0 8px;text-align:left;overflow:hidden}
+.mini{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;background:#fff;border:1px solid #ebe9e2;border-radius:14px;padding:10px 12px;margin:0 0 10px;text-align:left;overflow:hidden}
 /* stan ćwiczenia na liście (Filip 2026-10-01): zielony = wszystkie serie,
    pomarańcz = część, czerwony = nic nie zrobione, same ✕ */
 .mini.zrobione{background:#f1f8ee;border-color:#cfe3c6}
@@ -733,7 +733,9 @@ function htmlKarta(k, sek, wZwinietej) {
 // ćwiczenia (Filip 2026-09-30: „tydzień pierwszy ile, tydzień drugi ile”)
 function htmlOstatnio(k) {
   const karta = S.meta[k], hist = karta.historia || [], dk = `data-k="${esc(k)}"`;
-  if (S.rola === "zawodnik") return "";     // zawodnik: ikonka wykresu (htmlHistIkona)
+  // zawodnik: sama linia „Ostatnio …” w otwartej karcie (Filip 2026-10-10: „żeby
+  // zobrazować, ile zrobiłeś”), pełna historia pod ikonką wykresu (htmlHistIkona)
+  if (S.rola === "zawodnik") return karta.ostatnio ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "";
   if (!hist.length) return karta.ostatnio ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "";
   const otw = !!S.histOtw[k];
   const tyt = karta.ostatnio ? `Ostatnio ${esc(karta.ostatnio)}` : "Historia";
