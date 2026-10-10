@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F6F8FB">
+<meta name="robots" content="noindex, nofollow">
+<link rel="apple-touch-icon" href="/aph-trener-180.png">
+<title>Twój plan — AthleteLab</title>
+<style>
+/* Strona zawodnika poza Streamlitem: nagłówek, tygodnie i treningi rysuje ta
+   strona; listę ćwiczeń z seriami — komponent panel.html w ramce (ten sam, co
+   w apce). Wygląd 1:1 z widokiem zawodnika w apce (_PV_CSS, config.toml). */
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&display=swap');
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#F6F8FB;color:#1c1b18;
+  font-family:'Archivo',-apple-system,"Segoe UI",system-ui,sans-serif;
+  -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:manipulation}
+#app{max-width:640px;margin:0 auto;padding:12px 14px 64px;
+  padding-left:max(14px,env(safe-area-inset-left));padding-right:max(14px,env(safe-area-inset-right))}
+.baner{border-radius:12px;padding:16px 16px;font-size:16px;line-height:1.4;margin:0 0 14px}
+.baner.info{background:#dbe8fb;color:#1d4ed8}
+.baner.uwaga{background:#fdf1d6;color:#8a5a08}
+.baner.blad{background:#fdf3f2;color:#a33b2c;display:flex;flex-direction:column;gap:10px}
+.baner.blad button{align-self:flex-start;min-height:44px;padding:0 16px;border-radius:999px;
+  border:1px solid currentColor;background:#fff;font-weight:700;font-size:14px}
+.pills{display:grid;gap:8px;margin:0 0 12px}
+.pill{min-height:44px;padding:6px 8px;border-radius:999px;border:1px solid #e6e3db;background:#fff;
+  color:#6f6b61;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill.akt{background:#1c1b18;border-color:#1c1b18;color:#fff}
+.pvhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:6px 0 2px}
+.pvtitle{font-size:21px;font-weight:800;line-height:1.15}
+.pvsub{font-size:13px;color:#8a867c;margin-top:2px}
+.pvbadge{font-size:12px;font-weight:600;color:#6f6b61;background:#f2f1ec;border-radius:999px;
+  padding:5px 13px;white-space:nowrap}
+#panel{display:block;width:100%;border:0;height:320px;margin-top:6px;background:transparent}
+.zamek{max-width:420px;margin:80px auto;text-align:center;color:#6f6b61}
+.zamek .ico{font-size:40px}
+.zamek .tyt{font-size:17px;font-weight:700;color:#1c1b18;margin:8px 0 4px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="baner" hidden></div>
+  <div id="tyg" class="pills" hidden></div>
+  <div id="tren" class="pills" hidden></div>
+  <div id="glowa" class="pvhead" hidden>
+    <div><div class="pvtitle" id="tyt"></div><div class="pvsub" id="sub"></div></div>
+    <span class="pvbadge" id="badge"></span>
+  </div>
+  <div id="zamek" class="zamek" hidden></div>
+  <iframe id="panel" src="panel.html" scrolling="no" title="Trening"></iframe>
+</div>
+<script>
+(() => {
+  const Q = new URLSearchParams(location.search);
+  const TOKEN = (Q.get("plan") || "").trim();
+  const WS = (Q.get("ws") || "").trim();
+  const $ = (id) => document.getElementById(id);
+  const frame = $("panel");
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const S = { d: null, sid: null, wk: null, gotowy: false, wynik: null, offline: false, blad: "" };
+  const api = (n) => `/api/${n}?plan=${encodeURIComponent(TOKEN)}` + (WS ? `&ws=${encodeURIComponent(WS)}` : "");
+
+  // ── wybór tygodnia i treningu: jak _render_plan_workout_body w apce ──
+  function domyslny() {
+    const d = S.d, n = d.plan.tygodnie;
+    if (!(S.wk >= 1 && S.wk <= n)) S.wk = d.biezacy_tydzien;
+    const ids = d.treningi.map((t) => t.id);
+    if (!ids.includes(S.sid)) {
+      const w = String(S.wk);
+      const otw = d.treningi.filter((t) => t.ma_cw && !t.done.includes(w));
+      const zacz = otw.find((t) => t.started.includes(w));
+      S.sid = (zacz || otw[0] || d.treningi[0] || {}).id || null;
+    }
+  }
+  function ustawWybor(w) {
+    const d = S.d;
+    if (!d || !w || w.plan_id !== d.plan.id) return;
+    const wk = parseInt(w.wk, 10);
+    if (d.treningi.some((t) => t.id === w.sess_id) && wk >= 1 && wk <= d.plan.tygodnie) {
+      S.sid = w.sess_id; S.wk = wk;
+    }
+  }
+
+  // ── sieć ──
+  async function pobierz() {
+    const r = await fetch(api("plan"), { cache: "no-store" });
+    if (r.status === 404) { S.d = null; S.blad = "nieaktywny"; S.offline = false; return; }
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    S.d = await r.json(); S.blad = ""; S.offline = false;
+    domyslny();
+  }
+  async function wyslij(ops) {
+    const r = await fetch(api("zapisz"), { method: "POST", cache: "no-store",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ops }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 404) { S.d = null; S.blad = "nieaktywny"; S.offline = false; return; }
+    if (!r.ok) {                                 // magazyn padł: pasek z powodem, telefon ponowi
+      S.wynik = { ack: [], odrzucone: [], blad: j.blad || ("Błąd " + r.status) };
+      S.offline = false; return;
+    }
+    S.wynik = { ack: j.ack || [], odrzucone: j.odrzucone || [], blad: j.blad || "" };
+    if (j.dane) { S.d = j; S.blad = ""; domyslny(); }
+    S.offline = false;
+  }
+
+  // ── rysowanie ──
+  function pill(txt, akt, act, val) {
+    return `<button type="button" class="pill${akt ? " akt" : ""}" data-act="${act}" data-v="${esc(val)}">${esc(txt)}</button>`;
+  }
+  function rysuj() {
+    const d = S.d;
+    const ban = $("baner"), zam = $("zamek");
+    ban.hidden = true; zam.hidden = true;
+    if (!d) {
+      $("tyg").hidden = $("tren").hidden = $("glowa").hidden = true;
+      if (!TOKEN || S.blad === "nieaktywny") {
+        zam.hidden = false;
+        zam.innerHTML = `<div class="ico">🔒</div><div class="tyt">${!TOKEN ? "Brak dostępu" : "Ten link jest nieaktywny"}</div>`
+          + (!TOKEN ? "Otwórz link do planu, który dostałeś od trenera." : "Poproś trenera o nowy link do planu.");
+        frame.hidden = !!TOKEN === false;
+      } else if (S.blad) {
+        ban.hidden = false; ban.className = "baner blad";
+        ban.innerHTML = `<span>Nie mogę teraz wczytać planu. Wpisy czekają w telefonie.</span>`
+          + `<button type="button" data-act="ponow">Spróbuj ponownie</button>`;
+      }
+      wyslijRender();
+      return;
+    }
+    if (d.baner && d.baner.tekst) {
+      ban.hidden = false; ban.className = "baner " + (d.baner.rodzaj || "info");
+      ban.textContent = d.baner.tekst;
+    }
+    const n = d.plan.tygodnie, w = String(S.wk);
+    const zCw = d.treningi.filter((t) => t.ma_cw);
+    let h = "";
+    for (let t = 1; t <= n; t++) {
+      const wsz = zCw.length && zCw.every((x) => x.done.includes(String(t)));
+      h += pill(`W${t}` + (wsz ? " ✓" : ""), t === S.wk, "wk", t);
+    }
+    const tyg = $("tyg");
+    tyg.hidden = false; tyg.innerHTML = h;
+    tyg.style.gridTemplateColumns = `repeat(${Math.min(n, 4)},minmax(0,1fr))`;
+    const tren = $("tren");
+    if (d.treningi.length > 1) {
+      tren.hidden = false;
+      tren.innerHTML = d.treningi.map((t) => pill(t.litera + (t.done.includes(w) ? " ✓" : ""), t.id === S.sid, "sid", t.id)).join("");
+      tren.style.gridTemplateColumns = `repeat(${Math.min(d.treningi.length, 5)},minmax(0,1fr))`;
+    } else tren.hidden = true;
+    const k = d.dane[`${S.sid}|${S.wk}`];
+    if (k) {
+      $("glowa").hidden = false;
+      $("tyt").textContent = (k.status || {}).tytul || "";
+      $("sub").textContent = d.plan.nazwa || "";
+      $("badge").textContent = ((k.status || {}).stan || "") + ((k.status || {}).data ? " " + k.status.data : "");
+    } else $("glowa").hidden = true;
+    wyslijRender();
+  }
+  // host Streamlita dla komponentu: args jak _render_zawodnik_panel + ack z ostatniego zapisu
+  function wyslijRender() {
+    if (!S.gotowy || !frame.contentWindow) return;
+    const d = S.d, k = d && d.dane[`${S.sid}|${S.wk}`];
+    const args = Object.assign(
+      k ? Object.assign({}, k) : { ctx: null, sekcje: [], karty: [], status: {} },
+      { rola: "zawodnik", ack: [], odrzucone: [], blad: "" },
+      d ? { kolejka: d.kolejka } : {}, S.wynik || {});
+    S.wynik = null;
+    frame.contentWindow.postMessage({ type: "streamlit:render", args, disabled: S.offline }, "*");
+  }
+
+  // ── zdarzenia ──
+  document.addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-act]");
+    if (!b) return;
+    if (b.dataset.act === "wk") { S.wk = +b.dataset.v; domyslny(); rysuj(); }
+    else if (b.dataset.act === "sid") { S.sid = b.dataset.v; rysuj(); }
+    else if (b.dataset.act === "ponow") start();
+  });
+  let kolejkaOps = Promise.resolve();
+  async function obsluz(v) {
+    if (v.wybor) ustawWybor(v.wybor);
+    const ops = Array.isArray(v.ops) ? v.ops : [];
+    try {
+      if (ops.length) await wyslij(ops); else await pobierz();
+    } catch (e) { S.offline = true; }
+    rysuj();
+  }
+  window.addEventListener("message", (ev) => {
+    if (ev.source !== frame.contentWindow) return;
+    const m = ev.data || {};
+    if (!m.isStreamlitMessage) return;
+    if (m.type === "streamlit:componentReady") { S.gotowy = true; rysuj(); }
+    else if (m.type === "streamlit:setFrameHeight") frame.style.height = Math.max(0, +m.height || 0) + "px";
+    else if (m.type === "streamlit:setComponentValue") kolejkaOps = kolejkaOps.then(() => obsluz(m.value || {}));
+  });
+  async function start() {
+    if (!TOKEN) { rysuj(); return; }
+    try { await pobierz(); } catch (e) { S.blad = "siec"; S.offline = true; }
+    rysuj();
+  }
+  start();
+})();
+</script>
+</body>
+</html>
