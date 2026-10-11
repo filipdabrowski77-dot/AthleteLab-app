@@ -51,7 +51,9 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
     <span class="pvbadge" id="badge"></span>
   </div>
   <div id="zamek" class="zamek" hidden></div>
-  <iframe id="panel" src="panel.html" scrolling="no" title="Trening"></iframe>
+  <!-- src dopiero w skrypcie, po podpięciu nasłuchu: ramka z pamięci przeglądarki
+       potrafiła wysłać „componentReady” przed nim i trening się nie rysował -->
+  <iframe id="panel" scrolling="no" title="Trening"></iframe>
 </div>
 <script>
 (() => {
@@ -197,6 +199,7 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
     else if (m.type === "streamlit:setFrameHeight") frame.style.height = Math.max(0, +m.height || 0) + "px";
     else if (m.type === "streamlit:setComponentValue") kolejkaOps = kolejkaOps.then(() => obsluz(m.value || {}));
   });
+  frame.src = "panel.html";
   async function start() {
     if (!TOKEN) { rysuj(); return; }
     try { await pobierz(); } catch (e) { S.blad = "siec"; S.offline = true; }

@@ -324,7 +324,7 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
                 dane.append([Paragraph(x['cw'], S.cw), Paragraph(x.get('uw', ''), S.uw),
                              film(x['cw'], x.get('link'))])
                 typy.append('tresc')
-            return dane, typy, kol, 2, None
+            return dane, typy, kol, [], None
 
         # Obecność kolumn TEMPO/REST liczona dla całego dnia, nie bloku —
         # inaczej tygodnie rozjeżdżają się między blokami na tej samej stronie.
@@ -333,10 +333,17 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
         kol = [W * .035, W * szer_cw, W * szer_uw]
         gl = [Paragraph('#', S.hdr), Paragraph('ĆWICZENIE', S.hdr_l), Paragraph('UWAGI', S.hdr_l)]
         i_tempo = None
+        # kolumna TEMPO zostaje na całym dniu (wyrównanie), ale blok bez tempa
+        # (Plyo) nie pokazuje pustej kolumny — UWAGI zajmują jej miejsce
+        # (Filip 2026-09-27: tempo tylko w Main Strength)
+        tempo_tu = ma_tempo and any(x.get('tempo') for x in wiersze)
+        spans = []
         if ma_tempo:
             kol.append(W * .095)
-            gl.append(Paragraph('TEMPO', S.hdr_l))
+            gl.append(Paragraph('TEMPO' if tempo_tu else '', S.hdr_l))
             i_tempo = len(kol) - 1
+            if not tempo_tu:
+                spans.append(((2, 0), (i_tempo, 0)))
         reszta = 1 - sum(kol) / W - (.075 if ma_rest else 0) - .055
         n_t = max(1, int(getattr(S, 'n_tyg', 4)))
         # kolumna tygodnia nie szersza niż przy 4 tygodniach — przy 1–2
@@ -375,8 +382,14 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
             r = [Paragraph(x.get('nr', ''), S.nr), Paragraph(x['cw'], S.cw),
                  Paragraph(x.get('uw', ''), S.uw)]
             if ma_tempo:
-                r.append(Paragraph(x.get('tempo', ''), S.uw))
+                if tempo_tu:
+                    r.append(Paragraph(x.get('tempo', ''), S.uw))
+                else:
+                    r.append('')
+                    spans.append(((2, len(dane)), (i_tempo, len(dane))))
             _tyg = list(x['tyg'])[:n_t] + [''] * max(0, n_t - len(x['tyg']))
+            # dawka w KAŻDYM tygodniu, także identyczna (Filip 2026-10-11:
+            # „week to week rozpisujesz te serie i powtórzenia, a nie dajesz jedną”)
             r += [Paragraph(t, S.srodek) for t in _tyg]
             if ma_rest:
                 # sama liczba w REST to sekundy — dopisujemy jednostkę
@@ -387,12 +400,13 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
             r.append(film(x['cw'], x.get('link')))
             dane.append(r)
             typy.append('tresc')
-        return dane, typy, kol, len(kol) - 1, i_tempo
+        return dane, typy, kol, spans, (i_tempo if tempo_tu else None)
 
-    def zloz(dane, typy, kol, wys=None, i_tempo=None):
+    def zloz(dane, typy, kol, wys=None, i_tempo=None, spans=()):
         t = Table(dane, colWidths=kol, hAlign='LEFT',
                   rowHeights=[wys[y] for y in typy] if wys else None)
-        sty = [('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        sty = [('SPAN', a, b) for a, b in spans]
+        sty += [('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                ('BACKGROUND', (0, 0), (-1, 0), JASNY),
                ('LINEBELOW', (0, 0), (-1, 0), 1.1, ZIELEN_JASNA),
                ('TOPPADDING', (0, 0), (-1, -1), S.pad),
@@ -421,8 +435,8 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
     bloki = [zawartosc(b) for b in d['bloki']]
     zmierzone = {'hdr': 0.0, 'tresc': 0.0, 'sep': 7.0 * S.s}
     wys_blok = []
-    for dane, typy, kol, _, i_tempo in bloki:
-        proba = zloz(dane, typy, kol, i_tempo=i_tempo)
+    for dane, typy, kol, spans, i_tempo in bloki:
+        proba = zloz(dane, typy, kol, i_tempo=i_tempo, spans=spans)
         proba.wrap(W, 10000)
         lok = {'hdr': 0.0, 'tresc': 0.0, 'sep': 7.0 * S.s}
         for y, h in zip(typy, proba._rowHeights):
@@ -437,12 +451,12 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
     for lok in wys_blok:
         lok['hdr'] = naglowek
 
-    for b, (dane, typy, kol, _, i_tempo), wys in zip(d['bloki'], bloki, wys_blok):
+    for b, (dane, typy, kol, spans, i_tempo), wys in zip(d['bloki'], bloki, wys_blok):
         tyt = Table([[Paragraph(b['t'], S.blok)]], colWidths=[sum(kol)], hAlign='LEFT')
         tyt.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, -1), CZERN), ('LEFTPADDING', (0, 0), (-1, -1), 8),
             ('TOPPADDING', (0, 0), (-1, -1), S.pad), ('BOTTOMPADDING', (0, 0), (-1, -1), S.pad)]))
-        el += [tyt, zloz(dane, typy, kol, wys, i_tempo), Spacer(1, S.przerwa)]
+        el += [tyt, zloz(dane, typy, kol, wys, i_tempo, spans), Spacer(1, S.przerwa)]
 
     return el[:-1], zmierzone  # bez ostatniego odstępu
 
