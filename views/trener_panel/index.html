@@ -55,6 +55,18 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .sh{font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#a09c92;padding:0 0 4px}
 .sh span{text-align:center}
 .sr{margin-bottom:6px}
+/* Filip 2026-10-14: ciężar osobno prawa (pomarańcz) / lewa (niebieski) — dwie kolumny kg w tym samym wierszu */
+.strony .sh,.strony .sr{grid-template-columns:18px minmax(0,1fr) minmax(0,1fr) minmax(0,.85fr) minmax(0,.7fr) 40px 40px;gap:5px}
+.sh .hp,.krok .kpola label>span.hp{color:#c9741f}
+.sh .hl,.krok .kpola label>span.hl{color:#2f62c9}
+.pole.pp{border-color:#f0cfa6;background:#fff8f0}
+.pole.pl{border-color:#bcd0f7;background:#f3f7ff}
+.sr.ok .pole.pp{border-color:#e3b483;background:#fff8f0}
+.sr.ok .pole.pl{border-color:#9fb9ec;background:#f3f7ff}
+.nwpis{display:block;width:100%;height:44px;margin-top:6px;border:1px dashed #cfccc3;border-radius:10px;background:#fdfdfb;font-size:16px;font-weight:600;padding:0 10px;outline:none;-webkit-appearance:none;appearance:none}
+.nwpis:focus{border-style:solid;border-color:#e8c96a;box-shadow:0 0 0 2px #f6e8bd;background:#fff}
+.nwpis::placeholder{color:#b3afa6;font-weight:500}
+.nazwaw{color:#8a867c;font-weight:600}
 .nr{font-size:13px;font-weight:700;color:#8a867c;text-align:center;font-variant-numeric:tabular-nums}
 .pole{display:block;width:100%;height:44px;border:1px solid #e3e0d8;border-radius:10px;background:#fdfdfb;font-size:16px;font-weight:600;text-align:center;padding:0 4px;font-variant-numeric:tabular-nums;-webkit-appearance:none;appearance:none;outline:none}
 .pole:focus{border-color:#e8c96a;box-shadow:0 0 0 2px #f6e8bd;background:#fff}
@@ -156,6 +168,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .knazwa{font-size:22px;font-weight:750;letter-spacing:-.01em;line-height:1.2}
 .kdawka{font-size:15px;font-weight:600;color:#54514a;font-variant-numeric:tabular-nums}
 .kpola{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:6px}
+.kpola.strony{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
 .kpola label{display:flex;flex-direction:column;gap:3px}
 /* tylko podpis nad polem — „label span” łapał też otoczkę pola kg (span.kgpole) i wpisany ciężar był szary jak podpowiedź (test linku 2026-10-09) */
 .kpola label>span:not(.kgpole){font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#a09c92;text-align:center}
@@ -245,6 +258,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 @media (max-width:340px){
   .karta{padding:10px 8px}
   .sh,.sr{gap:4px;grid-template-columns:14px minmax(0,1.15fr) minmax(0,1fr) minmax(0,.8fr) 44px 44px}
+  .strony .sh,.strony .sr{gap:3px;grid-template-columns:12px minmax(0,1fr) minmax(0,1fr) minmax(0,.85fr) minmax(0,.7fr) 38px 38px}
 }
 </style>
 </head>
@@ -303,7 +317,8 @@ const S = {
   wcisniety: false, ostWys: 0, tWys: null, tKrok: 0, doDomkniecia: new Set(), domknijCzeka: false, potwCofnij: null,
   rola: "trener",  // „zawodnik” = link zawodnika: bez zmian rozpiski, z filmami
   baza: {},        // klucz karty → serie z serwera, od których zaczął telefon
-  notBaza: {},     // klucz karty → notatka z serwera, od której zaczął telefon
+  notBaza: {},
+  nazwaBaza: {},   // klucz karty → wpisana nazwa z serwera / ostatnio potwierdzona     // klucz karty → notatka z serwera, od której zaczął telefon
   odrzNazwa: {},   // klucz karty → ćwiczenie odrzuconego wpisu
   otwNazwy: {},    // ctx → nazwy otwartych kart sprzed zmiany rozpiski
   uwOtw: {},       // klucz karty → rozwinięte uwagi trenera w wierszu listy
@@ -357,21 +372,25 @@ function grupy() {
 function kopiaSerii(serie) {
   return (serie || []).map((s) => {
     const o = { kg: txt(s && s.kg), reps: txt(s && s.reps), rpe: txt(s && s.rpe), stan: (s && s.stan) || "" };
+    if (s && txt(s.kg_l)) o.kg_l = txt(s.kg_l);    // lewa strona (ćwiczenie ze stronami, kg = prawa)
     if (s && s.auto && s.auto.length) o.auto = s.auto.slice();   // wstawione samym ✓
     return o;
   });
 }
 function zSerwera(karta) {
-  return { serie: kopiaSerii(karta.serie), notatka: txt(karta.notatka), notZm: false };
+  return { serie: kopiaSerii(karta.serie), notatka: txt(karta.notatka), notZm: false,
+    nazwa: txt(karta.nazwa), nazwaZm: false };
 }
 function zOp(op, karta) {
   return { serie: kopiaSerii(op.serie),
     notatka: op.notatka == null ? txt(karta.notatka) : String(op.notatka),
-    notZm: op.notatka != null };
+    notZm: op.notatka != null,
+    nazwa: op.nazwa == null ? txt(karta.nazwa) : String(op.nazwa),
+    nazwaZm: op.nazwa != null };
 }
 // to samo co training.scal_serie: pole zmienione na telefonie (względem bazy)
 // wygrywa, reszta z serwera — telefon od razu widzi wpisy drugiej strony
-const POLA = ["kg", "reps", "rpe", "stan"];
+const POLA = ["kg", "kg_l", "reps", "rpe", "stan"];
 function scal(baza, moje, obecne) {
   const n = Math.max((baza || []).length, (moje || []).length, (obecne || []).length), out = [];
   for (let i = 0; i < n; i++) {
@@ -388,11 +407,11 @@ function dzisiaj() {
   return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
 }
 function seria(st, si) {
-  while (st.serie.length <= si) st.serie.push({ kg: "", reps: "", rpe: "", stan: "" });
+  while (st.serie.length <= si) st.serie.push({ kg: "", kg_l: "", reps: "", rpe: "", stan: "" });
   return st.serie[si];
 }
 function przytnij(st) {
-  const pusta = (s) => !(txt(s.kg) || txt(s.reps) || txt(s.rpe) || s.stan);
+  const pusta = (s) => !(txt(s.kg) || txt(s.kg_l) || txt(s.reps) || txt(s.rpe) || s.stan);
   while (st.serie.length && pusta(st.serie[st.serie.length - 1])) st.serie.pop();
 }
 // wierszy: tyle, ile rozpisał trener (albo ustawił + / −), nigdy mniej niż wpisanych
@@ -424,9 +443,10 @@ function domknij(k) {
   const st = S.stan[k];
   if (S.tr || !st) return false;
   const n = ileWierszy(k);
+  const strony = !!(S.meta[k] || {}).strony;
   for (let si = 0; si < n; si++) {
     const s = st.serie[si] || {};
-    if (s.stan === "skip" || !txt(s.kg) || !txt(s.reps)) return false;
+    if (s.stan === "skip" || !txt(s.kg) || (strony && !txt(s.kg_l)) || !txt(s.reps)) return false;
   }
   let zmiana = false;
   for (let si = 0; si < n; si++) { const s = seria(st, si); if (!s.stan) { s.stan = "ok"; zmiana = true; } }
@@ -437,7 +457,8 @@ function domknij(k) {
 // ćwiczenia, w których coś wpisano. Przejście do kolejnego pola nic nie zwija.
 function sprobujDomknac() {
   const akt = document.activeElement;
-  if (document.hasFocus() && akt && akt.classList && akt.classList.contains("pole")) return;
+  // pole nazwy („Core”) jak pole serii — zwinięcie karty zabrałoby wpisywaną nazwę
+  if (document.hasFocus() && akt && akt.classList && (akt.classList.contains("pole") || akt.classList.contains("nwpis"))) return;
   if (S.wcisniety) { S.domknijCzeka = true; return; }     // najpierw obsługa stuknięcia
   let zm = false;
   for (const k of S.doDomkniecia) if (domknij(k)) { kolejkuj(k); zm = true; }
@@ -474,6 +495,9 @@ function odhacz(k, si) {
   const auto = [];
   if (!txt(s.reps)) { s.reps = repsDoWstawienia(k, si); if (s.reps) auto.push("reps"); }
   if (!txt(s.kg) && S.rola !== "zawodnik") { s.kg = poprzednia(S.stan[k], si, "kg"); if (s.kg) auto.push("kg"); }
+  if ((S.meta[k] || {}).strony && !txt(s.kg_l) && S.rola !== "zawodnik") {
+    s.kg_l = poprzednia(S.stan[k], si, "kg_l"); if (s.kg_l) auto.push("kg_l");
+  }
   if (auto.length) s.auto = auto; else delete s.auto;
 }
 function pomin(k, si) {
@@ -492,11 +516,12 @@ function hintReps(karta, si) {
 // to tylko przypomnienie. W serii odhaczonej pusto znaczy pusto.
 function podpowiedzi(k, si) {
   const karta = S.meta[k], st = S.stan[k], s = st.serie[si] || {};
-  if (s.stan) return { kg: "", reps: "", rpe: "" };
+  if (s.stan) return { kg: "", kg_l: "", reps: "", rpe: "" };
   // RPE z rozpiski jako podpowiedź (Filip 2026-09-30) — ✓ go nie wpisuje;
   // u zawodnika bez podpowiedzi ciężaru: „ciężar musi wpisać dana osoba”
-  if (S.rola === "zawodnik") return { kg: "", reps: repsDoWstawienia(k, si) || hintReps(karta, si), rpe: txt((karta.rpe_plan || [])[si]) };
+  if (S.rola === "zawodnik") return { kg: "", kg_l: "", reps: repsDoWstawienia(k, si) || hintReps(karta, si), rpe: txt((karta.rpe_plan || [])[si]) };
   return { kg: si === 0 ? txt(karta.kg_hint) : poprzednia(st, si, "kg"),
+    kg_l: si === 0 ? txt(karta.kg_hint_l) : poprzednia(st, si, "kg_l"),
     reps: repsDoWstawienia(k, si) || hintReps(karta, si), rpe: txt((karta.rpe_plan || [])[si]) };
 }
 // „1 × 5 @ RPE 8 + 2 × 7 @ RPE 8” — RPE jako żółta plakietka
@@ -581,7 +606,11 @@ function kolejkuj(k) {
     nazwy: ctxKlucz(c) === ctxKlucz(S.ctx) ? S.karty.map((x) => x.exercise || "") : undefined,
     d: dzisiaj(),          // data treningu, nie dotarcia na serwer (SRV-07)
     // null = notatki nie ruszam (nie nadpisuję wpisu zawodnika starszą wersją)
-    notatka: st.notZm ? String(st.notatka || "") : null };
+    notatka: st.notZm ? String(st.notatka || "") : null,
+    // wpisana nazwa („Core” → „Dead bug”): null = bez zmian, jak notatka;
+    // nazwa_baza — od czego zaczął telefon (serwer pomija nazwę równą bazie)
+    nazwa: st.nazwaZm ? String(st.nazwa || "") : null,
+    nazwa_baza: txt(S.nazwaBaza[k] != null ? S.nazwaBaza[k] : karta.nazwa) };
   const stara = S.kolejka[miejsceOp(op)];
   if (stara && stara.typ === "cwiczenie" && Array.isArray(stara.serie)) op.baza = bazaPo(op.baza, stara.serie, op.serie);
   if (stara) S.zalatwione.add(String(stara.id));   // zastąpiona — z localStorage też znika
@@ -644,26 +673,28 @@ const IKONA_KOPIUJ = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none
   + `<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>`;
 // Filip 2026-10-01: „powielić ciężar, żeby nie wpisywać każdej serii” — mały
 // przycisk w pustym polu kg, gdy poprzednia seria ma ciężar
-const kgDoKopii = (k, si, s) => si > 0 && !txt(s.kg) && s.stan !== "skip" ? poprzednia(S.stan[k], si, "kg") : "";
-const htmlKopiuj = (a, kop) => `<button type="button" class="kopiuj" data-act="kopiuj" ${a}`
+const kgDoKopii = (k, si, s, f = "kg") => si > 0 && !txt(s[f]) && s.stan !== "skip" ? poprzednia(S.stan[k], si, f) : "";
+const htmlKopiuj = (a, kop, f = "kg") => `<button type="button" class="kopiuj" data-act="kopiuj" data-f="${f}" ${a}`
   + ` aria-label="Ciężar z poprzedniej serii: ${esc(kop)} kg">${IKONA_KOPIUJ}</button>`;
-function poleKg(k, si, a, s, ph) {
-  const kop = kgDoKopii(k, si, s);
-  return `<span class="kgpole">${pole(a, "kg", s.kg, ph, "decimal", 12, "kg")}${kop ? htmlKopiuj(a, kop) : ""}</span>`;
+// f: "kg" (przy ćwiczeniu ze stronami = prawa) albo "kg_l" (lewa); kl: klasa koloru
+function poleKg(k, si, a, s, ph, f = "kg", kl = "") {
+  const kop = kgDoKopii(k, si, s, f);
+  const etyk = f === "kg_l" ? "kg lewa" : kl ? "kg prawa" : "kg";
+  return `<span class="kgpole">${pole(a, f, s[f], ph, "decimal", 12, etyk, kl)}${kop ? htmlKopiuj(a, kop, f) : ""}</span>`;
 }
 // w trakcie pisania (bez przerysowania): przycisk pojawia się w kolejnych
 // seriach, gdy w poprzedniej jest już ciężar, i znika po wpisaniu własnego
 function odswiezKopie(k) {
   const st = S.stan[k];
   if (!st) return;
-  root.querySelectorAll(`.kgpole input.pole[data-k="${CSS.escape(k)}"][data-f="kg"]`).forEach((el) => {
-    const si = +el.dataset.si, kop = kgDoKopii(k, si, st.serie[si] || {}), kb = el.parentNode.querySelector(".kopiuj");
-    if (kop && !kb) el.insertAdjacentHTML("afterend", htmlKopiuj(`data-k="${esc(k)}" data-si="${si}"`, kop));
+  root.querySelectorAll(`.kgpole input.pole[data-k="${CSS.escape(k)}"]`).forEach((el) => {
+    const f = el.dataset.f, si = +el.dataset.si, kop = kgDoKopii(k, si, st.serie[si] || {}, f), kb = el.parentNode.querySelector(".kopiuj");
+    if (kop && !kb) el.insertAdjacentHTML("afterend", htmlKopiuj(`data-k="${esc(k)}" data-si="${si}"`, kop, f));
     else if (!kop && kb) kb.remove();
   });
 }
-function pole(a, f, v, ph, tryb, max, etyk) {
-  return `<input class="pole" ${a} data-f="${f}" type="text" inputmode="${tryb}"`
+function pole(a, f, v, ph, tryb, max, etyk, kl = "") {
+  return `<input class="pole${kl ? " " + kl : ""}" ${a} data-f="${f}" type="text" inputmode="${tryb}"`
     + ` enterkeyhint="next" autocomplete="off" autocorrect="off" autocapitalize="off"`
     + ` spellcheck="false" maxlength="${max}" aria-label="${etyk}"`
     + ` value="${esc(v)}" placeholder="${esc(ph)}">`;
@@ -679,14 +710,24 @@ function htmlUwagi(karta) {
   const tresc = zd.length > 1 ? `<ul>${zd.map((z) => `<li>${esc(z)}</li>`).join("")}</ul>` : esc(zd[0]);
   return `<div class="uwagi">${tresc}</div>`;
 }
+// Filip 2026-10-14: „Core” — pole na nazwę ćwiczenia, które zrobił (zawodnik i trener)
+function htmlNazwaWpis(k) {
+  const karta = S.meta[k];
+  if (!karta.nazwa_wpis) return "";
+  return `<input class="nwpis" data-k="${esc(k)}" data-f="nazwa" type="text" maxlength="80"`
+    + ` autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done"`
+    + ` aria-label="Nazwa ćwiczenia" placeholder="Wpisz, jakie ćwiczenie" value="${esc(txt((S.stan[k] || {}).nazwa))}">`;
+}
 function htmlKarta(k, sek, wZwinietej) {
   const karta = S.meta[k], st = S.stan[k], n = ileWierszy(k), dk = `data-k="${esc(k)}"`;
   // „‹ Wróć” zawsze na górze otwartego ćwiczenia (Filip 2026-09-30: „żeby
   // zawsze dało się wrócić”)
-  let h = `<div class="karta" data-karta="${esc(k)}">`
+  const strony = !!karta.strony;
+  let h = `<div class="karta${strony ? " strony" : ""}" data-karta="${esc(k)}">`
     + (wZwinietej ? `<button type="button" class="wroc" data-act="zwin" ${dk}><b>‹</b> Wróć</button>` : "")
     + `<div class="glowa">${htmlSlot(k, sek)}`
     + `<div class="pvcol"><span class="pvname">${esc(karta.exercise)}</span>`
+    + htmlNazwaWpis(k)
     + `<span class="pvdose">${htmlDawka(karta)}</span>`
     + htmlOstatnio(k)
     + (karta.det ? `<span class="det">${esc(karta.det)}</span>` : "")
@@ -694,12 +735,14 @@ function htmlKarta(k, sek, wZwinietej) {
     + htmlFilm(karta)
     + `</div><span class="kropka" data-kropka="${esc(k)}"></span>`
     + `</div><div class="serie"><div class="sh" aria-hidden="true"><span></span>`
-    + `<span>kg</span><span>powt.</span><span>RPE</span><span></span><span></span></div>`;
+    + (strony ? `<span class="hp">Prawa</span><span class="hl">Lewa</span>` : `<span>kg</span>`)
+    + `<span>powt.</span><span>RPE</span><span></span><span></span></div>`;
   for (let si = 0; si < n; si++) {
     const s = st.serie[si] || {}, p = podpowiedzi(k, si), a = `${dk} data-si="${si}"`;
     const cel = S.tr && S.cel && S.cel.k === k && S.cel.si === si ? " cel" : "";
     h += `<div class="sr${s.stan ? " " + s.stan : ""}${cel}"><span class="nr">${si + 1}</span>`
-      + poleKg(k, si, a, s, p.kg)
+      + (strony ? poleKg(k, si, a, s, p.kg, "kg", "pp") + poleKg(k, si, a, s, p.kg_l, "kg_l", "pl")
+        : poleKg(k, si, a, s, p.kg))
       + pole(a, "reps", s.reps, p.reps, "numeric", 12, "powtórzenia")
       + pole(a, "rpe", s.rpe, p.rpe, "decimal", 5, "RPE")
       + `<button type="button" class="btn-ok" data-act="ok" ${a} aria-pressed="${s.stan === "ok"}"`
@@ -859,7 +902,9 @@ function htmlMini(k, sek) {
   // dopiero po stuknięciu w ćwiczenie (test linku 2026-10-09)
   const film = zaw && karta.film ? `<a class="mfilm" href="${esc(karta.film)}" target="_blank" rel="noopener noreferrer"`
     + ` aria-label="Film: ${esc(karta.exercise)}">▶</a>` : "";
+  const nw = karta.nazwa_wpis ? txt((S.stan[k] || {}).nazwa) : "";
   const tresc = `${htmlSlot(k, sek)}<span class="pvcol"><span class="pvname">${esc(karta.exercise)}`
+    + (nw ? ` <span class="nazwaw">· ${esc(nw)}</span>` : "")
     + (uwagiPlanu(karta) ? ` <span class="uwznak" aria-label="są uwagi">ⓘ</span>` : "")
     + (txt((S.stan[k] || {}).notatka) ? `<span class="notznak" aria-label="jest notatka">✎</span>` : "") + `</span>`
     + `<span class="mdose">${htmlDawka(karta)}</span>`
@@ -1086,8 +1131,10 @@ function htmlKrok(krok, nastepny) {
   const k = krok.k, si = krok.si, karta = S.meta[k];
   const sek = S.sekcje.find((x) => x.key === karta.section) || { acc: "#1c1b18", tint: "#f1efe9", tytul: karta.section };
   const n = ileWierszy(k), s = S.stan[k].serie[si] || {}, p = podpowiedzi(k, si), a = `data-k="${esc(k)}" data-si="${si}"`;
-  const pola = sek.zwinieta ? "" : `<div class="kpola">`
-    + `<label><span>kg</span>${poleKg(k, si, a, s, p.kg)}</label>`
+  const pola = sek.zwinieta ? "" : `<div class="kpola${karta.strony ? " strony" : ""}">`
+    + (karta.strony ? `<label><span class="hp">Prawa</span>${poleKg(k, si, a, s, p.kg, "kg", "pp")}</label>`
+      + `<label><span class="hl">Lewa</span>${poleKg(k, si, a, s, p.kg_l, "kg_l", "pl")}</label>`
+      : `<label><span>kg</span>${poleKg(k, si, a, s, p.kg)}</label>`)
     + `<label><span>powt.</span>${pole(a, "reps", s.reps, p.reps, "numeric", 12, "powtórzenia")}</label>`
     + `<label><span>RPE</span>${pole(a, "rpe", s.rpe, p.rpe, "decimal", 5, "RPE")}</label></div>`;
   return `<div class="krok${nastepny ? " nast" : ""}">`
@@ -1095,6 +1142,7 @@ function htmlKrok(krok, nastepny) {
     + `<div class="kgora"><span class="pvslot" style="background:${esc(sek.tint)};color:${esc(sek.acc)}">${esc(karta.slot)}</span>`
     + `<span class="kser">Seria ${si + 1} z ${n}</span></div>`
     + `<div class="knazwa">${esc(karta.exercise)}</div>`
+    + htmlNazwaWpis(k)
     + `<div class="kdawka">${htmlDawka(karta)}</div>`
     + (karta.det ? `<div class="det">${esc(karta.det)}</div>` : "")
     + htmlUwagi(karta)
@@ -1314,7 +1362,7 @@ function zastosuj(a) {
       // niepotwierdzone: wpisy z telefonu na tle świeżych danych z serwera
       S.stan[k] = zOp(op, karta);
       S.stan[k].serie = op.baza ? scal(op.baza, op.serie, karta.serie) : S.stan[k].serie;
-    } else { S.stan[k] = zSerwera(karta); S.notBaza[k] = txt(karta.notatka); }
+    } else { S.stan[k] = zSerwera(karta); S.notBaza[k] = txt(karta.notatka); S.nazwaBaza[k] = txt(karta.nazwa); }
     S.baza[k] = kopiaSerii(karta.serie);
   }
   render();
@@ -1345,6 +1393,7 @@ function przyjmij(a) {
         // pole skasowane po autowysyłce wracało z poprzednią wartością, bo
         // baza zostawała sprzed wysyłki, gdy fokus był w polu (V3-02)
         if (op.typ === "cwiczenie" && op.serie && !m.includes("#")) S.baza[k] = kopiaSerii(op.serie);
+        if (op.typ === "cwiczenie" && op.nazwa != null) S.nazwaBaza[k] = String(op.nazwa);
       }
     } else if (odrz.has(String(op.id))) {
       delete S.kolejka[m];
@@ -1577,7 +1626,7 @@ root.addEventListener("click", (e) => {
       if (n <= 1) return;
       zdejmijFokus();
       const ost = st.serie[n - 1];
-      if (ost && (ost.stan || txt(ost.kg) || txt(ost.reps)) && S.minusK !== k) {
+      if (ost && (ost.stan || txt(ost.kg) || txt(ost.kg_l) || txt(ost.reps)) && S.minusK !== k) {
         S.minusK = k; render(); break;     // ZAW-10
       }
       S.minusK = null;
@@ -1676,11 +1725,12 @@ root.addEventListener("click", (e) => {
     case "kopiuj": {
       // ciężar z poprzedniej serii; kursor od razu na powtórzenia tej serii
       if (!S.stan[k]) return;
-      const v = poprzednia(S.stan[k], si, "kg");
+      const f = b.dataset.f === "kg_l" ? "kg_l" : "kg";
+      const v = poprzednia(S.stan[k], si, f);
       if (!v) return;
       const sr = seria(S.stan[k], si);
-      sr.kg = v;
-      if (sr.auto) { sr.auto = sr.auto.filter((f) => f !== "kg"); if (!sr.auto.length) delete sr.auto; }
+      sr[f] = v;
+      if (sr.auto) { sr.auto = sr.auto.filter((x) => x !== f); if (!sr.auto.length) delete sr.auto; }
       S.odrz[k] = "";
       if (txt(sr.reps)) domknij(k);
       kolejkuj(k);
@@ -1791,7 +1841,8 @@ root.addEventListener("input", (e) => {
   }
   if (!k || !S.stan[k]) return;
   const st = S.stan[k];
-  if (el.dataset.f === "notatka") {
+  if (el.dataset.f === "nazwa") { st.nazwa = el.value; st.nazwaZm = true; }
+  else if (el.dataset.f === "notatka") {
     st.notatka = el.value; st.notZm = true; autoWys(el);
     // przycisk notatki od razu niebieski (Filip 2026-10-01: „notatka się podświetla”)
     const nb = root.querySelector(`.nota-btn[data-k="${CSS.escape(k)}"]`), jest = !!txt(el.value);
@@ -1800,7 +1851,7 @@ root.addEventListener("input", (e) => {
   else {
     const sr = seria(st, +el.dataset.si);
     sr[el.dataset.f] = el.value;
-    if (el.dataset.f === "kg") odswiezKopie(k);
+    if (el.dataset.f === "kg" || el.dataset.f === "kg_l") odswiezKopie(k);
     if (sr.auto) { sr.auto = sr.auto.filter((f) => f !== el.dataset.f); if (!sr.auto.length) delete sr.auto; }
     odswiezPodpowiedzi(k);
   }
@@ -1816,10 +1867,11 @@ root.addEventListener("input", (e) => {
 root.addEventListener("focusout", (e) => {
   const k = e.target.dataset && e.target.dataset.k;
   if (k && S.brudne[k]) { kolejkuj(k); planujWysylke(); }
-  if (k && e.target.classList.contains("pole")) { S.doDomkniecia.add(k); setTimeout(sprobujDomknac, 60); }
+  if (k && (e.target.classList.contains("pole") || e.target.classList.contains("nwpis"))) { S.doDomkniecia.add(k); setTimeout(sprobujDomknac, 60); }
   setTimeout(sprobujOdlozone, 60);
 });
 root.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.classList.contains("nwpis")) { e.preventDefault(); e.target.blur(); return; }
   if (e.key === "Enter" && e.target.classList.contains("edp")) {
     e.preventDefault();
     const nast = e.target.nextElementSibling;

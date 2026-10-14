@@ -379,7 +379,7 @@ def item_weeks(it: dict) -> dict:
 
 # pola WYKONANIA (zawodnik) — nigdy nie dziedziczą na kolejne tygodnie;
 # dziedziczy wyłącznie ROZPISKA (sets_n/reps/intent/rest)
-_EXEC_FIELDS = ("load", "sets_done", "session_note", "sets")
+_EXEC_FIELDS = ("load", "sets_done", "session_note", "sets", "wpisana_nazwa")
 
 
 def week_params(it: dict, wk: int) -> dict:
@@ -503,7 +503,7 @@ def przecinek_dziesietny(x) -> str:
 
 def zapisz_cwiczenie(plan: dict, sess_id: str, item_i: int, wk: int,
                      serie: list, notatka: str | None = None,
-                     exercise: str = "") -> bool:
+                     exercise: str = "", wpisana: str | None = None) -> bool:
     """Pełny stan JEDNEGO ćwiczenia w tygodniu wk — tryb trenera (telefon).
 
     serie: [{"kg","reps","rpe","stan": "ok"|"skip"|""}] — każda seria ma
@@ -512,6 +512,9 @@ def zapisz_cwiczenie(plan: dict, sess_id: str, item_i: int, wk: int,
     u zawodnika) i nie liczy się do Load. notatka: None = bez zmian,
     "" = usuń, tekst = session_note tego tygodnia. Load wpisany tekstem
     (stary wpis bez serii) zostaje, dopóki serie nie dadzą ciężaru.
+    kg_l: ciężar lewej strony przy ćwiczeniu ze `strony` (kg = prawa).
+    wpisana: jak notatka — ćwiczenie wpisane przy pozycji z `nazwa_do_wpisania`
+    („Core” → „Dead bug”), weeks[wk]["wpisana_nazwa"].
 
     Ćwiczenie szukane po indeksie i nazwie, potem po samej nazwie (trener
     mógł w międzyczasie przestawić rozpiskę na komputerze). Nie ma go —
@@ -542,10 +545,13 @@ def zapisz_cwiczenie(plan: dict, sess_id: str, item_i: int, wk: int,
         rpe = przecinek_dziesietny(s.get("rpe"))
         if rpe:
             nowy["rpe"] = rpe
-        if not stan and (nowy["reps"] or nowy["kg"] or rpe):
+        kg_l = przecinek_dziesietny(s.get("kg_l"))
+        if kg_l:
+            nowy["kg_l"] = kg_l
+        if not stan and (nowy["reps"] or nowy["kg"] or rpe or kg_l):
             nowy["tkniete"] = True
         done.append(nowy)
-    while done and not (done[-1]["reps"] or done[-1]["kg"]
+    while done and not (done[-1]["reps"] or done[-1]["kg"] or done[-1].get("kg_l")
                         or done[-1].get("rpe") or done[-1]["stan"]):
         done.pop()
 
@@ -562,8 +568,19 @@ def zapisz_cwiczenie(plan: dict, sess_id: str, item_i: int, wk: int,
             params["session_note"] = notatka.strip()
         else:
             params.pop("session_note", None)
+    if wpisana is not None:
+        if wpisana.strip():
+            params["wpisana_nazwa"] = wpisana.strip()
+        else:
+            params.pop("wpisana_nazwa", None)
     if not wlasny and not any(params.get(k) for k in _EXEC_FIELDS):
-        return True       # nic do zapisania — dziedziczenie rozpiski zostaje żywe
+        # nic do zapisania — dziedziczenie rozpiski zostaje żywe; stary wpis
+        # samego wykonania (wyczyszczona nazwa/notatka bez serii) znika, inaczej
+        # telefon dostawał potwierdzenie, a nazwa wracała (przegląd 2026-10-14)
+        if str(wk) in item_weeks(it):
+            it["weeks"] = dict(item_weeks(it))
+            it["weeks"].pop(str(wk), None)
+        return True
     if not wlasny:
         # tydzień bez własnej dawki: zapisuję SAMO wykonanie — kopia rozpiski
         # z W1 zamrażała W2 (poprawka dawki w W1 nie schodziła niżej), a
@@ -614,7 +631,7 @@ def _data_z_telefonu(dzien: str) -> str:
     return str(d) if dzis - timedelta(days=14) <= d <= dzis + timedelta(days=1) else str(dzis)
 
 
-_POLA_SERII = ("kg", "reps", "rpe", "stan")
+_POLA_SERII = ("kg", "kg_l", "reps", "rpe", "stan")
 
 
 def scal_serie(baza: list, moje: list, obecne: list) -> list:
@@ -773,13 +790,15 @@ def wykonanie_sesji(sess: dict, wk: int) -> list[dict]:
         serie = [{"nr": i + 1, "stan": stan_serii(s),
                   "reps": (s.get("reps") or "").strip(),
                   "kg": (s.get("kg") or "").strip(),
+                  "kg_l": (s.get("kg_l") or "").strip(),
                   "rpe": (s.get("rpe") or "").strip()}
                  for i, s in enumerate(done) if stan_serii(s) or s.get("reps")
-                 or s.get("kg") or s.get("rpe")]
-        if not serie and not (p.get("session_note") or "").strip():
+                 or s.get("kg") or s.get("kg_l") or s.get("rpe")]
+        nazwa = (p.get("wpisana_nazwa") or "").strip()
+        if not serie and not (p.get("session_note") or "").strip() and not nazwa:
             continue
         out.append({
-            "exercise": it.get("exercise", ""),
+            "exercise": it.get("exercise", "") + (f" · {nazwa}" if nazwa else ""),
             "slot": str(it.get("slot", "") or ""),
             "section": it.get("section", "Main"),
             "serie": serie,
@@ -821,7 +840,7 @@ def merge_week_rows(old_items: list[dict], new_rows: list[dict],
         # Load) wygrywa — puste pole = trener celowo wyczyścił.
         key_wk = str(int(wk))
         prev_wk = ws.get(key_wk) or {}
-        for _exec in ("load", "sets_done", "session_note", "sets"):
+        for _exec in _EXEC_FIELDS:
             if _exec not in params and prev_wk.get(_exec):
                 params[_exec] = prev_wk[_exec]
         # NIE materializuj tygodnia przy samym PRZEGLĄDANIU: jeśli ten
@@ -947,7 +966,7 @@ def item_has_content(it: dict) -> bool:
     for wv in (it.get("weeks") or {}).values():
         if any((wv or {}).get(f) for f in
                ("sets_n", "reps", "intent", "rest",
-                "load", "sets_done", "session_note")):
+                "load", "sets_done", "session_note", "wpisana_nazwa")):
             return True
     return False
 

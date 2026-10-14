@@ -426,6 +426,7 @@ def _wykonanie_profilu(plany: list[dict]) -> list[dict]:
                 for x in poz:
                     for sr in x["serie"]:
                         sr["kg"] = przecinek_dziesietny(sr["kg"])
+                        sr["kg_l"] = przecinek_dziesietny(sr.get("kg_l"))
                         sr["rpe"] = przecinek_dziesietny(sr["rpe"])
                 iso = zrobione.get(str(wk)) or zaczete.get(str(wk)) or ""
                 out.append({
@@ -455,7 +456,7 @@ def _wykonanie_sekcje(s: dict, wk: int) -> list[dict]:
     zrobił. Usunięte z planu tylko z wpisami, z dopiskiem."""
     from .training import przecinek_dziesietny, stan_serii, week_params
     from .ui_training import (_PV_SEKCJE, _TRK_KOLEJNOSC, _pv_sekcja_kolory,
-                              _pv_slot_label, _trk_dawka_pelna)
+                              _pv_slot_label, _trk_dawka_pelna, _trk_kg_txt)
     pozycje = [(it, False) for it in (s.get("items") or [])]
     pozycje += [(it, True) for it in (s.get("removed_items") or [])]
     obecne = []
@@ -472,17 +473,21 @@ def _wykonanie_sekcje(s: dict, wk: int) -> list[dict]:
             if (it.get("section") or "Main") != sec:
                 continue
             p = week_params(it, wk)
-            serie = [{"kg": przecinek_dziesietny(x.get("kg")),
+            # ciężar prawa/lewa jednym napisem („P 27,5 L 32,5”) — kafelek
+            # w Wykonaniu dokleja „kg × powt.” jak dotąd
+            serie = [{"kg": _trk_kg_txt(x),
                       "reps": str(x.get("reps") or "").strip(),
                       "rpe": przecinek_dziesietny(x.get("rpe")), "stan": stan_serii(x)}
                      for x in (p.get("sets_done") or []) if isinstance(x, dict)]
             serie = [x for x in serie if x["stan"] or x["kg"] or x["reps"] or x["rpe"]]
             nota = str(p.get("session_note") or "").strip()
+            nazwa = str(p.get("wpisana_nazwa") or "").strip()
             if usuniete and not (serie or nota):
                 continue
             wiersze.append({
                 "slot": "" if usuniete else _pv_slot_label(it, idx, sec),
-                "exercise": it.get("exercise", "") + (" (usunięte)" if usuniete else ""),
+                "exercise": it.get("exercise", "") + (f" · {nazwa}" if nazwa else "")
+                + (" (usunięte)" if usuniete else ""),
                 "dawka": _trk_dawka_pelna(p), "serie": serie, "note": nota})
             if not usuniete:
                 idx += 1
@@ -508,8 +513,11 @@ def _najlepsza_seria(serie: list) -> str:
     ok = [x for x in serie if isinstance(x, dict) and stan_serii(x) == SERIA_OK]
     if not ok:
         return ""
-    best = max(ok, key=lambda x: (_liczba(x.get("kg")), _liczba(x.get("reps"))))
-    kg, reps = przecinek_dziesietny(best.get("kg")), str(best.get("reps") or "").strip()
+    # ćwiczenie ze stronami: cięższa strona wybiera serię, napis „P 27,5 L 32,5”
+    best = max(ok, key=lambda x: (max(_liczba(x.get("kg")), _liczba(x.get("kg_l"))),
+                                  _liczba(x.get("reps"))))
+    from .ui_training import _trk_kg_txt
+    kg, reps = _trk_kg_txt(best), str(best.get("reps") or "").strip()
     return f"{kg}×{reps}" if kg and reps else f"{kg} kg" if kg else f"×{reps}" if reps else "✓"
 
 

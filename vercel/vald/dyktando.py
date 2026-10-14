@@ -438,7 +438,7 @@ def _ma_wykonanie(items: list[dict]) -> bool:
         for w in (it.get("weeks") or {}).values():
             if not isinstance(w, dict):
                 continue
-            if (w.get("load") or w.get("session_note")
+            if (w.get("load") or w.get("session_note") or w.get("wpisana_nazwa")
                     or any(isinstance(s, dict) and (s.get("stan") or s.get("kg") or s.get("reps"))
                            for s in (w.get("sets_done") or []))):
                 return True
@@ -523,7 +523,17 @@ def zapisz_plan(dane: dict, prog: float = 0.999) -> dict:
                 raise ValueError(f"trening „{tytul}” ma już wpisy zawodnika — "
                                  "popraw go w edytorze, nie z dyktanda")
             else:
-                stara["items"] = zbuduj_items(tr["items"])
+                # znaczniki z apki (strony, nazwa do wpisania) zostają przy tym
+                # samym ćwiczeniu — dyktando ich nie zna
+                znaczniki = {(o.get("exercise") or "").strip().lower(): o
+                             for o in stara.get("items") or []}
+                nowe = zbuduj_items(tr["items"])
+                for it in nowe:
+                    o = znaczniki.get((it.get("exercise") or "").strip().lower()) or {}
+                    for f in ("strony", "nazwa_do_wpisania"):
+                        if o.get(f):
+                            it[f] = True
+                stara["items"] = nowe
         plan["sessions"] = sesje
         upsert_plan(plan)
     else:

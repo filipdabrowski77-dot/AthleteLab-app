@@ -403,7 +403,7 @@ def _tr_workout_body(plan_id: str, sid: str) -> None:
                 n += 1
         return n
 
-    _EXEC_F = ("load", "sets_done", "session_note", "sets")
+    _EXEC_F = ("load", "sets_done", "session_note", "sets", "wpisana_nazwa")
 
     def _pp_shift(d: dict, ops: list) -> dict:
         """Ta sama mapa przesuniec tygodni (insert/remove z edytora) dla
@@ -1328,14 +1328,24 @@ def _trk_serie_plan(it: dict, wk: int) -> tuple:
 
 
 def _trk_seria_txt(s: dict) -> str:
-    """„85×6 @9" / „40 kg" / „×10" / „✓" — jedna zrobiona seria."""
+    """„85×6 @9" / „40 kg" / „×10" / „✓" — jedna zrobiona seria; przy
+    ćwiczeniu ze stronami „P 27,5 L 32,5×6"."""
     from .training import przecinek_dziesietny
-    kg = przecinek_dziesietny(s.get("kg"))
+    kg = _trk_kg_txt(s)
     reps = str(s.get("reps") or "").strip()
     rpe = przecinek_dziesietny(s.get("rpe"))
     txt = (f"{kg}×{reps}" if kg and reps else f"{kg} kg" if kg
            else f"×{reps}" if reps else "✓")
     return txt + (f" @{rpe}" if rpe else "")
+
+
+def _trk_kg_txt(s: dict) -> str:
+    """Ciężar serii: „85", a gdy jest lewa strona (kg_l) — „P 27,5 L 32,5"."""
+    from .training import przecinek_dziesietny
+    kg, kg_l = przecinek_dziesietny(s.get("kg")), przecinek_dziesietny(s.get("kg_l"))
+    if not kg_l:
+        return kg
+    return " ".join(x for x in (f"P {kg}" if kg else "", f"L {kg_l}") if x)
 
 
 def _trk_data(sess: dict | None, wk) -> str:
@@ -1347,8 +1357,10 @@ def _trk_data(sess: dict | None, wk) -> str:
         return ""
 
 
-def _trk_ostatnio(plan: dict, it: dict, wk: int, plany=(), sess: dict | None = None) -> tuple:
+def _trk_ostatnio(plan: dict, it: dict, wk: int, plany=(), sess: dict | None = None,
+                  pole: str = "kg") -> tuple:
     """(„W1: 70×7 · 80×7 · 85×6", kg pierwszej serii) — odniesienie na karcie.
+    pole="kg_l": kg lewej strony pierwszej serii (ćwiczenie ze stronami).
 
     Najbliższy wcześniejszy tydzień TEGO ćwiczenia z seriami ✓, a gdy go nie
     ma (np. W1 nowego bloku) — wcześniejsze plany zawodnika (plany), po
@@ -1363,12 +1375,15 @@ def _trk_ostatnio(plan: dict, it: dict, wk: int, plany=(), sess: dict | None = N
                 if isinstance(s, dict) and stan_serii(s) == SERIA_OK]
 
     def _wynik(serie: list, prefiks: str) -> tuple:
-        kg = next((przecinek_dziesietny(s.get("kg")) for s in serie
-                   if str(s.get("kg") or "").strip()), "")
+        kg = next((przecinek_dziesietny(s.get(pole)) for s in serie
+                   if str(s.get(pole) or "").strip()), "")
         return f"{prefiks}: " + " · ".join(_trk_seria_txt(s) for s in serie), kg
 
     def _z_tygodnia(tyg, prefiks: str):
         ok = _ok(tyg)
+        # „Core” z wpisaną nazwą: „W1 · Dead bug: ×12” — liczby różnych ćwiczeń
+        nw = str((tyg or {}).get("wpisana_nazwa") or "").strip() if isinstance(tyg, dict) else ""
+        prefiks = f"{prefiks} · {nw}" if nw else prefiks
         tekst = load_tekstowy(tyg if isinstance(tyg, dict) else {})
         if ok:                  # Load tekstowy zostaje tylko przy seriach bez kg
             txt, kg = _wynik(ok, prefiks)
@@ -1421,11 +1436,12 @@ def _trk_historia(it: dict, wk: int, sess: dict | None) -> list:
             continue
         ok = [x for x in ((ws.get(str(w_)) or {}).get("sets_done") or [])
               if isinstance(x, dict) and stan_serii(x) == SERIA_OK]
-        if not any(str(x.get("kg") or "").strip() or str(x.get("reps") or "").strip()
-                   for x in ok):
+        if not any(str(x.get("kg") or "").strip() or str(x.get("kg_l") or "").strip()
+                   or str(x.get("reps") or "").strip() for x in ok):
             continue
         d_ = _trk_data(sess, w_)
-        out.append(f"W{w_}" + (f" · {d_}" if d_ else "") + ": "
+        nw = str((ws.get(str(w_)) or {}).get("wpisana_nazwa") or "").strip()
+        out.append(f"W{w_}" + (f" · {d_}" if d_ else "") + (f" · {nw}" if nw else "") + ": "
                    + " · ".join(_trk_seria_txt(x) for x in ok))
     return out
 
@@ -1502,7 +1518,7 @@ def _trk_serie_grupy(ok: list) -> list:
     from .training import przecinek_dziesietny
     grupy = []
     for y in ok:
-        klucz = (przecinek_dziesietny(y.get("kg")), str(y.get("reps") or "").strip(),
+        klucz = (_trk_kg_txt(y), str(y.get("reps") or "").strip(),
                  przecinek_dziesietny(y.get("rpe")))
         if grupy and grupy[-1][0] == klucz:
             grupy[-1][1] += 1
@@ -1515,7 +1531,7 @@ def _trk_serie_grupy(ok: list) -> list:
         else:
             t = f"{n} " + ("seria" if n == 1 else "serie" if 2 <= n % 10 <= 4
                            and not 12 <= n % 100 <= 14 else "serii")
-        if re.fullmatch(r"\d+(?:,\d+)?", kg):
+        if re.fullmatch(r"\d+(?:,\d+)?", kg) or kg.startswith(("P ", "L ")):
             kg += " kg"
         out.append({"sr": t, "kg": kg, "rpe": rpe})
     return out
@@ -1542,7 +1558,8 @@ def _trk_ostatnie(plan: dict, it: dict, wk: int, sess: dict | None, plany=()) ->
                 continue
             ok = [y for y in ((tyg or {}).get("sets_done") or [])
                   if isinstance(y, dict) and stan_serii(y) == SERIA_OK]
-            if not any(str(y.get("kg") or "").strip() or str(y.get("reps") or "").strip() for y in ok):
+            if not any(str(y.get("kg") or "").strip() or str(y.get("kg_l") or "").strip()
+                       or str(y.get("reps") or "").strip() for y in ok):
                 continue
             iso = ((s_.get("done_weeks") or {}).get(str(k)) or
                    (s_.get("started_weeks") or {}).get(str(k)) or "")
@@ -1566,7 +1583,9 @@ def _trk_ostatnie(plan: dict, it: dict, wk: int, sess: dict | None, plany=()) ->
             if klucz in kand:
                 kand[klucz][3].extend(_trk_serie_grupy(ok))
             else:
-                kand[klucz] = (iso or przyb, data_, f"{pref}W{k}", _trk_serie_grupy(ok))
+                nw = str((tyg or {}).get("wpisana_nazwa") or "").strip()
+                kand[klucz] = (iso or przyb, data_, f"{pref}W{k}" + (f" · {nw}" if nw else ""),
+                               _trk_serie_grupy(ok))
 
     for p_ in [plan] + [q for q in plany if q.get("id") != plan.get("id")]:
         pref = "" if p_ is plan else f"{p_.get('name', '')} · "
@@ -1622,6 +1641,8 @@ def _trk_dane(plan: dict, sess: dict, wk: int, plany=(), zawodnik: bool = False)
                 f"Tempo {it['tempo']}" if it.get("tempo") else "") if x)
             n_plan, reps_plan, reps_hint = _trk_serie_plan(it, wk)
             ostatnio, kg_hint = _trk_ostatnio(plan, it, wk, plany, sess)
+            kg_hint_l = _trk_ostatnio(plan, it, wk, plany, sess, pole="kg_l")[1] \
+                if it.get("strony") else ""
             serie = []
             for s in (p.get("sets_done") or []):
                 s = s if isinstance(s, dict) else {}
@@ -1629,12 +1650,19 @@ def _trk_dane(plan: dict, sess: dict, wk: int, plany=(), zawodnik: bool = False)
                               "reps": str(s.get("reps") or "").strip(),
                               "rpe": przecinek_dziesietny(s.get("rpe")),
                               "stan": stan_serii(s)})
+                if str(s.get("kg_l") or "").strip():      # lewa strona (strony)
+                    serie[-1]["kg_l"] = przecinek_dziesietny(s.get("kg_l"))
             karty.append({
                 "i": i, "exercise": it.get("exercise", ""), "section": sec,
                 "slot": etykiety[idx], "dawka": dawka,
                 "intent": intent, "det": det, "n_plan": n_plan,
                 "reps_plan": reps_plan, "reps_hint": reps_hint,
                 "ostatnio": ostatnio, "kg_hint": kg_hint, "serie": serie,
+                # Filip 2026-10-14: ciężar osobno prawa (kg) / lewa (kg_l)
+                "strony": bool(it.get("strony")), "kg_hint_l": kg_hint_l,
+                # „Core” — zawodnik / trener wpisuje, co zrobił
+                "nazwa_wpis": bool(it.get("nazwa_do_wpisania")),
+                "nazwa": str(p.get("wpisana_nazwa") or "").strip(),
                 "notatka": str(p.get("session_note") or "").strip(),
                 "historia": _trk_historia(it, wk, sess),
                 "ostatnie": _trk_ostatnie(plan, it, wk, sess, plany) if zawodnik else [],
@@ -1689,14 +1717,22 @@ def _trk_op_cwiczenie(plan: dict, sess: dict, wk: int, op: dict) -> str:
         if not isinstance(s, dict) or (s.get("stan") or "") not in _TRK_STANY:
             return "Nieprawidłowa seria"
         czyste.append({"kg": _trk_tekst(s.get("kg"), 12),
+                       "kg_l": _trk_tekst(s.get("kg_l"), 12),
                        "reps": _trk_tekst(s.get("reps"), 12),
                        "rpe": _trk_tekst(s.get("rpe"), 5),
                        "stan": s.get("stan") or "",
                        # pola wstawione samym ✓ (podpowiedź) — scal_serie
-                       "auto": [f for f in (s.get("auto") or []) if f in ("kg", "reps")]
+                       "auto": [f for f in (s.get("auto") or []) if f in ("kg", "kg_l", "reps")]
                        if isinstance(s.get("auto"), list) else []})
     notatka = op.get("notatka")
     notatka = None if notatka is None else _trk_tekst(notatka, 500)
+    nazwa = op.get("nazwa")              # None = bez zmian (jak notatka)
+    nazwa = None if nazwa is None else _trk_tekst(nazwa, 80)
+    # telefon wysyła też nazwę, od której zaczął: ta sama = nic nie zmieniał,
+    # nie nadpisuję poprawki drugiej strony (przegląd 2026-10-14)
+    if nazwa is not None and isinstance(op.get("nazwa_baza"), str) \
+            and nazwa == _trk_tekst(op.get("nazwa_baza"), 80):
+        nazwa = None
     try:
         i = int(op.get("i"))
     except (TypeError, ValueError):
@@ -1748,7 +1784,7 @@ def _trk_op_cwiczenie(plan: dict, sess: dict, wk: int, op: dict) -> str:
                 notatka = _trk_tekst(f"{obecna} · {notatka}" if notatka.strip() else obecna, 500)
         op = dict(op, exercise=sess["items"][i].get("exercise", ""))
     if not zapisz_cwiczenie(plan, sess["id"], i, wk, czyste, notatka=notatka,
-                            exercise=str(op.get("exercise") or "")):
+                            exercise=str(op.get("exercise") or ""), wpisana=nazwa):
         return "Plan zmienił się — wpisz ponownie"
     if any(s["stan"] == SERIA_OK for s in czyste) \
             and str(wk) not in (sess.get("started_weeks") or {}) \

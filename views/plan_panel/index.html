@@ -314,7 +314,7 @@ function setDose(ex, w, text) {
   const k = String(w), prev = ex.weeks[k] || {}, p = textToDose(text);
   // edytor dotyka TYLKO rozpiski; wykonanie zawodnika zostaje (invariant merge)
   const exec = {};
-  for (const f of ["load", "sets_done", "session_note", "sets"]) if (prev[f]) exec[f] = prev[f];
+  for (const f of ["load", "sets_done", "session_note", "sets", "wpisana_nazwa"]) if (prev[f]) exec[f] = prev[f];
   if (p) ex.weeks[k] = { ...exec, sets_n: p.sets_n, reps: p.reps, intent: p.intent, rest: prev.rest || "" };
   else if (Object.keys(exec).length) ex.weeks[k] = { ...exec, sets_n: "", reps: "", intent: "", rest: "" };
   else delete ex.weeks[k];
