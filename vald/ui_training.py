@@ -1253,6 +1253,18 @@ _TRK_CSS = """<style>
         .stApp [class*="st-key-trk_z_"] button p { text-align: center;
             font-size: 14px; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
         .stApp .st-key-trk_pop { display: none !important; }
+        /* tablet w poziomie (Filip 2026-10-15): szeroka strona — komponent
+           rysuje wtedy dwie kolumny (Prep+Plyo | Main); wybór planu, tygodnie
+           i treningi nie rozciągają się na całą szerokość */
+        @media (min-width: 900px) and (orientation: landscape) {
+            .block-container { max-width: 1280px !important;
+                padding: 1rem 1.5rem 4rem !important; }
+            .stApp [data-testid="stHorizontalBlock"]:has([class*="st-key-gymwk_"]),
+            .stApp [data-testid="stHorizontalBlock"]:has([class*="st-key-gymt_"]),
+            .stApp [class*="st-key-trk_plan_"] { max-width: 720px; }
+            .stApp .st-key-trk_kafle, .stApp .st-key-trk_kafle_reszta {
+                grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        }
         </style>"""
 
 

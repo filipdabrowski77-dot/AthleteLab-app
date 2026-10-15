@@ -118,6 +118,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .notznak{display:inline-flex;align-items:center;justify-content:center;margin-left:6px;padding:1px 7px;border-radius:999px;background:#e8f0fe;color:#2453b8;font-size:12px;font-weight:700;vertical-align:2px}
 /* ciężar z poprzedniej serii: mały przycisk wewnątrz pola kg */
 .kgpole{position:relative;display:block;min-width:0}
+.kgpole:has(.kopiuj) .pole{padding-right:32px}
 .kopiuj{position:absolute;top:5px;right:4px;bottom:5px;width:28px;border:0;border-radius:7px;background:#f1efe9;color:#8a867c;display:flex;align-items:center;justify-content:center;padding:0}
 /* „Cofnij wszystko” z potwierdzeniem */
 .potw{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:-2px 0 10px;padding:8px 8px 8px 12px;border:1px solid #efc9c3;border-radius:12px;background:#fdf4f3;font-size:14px;font-weight:600;color:#7a2e24}
@@ -138,6 +139,14 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .mfilm{flex:none;width:42px;height:42px;margin:-6px 0;border-radius:999px;background:#eef3fb;color:#2563eb;display:inline-flex;align-items:center;justify-content:center;font-size:15px;text-decoration:none}
 /* superseria (1a, 1b…) w jednej ramce z paskiem w kolorze sekcji, jak w PDF */
 .ss{border-left:3px solid var(--acc);padding-left:8px;margin-bottom:8px}
+/* Filip 2026-10-15: tablet w poziomie — lewa kolumna Prep + Plyo, prawa Main;
+   superseria (1a | 1b) obok siebie, karty Main otwarte (render: szeroki()) */
+.dwie{display:grid;grid-template-columns:minmax(260px,32%) minmax(0,1fr);gap:24px;align-items:start}
+.dwie>.kl>.pvsec:first-child,.dwie>.kp>.pvsec:first-child{margin-top:8px}
+.dwie .ss{display:grid;grid-template-columns:repeat(var(--n,1),minmax(0,1fr));gap:10px;align-items:start}
+.dwie .ss>.mini,.dwie .ss>.karta{margin-bottom:0}
+.dwie .ss>.edczeka{grid-column:1/-1}
+.dwie .kp>.karta{max-width:calc(50% - 9px)}
 .ss .mini:last-child,.ss .karta:last-child{margin-bottom:0}
 .postep{margin:2px 0 12px}
 .ptor{height:6px;background:#ebe9e2;border-radius:999px;overflow:hidden}
@@ -314,7 +323,7 @@ const S = {
   odrzSek: {},   // sekcja → powód odrzucenia dodania
   kolejka: {},   // miejsce („c|plan|sesja|tydz|i", „k|plan|sesja|tydz") → operacja
   zapisane: {}, odrz: {}, odrzKoniec: "", blad: "",
-  wcisniety: false, ostWys: 0, tWys: null, tKrok: 0, doDomkniecia: new Set(), domknijCzeka: false, potwCofnij: null,
+  wcisniety: false, ostWys: 0, tWys: null, tKrok: 0, doDomkniecia: new Set(), otwRecznie: new Set(), domknijCzeka: false, potwCofnij: null,
   rola: "trener",  // „zawodnik” = link zawodnika: bez zmian rozpiski, z filmami
   baza: {},        // klucz karty → serie z serwera, od których zaczął telefon
   notBaza: {},
@@ -356,6 +365,9 @@ const edycjaCzeka = () => !!S.ctx && Object.values(S.kolejka).some(
 const miejsceEd = (op) => "e|" + op.id;
 
 // blok = sekcja + cyfra numeru („1a”, „1b” → 1); Prep bez litery to osobne bloki
+// tablet w poziomie (ramka komponentu ≥ 860 px): dwie kolumny, karty Main otwarte
+const SZEROKI = window.matchMedia("(min-width: 860px)");
+const szeroki = () => SZEROKI.matches;
 function grupaK(karta) {
   const m = String(karta.slot || "").match(/^\d+/);
   return karta.section + "|" + (m ? m[0] : String(karta.slot || karta.i));
@@ -673,7 +685,10 @@ const IKONA_KOPIUJ = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none
   + `<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>`;
 // Filip 2026-10-01: „powielić ciężar, żeby nie wpisywać każdej serii” — mały
 // przycisk w pustym polu kg, gdy poprzednia seria ma ciężar
-const kgDoKopii = (k, si, s, f = "kg") => si > 0 && !txt(s[f]) && s.stan !== "skip" ? poprzednia(S.stan[k], si, f) : "";
+// przy ćwiczeniu ze stronami bez przycisku: w wąskiej kolumnie zasłaniał podpowiedź,
+// a ✓ i tak wstawia oba ciężary z poprzedniej serii (tablet 1080 px, 2026-10-15)
+const kgDoKopii = (k, si, s, f = "kg") => si > 0 && !txt(s[f]) && s.stan !== "skip"
+  && !(S.meta[k] || {}).strony ? poprzednia(S.stan[k], si, f) : "";
 const htmlKopiuj = (a, kop, f = "kg") => `<button type="button" class="kopiuj" data-act="kopiuj" data-f="${f}" ${a}`
   + ` aria-label="Ciężar z poprzedniej serii: ${esc(kop)} kg">${IKONA_KOPIUJ}</button>`;
 // f: "kg" (przy ćwiczeniu ze stronami = prawa) albo "kg_l" (lewa); kl: klasa koloru
@@ -724,7 +739,8 @@ function htmlKarta(k, sek, wZwinietej) {
   // zawsze dało się wrócić”)
   const strony = !!karta.strony;
   let h = `<div class="karta${strony ? " strony" : ""}" data-karta="${esc(k)}">`
-    + (wZwinietej ? `<button type="button" class="wroc" data-act="zwin" ${dk}><b>‹</b> Wróć</button>` : "")
+    + (wZwinietej ? `<button type="button" class="wroc" data-act="zwin" ${dk}>`
+      + (szeroki() ? `Zwiń <b>▴</b>` : `<b>‹</b> Wróć`) + `</button>` : "")
     + `<div class="glowa">${htmlSlot(k, sek)}`
     + `<div class="pvcol"><span class="pvname">${esc(karta.exercise)}</span>`
     + htmlNazwaWpis(k)
@@ -961,11 +977,16 @@ function render() {
       + `<span>${zr} z ${wsz.length} ćwiczeń</span></div>`;
     h += `<button type="button" class="start" data-act="start">▶ Zacznij trening</button>`;
   }
-  const rozmiar = {};
+  const rozmiar = {}, szer = szeroki();
   for (const g of gr) rozmiar[g.key] = g.ks.length;
+  // tablet: Prep i Plyo do lewej kolumny, reszta (Main) do prawej; telefon — jedna lista
+  const gora = h;
+  let lewa = "";
+  h = "";
   for (const sek of S.sekcje) {
     const karty = S.karty.filter((karta) => karta.section === sek.key);
     if (!karty.length && !S.dod[sek.key]) continue;
+    const poczatek = h.length;
     const ks = karty.map(kl), zwinieta = sek.zwinieta && !S.sekOtw[sek.key];
     // karta odrzucona przy wpisywaniu w innym polu: stan z serwera od razu
     for (const k of ks) if (!S.stan[k]) { S.stan[k] = zSerwera(S.meta[k]); S.baza[k] = kopiaSerii(S.meta[k].serie); }
@@ -980,14 +1001,15 @@ function render() {
       if (g !== poprz) {
         if (wRamce) { h += `</div>`; wRamce = false; }
         if (poprz && (rozmiar[g] > 1 || rozmiar[poprz] > 1)) h += `<div class="odstep"></div>`;
-        if (rozmiar[g] > 1) { h += `<div class="ss" style="--acc:${esc(sek.acc)}">`; wRamce = true; }
+        if (rozmiar[g] > 1) { h += `<div class="ss" style="--acc:${esc(sek.acc)};--n:${rozmiar[g]}">`; wRamce = true; }
       }
       poprz = g;
       // decyzja „w trakcie → otwarta” raz, przy pierwszym narysowaniu — wpisy
       // drugiej strony (ping) otwierały i zamykały karty trenerowi (V3-03)
       const o = ileOk(k);
       const po = S.otwNazwy[ctxKlucz(S.ctx)];
-      if (S.otwarte[k] === undefined) S.otwarte[k] = po ? po.has(S.meta[k].exercise) : (o > 0 && o < ileWierszy(k));
+      if (S.otwarte[k] === undefined) S.otwarte[k] = po ? po.has(S.meta[k].exercise)
+        : (o > 0 && o < ileWierszy(k)) || (szer && !sek.zwinieta && o < ileWierszy(k));
       const otw = S.otwarte[k];
       h += otw ? htmlKarta(k, sek, true) : htmlMini(k, sek);
       h += htmlEdCzeka((op) => op.typ !== "dodaj" && kartaOp(op) === k);
@@ -996,11 +1018,15 @@ function render() {
     // „+ ćwiczenie" tylko w Main — Prep/Plyo zostają jedną listą (minimum tekstu)
     if (S.rola !== "zawodnik" && (!sek.zwinieta || S.dod[sek.key])) h += htmlDodaj(sek);
     h += htmlEdCzeka((op) => op.typ === "dodaj" && op.section === sek.key);
+    if (szer && sek.zwinieta) { lewa += h.slice(poczatek); h = h.slice(0, poczatek); }
   }
   // pusty trening albo usunięte całe Main — bez tego z telefonu nie dało się
   // nic dodać ani odkręcić usunięcia (TEL-4)
   if (S.rola !== "zawodnik" && S.ctx && !S.sekcje.some((x) => x.key === "Main"))
     h += htmlDodaj({ key: "Main", tytul: "Main Strength" }) + htmlEdCzeka((op) => op.typ === "dodaj");
+  if (szer && lewa) h = `<div class="dwie"><div class="kl">${lewa}</div><div class="kp">${h}</div></div>`;
+  else h = lewa + h;
+  h = gora + h;
   if (!h && S.ctx) h = `<div class="pusto">Brak ćwiczeń.</div>`;
   if (S.ctx) h += htmlNazwy();
   const lista = document.getElementById("lista");
@@ -1643,6 +1669,7 @@ root.addEventListener("click", (e) => {
       break;
     case "otworz":
       S.otwarte[k] = true;
+      S.otwRecznie.add(k);
       if (S.tr) S.trOtw[k] = true;
       render();
       break;
@@ -1663,6 +1690,7 @@ root.addEventListener("click", (e) => {
     case "zwin":
       zdejmijFokus();
       S.otwarte[k] = false;
+      S.otwRecznie.add(k);
       if (S.tr) S.trOtw[k] = false;
       render();
       break;
@@ -1884,6 +1912,20 @@ root.addEventListener("keydown", (e) => {
   if (i >= 0 && i + 1 < pola.length) pola[i + 1].focus(); else e.target.blur();
 });
 root.addEventListener("pointerdown", () => { S.wcisniety = true; });
+// obrót tabletu (poziom ↔ pion): układ jedno- / dwukolumnowy od razu
+// ramka startuje z szerokością 0 — pierwsze rysowanie bywa „telefonowe”; po
+// przejściu na szeroki układ niedokończone karty Main otwierają się, poza tymi,
+// które trener sam zwinął albo otworzył
+SZEROKI.addEventListener("change", () => {
+  if (SZEROKI.matches) {
+    const zwin = new Set(S.sekcje.filter((x) => x.zwinieta).map((x) => x.key));
+    for (const karta of S.karty) {
+      const k = kl(karta);
+      if (!zwin.has(karta.section) && !S.otwRecznie.has(k) && S.stan[k]) S.otwarte[k] = ileOk(k) < ileWierszy(k);
+    }
+  }
+  if (S.gotowy && !S.tr && !wPolu()) render();
+});
 const puszczony = () => {
   S.wcisniety = false;
   setTimeout(() => {
