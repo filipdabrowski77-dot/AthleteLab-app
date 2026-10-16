@@ -338,7 +338,7 @@ def _przypisz_zawodnika(name: str) -> None:
 
 # ---------------------------------------------------------------- dane
 _KLUCZE = ("training_plans", "exercise_library", "athlete_profiles",
-           "plan_todos", "recent_plans", "plan_groups", "film_pominiete")
+           "plan_todos", "recent_plans", "plan_groups", "film_pominiete", "sciagi")
 
 
 def rozgrzej_magazyn() -> None:
@@ -651,6 +651,15 @@ def _przepnij_rozpiski(stara: str, nowa: str) -> int:
     return ile
 
 
+def _narzedzia() -> list[dict]:
+    """TOOLS w menu: ściągi (vald/sciagi.py) — tytuły, obraz dopiero po kliknięciu."""
+    from . import sciagi
+    try:
+        return [{"id": x["id"], "tytul": x["tytul"]} for x in sciagi.lista()]
+    except RuntimeError:
+        return []
+
+
 def build_data(screen: str) -> dict:
     # jedno zapytanie zamiast sześciu — reszta funkcji czyta z cache
     from . import store as _st
@@ -765,6 +774,7 @@ def build_data(screen: str) -> dict:
     kto = st.session_state.get("profil_osoby") or ""
     # zdjęci z listy — bez tego usunięcie byłoby nieodwracalne
     data["hidden"] = hidden_names()
+    data["narzedzia"] = _narzedzia()
     # profil tylko z przestrzeni oglądanego konta: nazwisko z innej
     # (stara sesja, podgląd admina) nie może się pokazać (audyt 2026-09-28)
     if kto and kto not in ({r["name"] for r in _r} | set(data["hidden"])
@@ -970,6 +980,10 @@ def handle_action(ev: dict) -> None:
         from . import konta as _konta
         _konta.wyloguj()
         st.rerun()
+
+    elif a == "sciaga":
+        # TOOLS w menu (Filip 2026-10-16): ściąga w dużym oknie na każdej stronie
+        _sciaga_duza(str(ev.get("id") or ""))
 
     elif a == "przejmij_cwiczenie":
         # admin przenosi ćwiczenie trenera do swojej (wspólnej) Bazy
@@ -1663,6 +1677,13 @@ def _sciaga_duza(id_: str) -> None:
     from . import sciagi
     ob = sciagi.obraz(id_)
     tytul = next((x["tytul"] for x in sciagi.lista() if x["id"] == id_), "")
+    # st.image(width="stretch") kurczył kontener do 16 px (pomiar 2026-10-16) —
+    # obraz zawsze na pełną szerokość okna
+    st.markdown("<style>[role='dialog'] [data-testid='stElementContainer']:has([data-testid='stImage']),"
+                "[role='dialog'] [data-testid='stFullScreenFrame'],[role='dialog'] [data-testid='stImage'],"
+                "[role='dialog'] [data-testid='stImageContainer'],[role='dialog'] [data-testid='stImage'] img"
+                "{width:100%!important;max-width:100%!important;height:auto!important}</style>",
+                unsafe_allow_html=True)
     if tytul:
         st.markdown(f"**{html.escape(tytul)}**")
     if ob:

@@ -4632,6 +4632,20 @@ def main() -> None:
                     # plan zamyka dopiero „← Plany" na jego ekranie
                     st.session_state["app_mode"] = _m
                     st.rerun()
+        # TOOLS (ściągi) na dole menu — jak w powłoce (Filip 2026-10-16)
+        from vald.shell import _narzedzia, _sciaga_duza
+        _tools = _narzedzia()
+        if _tools:
+            st.markdown(
+                "<div style='font-family:var(--aph-text); font-size:10.5px;"
+                "font-weight:700; letter-spacing:0.08em; text-transform:uppercase;"
+                " color:var(--aph-mute); margin:18px 0 2px;'>Tools</div>",
+                unsafe_allow_html=True)
+            for _n in _tools:
+                # ten sam format etykiety co reszta menu (pogrubiona nazwa)
+                if st.button(f"**{_n['tytul']}**\n\n", key=f"nav_tool_{_n['id']}",
+                             use_container_width=True):
+                    _sciaga_duza(_n["id"])
 
     # Jeśli ostatni pull się nie powiódł — pokaż dialog z logiem (zamiast
     # rozszerzonego st.expander który rozsuwał layout)

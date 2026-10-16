@@ -48,6 +48,9 @@ select{appearance:none;background-image:none}
 .navitem.on{background:var(--fill);color:var(--ink);font-weight:700}
 .navitem.on i{background:var(--ink)}
 .side .spacer{flex:1}
+/* TOOLS na dole menu (Filip 2026-10-16): ściągi — klik otwiera duże okno */
+.side .narzedzia{padding:14px 0 12px}
+.side .narzedzia .navitem{white-space:normal;line-height:1.25}
 .me{display:flex;align-items:center;gap:8px;padding:10px 10px 0;border-top:1px solid var(--hair2)}
 .me i{width:24px;height:24px;border-radius:999px;background:#ecebe6;font-size:10.5px;font-weight:700;
   color:var(--dim);display:inline-flex;align-items:center;justify-content:center}
@@ -644,6 +647,8 @@ function sidebar(){
       <button class="navtoggle" data-act="navtoggle" title="Zwiń panel">‹</button></div>
     ${groups}
     <div class="spacer"></div>
+    ${(D.narzedzia||[]).length ? `<div class="narzedzia"><h3>Tools</h3><div class="navgroup">` + D.narzedzia.map(n=>
+      `<button class="navitem" data-act="sciaga" data-id="${esc(n.id)}"><i></i>${esc(n.tytul)}</button>`).join("") + `</div></div>` : ""}
     <div class="me"><i>${esc(D.user.initials)}</i><span>${esc(D.user.name)}</span>
       ${D.wyloguj ? `<button class="wyloguj" data-act="wyloguj" title="Wyloguj">Wyloguj</button>` : ""}</div>
   </div>`;
@@ -1725,6 +1730,9 @@ document.addEventListener("click", e=>{
       if(b.dataset.tab) S.exTab = b.dataset.tab;
       if(S.screen==="plans") S.planTab = "plany";
       S.share = false; S.menu = false; render(); act("navigate",{to:b.dataset.v}); break;
+    case "sciaga":
+      if(waski()) S.navCollapsed = true;
+      act("sciaga", {id: b.dataset.id}); break;
     case "extrener":
       S.exTrener = b.dataset.v; render(); break;
     case "przejmij_cwiczenie":
