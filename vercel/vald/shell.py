@@ -652,12 +652,18 @@ def _przepnij_rozpiski(stara: str, nowa: str) -> int:
 
 
 def _narzedzia() -> list[dict]:
-    """TOOLS w menu: ściągi (vald/sciagi.py) — tytuły, obraz dopiero po kliknięciu."""
-    from . import sciagi
+    """TOOLS w menu: najpierw tabele rysowane w apce (vald/narzedzia.py), potem
+    obrazy dodane przez trenera (vald/sciagi.py) — tytuły, treść po kliknięciu.
+    Obraz o tym samym tytule co tabela wbudowana jest pomijany (zastąpiony)."""
+    from . import narzedzia, sciagi
+    wbud = [{"id": n["id"], "tytul": n["tytul"]} for n in narzedzia.NARZEDZIA]
+    tytuly = {n["tytul"].strip().lower() for n in wbud}
     try:
-        return [{"id": x["id"], "tytul": x["tytul"]} for x in sciagi.lista()]
+        obrazy = [{"id": x["id"], "tytul": x["tytul"]} for x in sciagi.lista()
+                  if x["tytul"].strip().lower() not in tytuly]
     except RuntimeError:
-        return []
+        obrazy = []
+    return wbud + obrazy
 
 
 def build_data(screen: str) -> dict:
@@ -1674,7 +1680,18 @@ def _render_workout_page(plan_id: str, sid: str) -> None:
 
 @st.dialog("Ściąga", width="large")
 def _sciaga_duza(id_: str) -> None:
-    from . import sciagi
+    from . import narzedzia, sciagi
+    if narzedzia.jest(id_):
+        # tabela rysowana w apce: okno prawie na cały ekran (Filip 2026-10-16:
+        # „żeby na całą stronę odpalała się taka tabelka”)
+        # kontenery elementów w oknie kurczyły się do 0 px (pomiar 2026-10-16)
+        st.markdown("<style>div[role='dialog']{width:96vw!important;max-width:96vw!important}"
+                    "div[role='dialog'] [data-testid='stElementContainer'],"
+                    "div[role='dialog'] [data-testid='stHtml']{width:100%!important;max-width:100%!important}</style>",
+                    unsafe_allow_html=True)
+        st.markdown(narzedzia.css(), unsafe_allow_html=True)
+        st.html(narzedzia.tresc(id_))
+        return
     ob = sciagi.obraz(id_)
     tytul = next((x["tytul"] for x in sciagi.lista() if x["id"] == id_), "")
     # st.image(width="stretch") kurczył kontener do 16 px (pomiar 2026-10-16) —
@@ -1708,12 +1725,18 @@ def _render_sciagi_panel() -> None:
         except RuntimeError as e:
             st.error(f"Nie mogę wczytać ściąg. {e}")
             return
+        from . import narzedzia
+        for n in narzedzia.NARZEDZIA:          # tabele rysowane w apce — otwierają duże okno
+            if st.button(n["tytul"], key=f"sc_nz_{n['id']}", use_container_width=True):
+                _sciaga_duza(n["id"])
+        tytuly_nz = {n["tytul"].strip().lower() for n in narzedzia.NARZEDZIA}
+        items = [x for x in items if x["tytul"].strip().lower() not in tytuly_nz]
         ids = [x["id"] for x in items]
         wyb = st.session_state.get("sc_wybrana")
         if wyb not in ids:
             wyb = ids[0] if ids else None
         if not items:
-            st.caption("Brak ściąg — dodaj pierwszą niżej.")
+            st.caption("Własne obrazy dodasz niżej.")
         for x in items:
             if st.button(x["tytul"], key=f"sc_poz_{x['id']}", use_container_width=True,
                          type="primary" if x["id"] == wyb else "secondary"):
