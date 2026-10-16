@@ -26,12 +26,12 @@ _CSS = """<style>
 .nz{font-family:Archivo,system-ui,-apple-system,sans-serif;color:#1c1b18;
   --ink:#1c1b18;--dim:#6f6b61;--mute:#8a867c;--line:#e6e3db;--hair:#f0eee8}
 .nz *{box-sizing:border-box}
-.nz h2{font-family:'Archivo Black',Archivo,sans-serif;font-size:clamp(22px,3vw,32px);
-  letter-spacing:-.02em;line-height:1.1;margin:0 0 4px}
-.nz .pod{font-size:14px;color:var(--dim);margin:0 0 18px}
+.nz h2{font-family:'Archivo Black',Archivo,sans-serif;font-size:clamp(18px,2vw,24px);
+  letter-spacing:-.02em;line-height:1.1;margin:0 0 2px}
+.nz .pod{font-size:13px;color:var(--dim);margin:0 0 10px}
 .nz .ramka{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);
   border-radius:14px;background:#fff}
-.nz .zrodlo{font-size:12px;color:var(--mute);margin:12px 0 0}
+.nz .zrodlo{font-size:11.5px;color:var(--mute);margin:8px 0 0}
 .nz table{border-collapse:separate;border-spacing:0;width:100%}
 .nz th,.nz td{font-variant-numeric:tabular-nums}
 /* gojenie tkanek */
@@ -39,11 +39,11 @@ _CSS = """<style>
 .nz .gt-wiersz{display:grid;grid-template-columns:170px repeat(9,minmax(0,1fr));border-bottom:1px solid var(--hair)}
 .nz .gt-wiersz:last-child{border-bottom:0}
 .nz .gt-glowa{background:#faf9f6}
-.nz .gt-glowa div{padding:12px 6px;font-size:11.5px;font-weight:700;letter-spacing:.04em;
+.nz .gt-glowa div{padding:7px 4px;font-size:10.5px;font-weight:700;letter-spacing:.04em;
   text-transform:uppercase;color:var(--dim);text-align:center;border-left:1px solid var(--hair)}
 .nz .gt-glowa div:first-child{text-align:left;padding-left:16px;border-left:0}
-.nz .gt-nazwa{display:flex;align-items:center;gap:10px;padding:10px 12px 10px 16px;
-  font-size:14px;font-weight:700;position:sticky;left:0;z-index:2;background:#fff;
+.nz .gt-nazwa{display:flex;align-items:center;gap:8px;padding:3px 10px 3px 14px;
+  font-size:13px;font-weight:700;position:sticky;left:0;z-index:2;background:#fff;
   box-shadow:1px 0 0 var(--hair)}
 .nz .gt-glowa div:first-child{position:sticky;left:0;z-index:2;background:#faf9f6;box-shadow:1px 0 0 var(--hair)}
 /* telefon: węższa kolumna nazw (przyklejona przy przewijaniu osi) */
@@ -53,18 +53,18 @@ _CSS = """<style>
   .nz .gt-nazwa{font-size:12.5px;padding:8px 8px 8px 10px;gap:6px}
   .nz .gt-glowa div:first-child{padding-left:10px}
 }
-.nz .gt-kropka{width:10px;height:10px;border-radius:999px;flex:none}
+.nz .gt-kropka{width:9px;height:9px;border-radius:999px;flex:none}
 .nz .gt-tor{grid-column:2/-1;display:grid;grid-template-columns:repeat(9,minmax(0,1fr));
-  row-gap:5px;padding:8px 0;position:relative;
+  row-gap:2px;padding:3px 0;position:relative;
   background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(100%/9 - 1px),var(--hair) calc(100%/9 - 1px),var(--hair) calc(100%/9))}
-.nz .gt-pas{height:28px;margin:0 3px;border-radius:7px;display:flex;align-items:center;
-  padding:0 10px;font-size:12.5px;font-weight:600;white-space:nowrap;overflow:visible;
-  border-left:4px solid var(--k);background:color-mix(in srgb,var(--k) var(--s),#fff)}
+.nz .gt-pas{height:18px;margin:0 3px;border-radius:5px;display:flex;align-items:center;
+  padding:0 7px;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:visible;
+  border-left:3px solid var(--k);background:color-mix(in srgb,var(--k) var(--s),#fff)}
 .nz .gt-pas b{font-weight:800;margin-right:5px}
-.nz .czynniki{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:18px}
-.nz .czynnik{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}
-.nz .czynnik b{display:block;font-size:14px;margin-bottom:4px}
-.nz .czynnik span{font-size:13px;line-height:1.4;color:#3c3a33}
+.nz .czynniki{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:10px}
+.nz .czynnik{border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:#fff}
+.nz .czynnik b{display:block;font-size:12.5px;margin-bottom:2px}
+.nz .czynnik span{display:block;font-size:12px;line-height:1.3;color:#3c3a33}
 /* izometria */
 .nz .iz{min-width:900px}
 .nz .iz th,.nz .iz td{padding:12px 12px;border-bottom:1px solid var(--hair);border-left:1px solid var(--hair);
@@ -83,14 +83,15 @@ _CSS = """<style>
 .nz .rm-uklad{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start}
 @media (max-width:1100px){.nz .rm-uklad{grid-template-columns:minmax(0,1fr)}}
 .nz .rm{min-width:640px}
-.nz .rm th,.nz .rm td{padding:6px 8px;border-bottom:1px solid var(--hair);font-size:13.5px;text-align:center}
-.nz .rm thead th{font-size:11.5px;font-weight:700;color:var(--dim);background:#faf9f6;line-height:1.25;vertical-align:bottom}
-.nz .rm thead th small{display:block;font-weight:500;font-size:10.5px;color:var(--mute)}
-.nz .rm thead tr:first-child th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:#f2f1ec}
+.nz .rm th,.nz .rm td{padding:2px 6px;border-bottom:1px solid var(--hair);font-size:12.5px;line-height:1.35;text-align:center}
+.nz .rm td{white-space:nowrap}
+.nz .rm thead th{font-size:10.5px;font-weight:700;color:var(--dim);background:#faf9f6;line-height:1.2;vertical-align:bottom;padding:4px 5px}
+.nz .rm thead th small{display:block;font-weight:500;font-size:9.5px;color:var(--mute)}
+.nz .rm thead tr:first-child th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:#f2f1ec}
 .nz .rm thead tr:first-child th.pril,.nz .rm td.pril{background:#fdf6e3}
 .nz .rm td.proc{font-weight:800}
-.nz .rm td.lvl{font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#fff;
-  background:var(--k);text-align:left;padding-left:12px;width:84px}
+.nz .rm td.lvl{font-weight:800;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#fff;
+  background:var(--k);text-align:left;padding-left:10px;width:72px}
 .nz .rm td.ef{font-weight:600;background:color-mix(in srgb,#3f7fd8 var(--s),#fff)}
 .nz .rm tr.gr td{border-top:2px solid #fff}
 .nz .rev{min-width:380px}

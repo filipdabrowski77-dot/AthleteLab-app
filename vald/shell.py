@@ -1685,6 +1685,13 @@ def _sciaga_duza(id_: str) -> None:
         # tabela rysowana w apce: okno prawie na cały ekran (Filip 2026-10-16:
         # „żeby na całą stronę odpalała się taka tabelka”)
         # kontenery elementów w oknie kurczyły się do 0 px (pomiar 2026-10-16)
+        # mniej ramki okna (marginesy, tytuł) — tabela ma się zmieścić na jednym
+        # ekranie laptopa i iPada bez przewijania (Filip 2026-10-16)
+        st.markdown("<style>div:has(> div[role='dialog']){padding-top:8px!important}"
+                    "div[role='dialog']{margin:8px auto!important}"
+                    "div[role='dialog'] > div:first-child{padding:10px 20px 0!important}"
+                    "div[role='dialog'] > div:nth-child(2){padding:4px 20px 14px!important}</style>",
+                    unsafe_allow_html=True)
         st.markdown("<style>div[role='dialog']{width:96vw!important;max-width:96vw!important}"
                     "div[role='dialog'] [data-testid='stElementContainer'],"
                     "div[role='dialog'] [data-testid='stHtml']{width:100%!important;max-width:100%!important}</style>",
