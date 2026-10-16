@@ -1553,7 +1553,26 @@ EDITOR_CSS = """<style>
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .aph-wk-warn{font-family:Archivo,system-ui,sans-serif;font-size:13px;font-weight:600;
   color:#a8452f;padding-top:9px}
+/* Ściągi (Filip 2026-10-16): lewa kolumna obok edytora, przyklejona przy przewijaniu */
+.stApp .st-key-wk_sciagi button{min-height:34px!important;height:34px!important;
+  padding:0 14px!important;border-radius:6px!important;border:1px solid #d8d5cc!important;
+  background:#fff!important;font-size:13px!important;font-weight:700!important;color:#1c1b18!important}
+.stApp .st-key-wk_sciagi button:hover{background:#f2f1ec!important}
+.stApp .st-key-wk_sciagi.otwarte button{background:#1c1b18!important;border-color:#1c1b18!important;color:#fff!important}
+.stApp .st-key-sc_panel{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;
+  margin:12px 0 0 40px;width:calc(100% - 40px)!important;box-sizing:border-box;padding:14px;
+  border:1px solid #e6e3db;border-radius:14px;background:#fff}
+.stApp .st-key-sc_panel button{border-radius:10px!important;justify-content:flex-start!important;
+  text-align:left!important}
+.stApp .st-key-sc_panel [data-testid="stImage"],.stApp .st-key-sc_panel [data-testid="stImage"] img{width:100%!important;height:auto!important}
+.stApp .st-key-sc_panel [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important;gap:8px!important}
+.stApp .st-key-sc_panel [data-testid="stHorizontalBlock"] [data-testid="stColumn"]{min-width:0!important;width:auto!important;flex:1 1 0!important}
+.stApp .st-key-sc_panel [data-testid="stHorizontalBlock"] [data-testid="stColumn"]:has(.st-key-sc_zamknij){flex:0 0 44px!important}
+.aph-sc-tyt{font-family:Archivo,system-ui,sans-serif;font-size:12.5px;font-weight:800;
+  letter-spacing:.1em;text-transform:uppercase;color:#1c1b18}
+.stApp .st-key-sc_panel [data-testid="stImage"] img{border-radius:8px;border:1px solid #f0eee8}
 @media (max-width:700px){
+  .stApp .st-key-sc_panel{position:static;max-height:none;margin:12px 14px 0;width:calc(100% - 28px)!important}
   /* audyt telefonu 2026-09-29: pasek nad edytorem w jednej linii, przyciski
      pobierania z marginesem */
   .stApp .st-key-wk_bar{padding:12px 14px 0}
@@ -1606,8 +1625,9 @@ def _render_workout_page(plan_id: str, sid: str) -> None:
     brudny = bool(st.session_state.get("pp_dirty"))
     if brudny and st.session_state.get("wk_exit_ask"):
         _pytanie_o_zapis()
+    otwarte = bool(st.session_state.get("sciagi_otwarte"))
     with st.container(key="wk_bar"):
-        c1, c2 = st.columns([1.3, 7], vertical_alignment="center")
+        c1, c2, c3 = st.columns([1.3, 6, 1], vertical_alignment="center")
         if c1.button("← Wróć do planu", key="wk_back"):
             if brudny:
                 st.session_state["wk_exit_ask"] = True
@@ -1620,7 +1640,100 @@ def _render_workout_page(plan_id: str, sid: str) -> None:
             f"{html.escape(plan.get('name', ''))} · "
             f"{html.escape(ses[idx].get('title') or 'Trening ' + _letter(idx))}</div>",
             unsafe_allow_html=True)
-    _tr_workout_body(plan_id, sid)
+        if c3.button("Ściągi", key="wk_sciagi", use_container_width=True):
+            st.session_state["sciagi_otwarte"] = not otwarte
+            st.rerun()
+    if not otwarte:
+        _tr_workout_body(plan_id, sid)
+        return
+    # przycisk ciemny, gdy panel otwarty
+    st.markdown("<style>.stApp .st-key-wk_sciagi button{background:#1c1b18!important;"
+                "border-color:#1c1b18!important}.stApp .st-key-wk_sciagi button,"
+                ".stApp .st-key-wk_sciagi button *{color:#fff!important}</style>",
+                unsafe_allow_html=True)
+    lewa, prawa = st.columns([1.05, 2.6], gap="small")
+    with lewa:
+        _render_sciagi_panel()
+    with prawa:
+        _tr_workout_body(plan_id, sid)
+
+
+@st.dialog("Ściąga", width="large")
+def _sciaga_duza(id_: str) -> None:
+    from . import sciagi
+    ob = sciagi.obraz(id_)
+    tytul = next((x["tytul"] for x in sciagi.lista() if x["id"] == id_), "")
+    if tytul:
+        st.markdown(f"**{html.escape(tytul)}**")
+    if ob:
+        st.image(ob[0], width="stretch")
+    else:
+        st.caption("Tej ściągi już nie ma.")
+
+
+def _render_sciagi_panel() -> None:
+    """Lista ściąg, podgląd wybranej, powiększenie, dodawanie i usuwanie
+    (vald/sciagi.py). Klucze widżetów z nonce — Streamlit wskrzesza wartość
+    widżetu po pop (pole tytułu i plik po dodaniu mają być puste)."""
+    from . import sciagi
+    with st.container(key="sc_panel"):
+        h1, h2 = st.columns([5, 1], vertical_alignment="center")
+        h1.markdown("<div class='aph-sc-tyt'>Ściągi</div>", unsafe_allow_html=True)
+        if h2.button("✕", key="sc_zamknij", help="Zamknij panel"):
+            st.session_state["sciagi_otwarte"] = False
+            st.rerun()
+        try:
+            items = sciagi.lista()
+        except RuntimeError as e:
+            st.error(f"Nie mogę wczytać ściąg. {e}")
+            return
+        ids = [x["id"] for x in items]
+        wyb = st.session_state.get("sc_wybrana")
+        if wyb not in ids:
+            wyb = ids[0] if ids else None
+        if not items:
+            st.caption("Brak ściąg — dodaj pierwszą niżej.")
+        for x in items:
+            if st.button(x["tytul"], key=f"sc_poz_{x['id']}", use_container_width=True,
+                         type="primary" if x["id"] == wyb else "secondary"):
+                st.session_state["sc_wybrana"] = x["id"]
+                st.session_state.pop("sc_usun_pewny", None)
+                st.rerun()
+        if wyb:
+            ob = sciagi.obraz(wyb)
+            if ob:
+                st.image(ob[0], width="stretch")
+            b1, b2 = st.columns(2)
+            if b1.button("Powiększ", key="sc_powieksz", use_container_width=True):
+                _sciaga_duza(wyb)
+            pewny = st.session_state.get("sc_usun_pewny") == wyb
+            if b2.button("Na pewno usuń" if pewny else "Usuń", key="sc_usun",
+                         use_container_width=True):
+                if pewny:
+                    sciagi.usun(wyb)
+                    st.session_state.pop("sc_usun_pewny", None)
+                    st.session_state.pop("sc_wybrana", None)
+                else:
+                    st.session_state["sc_usun_pewny"] = wyb
+                st.rerun()
+        n = st.session_state.get("sc_nonce", 0)
+        with st.expander("+ Dodaj ściągę", expanded=not items):
+            tytul = st.text_input("Tytuł", key=f"sc_tytul_{n}",
+                                  placeholder="np. Tabela %1RM")
+            plik = st.file_uploader("Obraz (PNG, JPG, WEBP)", key=f"sc_plik_{n}",
+                                    type=["png", "jpg", "jpeg", "webp", "gif"])
+            if st.button("Dodaj", key=f"sc_dodaj_{n}", type="primary"):
+                if plik is None:
+                    st.warning("Wybierz obraz.")
+                else:
+                    try:
+                        wpis = sciagi.dodaj(tytul, plik.getvalue(), plik.type or "")
+                    except ValueError as e:
+                        st.warning(str(e))
+                    else:
+                        st.session_state["sc_wybrana"] = wpis["id"]
+                        st.session_state["sc_nonce"] = n + 1
+                        st.rerun()
 
 
 def render_shell() -> None:

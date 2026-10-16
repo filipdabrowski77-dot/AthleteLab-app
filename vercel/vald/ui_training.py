@@ -1242,16 +1242,32 @@ _TRK_N_X_R = re.compile(r"(\d+)\s*[x×]\s*(\d+(?:\s*-\s*\d+)?)?", re.I)
 _TRK_CSS = """<style>
         /* podopieczni jako kafelki, trzy obok siebie (Filip 2026-09-29):
            siatka na kontenerze, bo st.columns na telefonie idą pod siebie */
-        .stApp .st-key-trk_kafle, .stApp .st-key-trk_kafle_reszta {
-            display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 8px !important; }
-        .stApp .st-key-trk_kafle > div, .stApp .st-key-trk_kafle_reszta > div {
-            width: auto !important; min-width: 0; }
-        .stApp [class*="st-key-trk_z_"] button { min-height: 76px !important;
-            height: 100%; padding: 8px 6px !important; white-space: normal !important;
-            border-radius: 14px !important; }
-        .stApp [class*="st-key-trk_z_"] button p { text-align: center;
-            font-size: 14px; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
+        .stApp .st-key-trk_kafle {
+            display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px !important; }
+        @media (min-width: 600px) {
+            .stApp .st-key-trk_kafle { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        .stApp .st-key-trk_kafle > div { width: auto !important; min-width: 0; }
+        /* kafelek jak w Podopiecznych (Filip 2026-10-16): inicjały w kwadracie,
+           zielone „AKTYWNY” przy aktualnym planie, imię i nazwisko na dole */
+        .stApp [class*="st-key-trk_z_"] button { position: relative;
+            min-height: 112px !important; height: 100%; padding: 62px 14px 14px 16px !important;
+            display: flex !important; align-items: flex-end !important;
+            justify-content: flex-start !important; white-space: normal !important;
+            border-radius: 14px !important; border: 1px solid #e6e3db !important;
+            background: #fff !important; box-shadow: 0 1px 2px rgba(28,27,24,.04); }
+        .stApp [class*="st-key-trk_z_"] button:hover { border-color: #c9c5bb !important; }
+        .stApp [class*="st-key-trk_z_"] button p { text-align: left; font-size: 15.5px;
+            font-weight: 700; line-height: 1.25; color: #1c1b18; overflow-wrap: break-word;
+            hyphens: auto; }
+        .stApp [class*="st-key-trk_z_"] button::before { position: absolute; left: 16px;
+            top: 14px; width: 40px; height: 40px; border-radius: 10px; background: #f2f1ec;
+            color: #6f6b61; font: 700 13px/40px Archivo, system-ui, sans-serif;
+            text-align: center; letter-spacing: .02em; }
+        .stApp [class*="st-key-trk_z_"] button::after { position: absolute; right: 12px;
+            top: 16px; padding: 3px 8px; border-radius: 6px; background: #e8f3e4;
+            color: #2f6e3b; font: 800 10.5px/1.3 Archivo, system-ui, sans-serif;
+            letter-spacing: .08em; }
         .stApp .st-key-trk_pop { display: none !important; }
         /* tablet w poziomie (Filip 2026-10-15): szeroka strona — komponent
            rysuje wtedy dwie kolumny (Prep+Plyo | Main); wybór planu, tygodnie
@@ -1262,7 +1278,7 @@ _TRK_CSS = """<style>
             .stApp [data-testid="stHorizontalBlock"]:has([class*="st-key-gymwk_"]),
             .stApp [data-testid="stHorizontalBlock"]:has([class*="st-key-gymt_"]),
             .stApp [class*="st-key-trk_plan_"] { max-width: 720px; }
-            .stApp .st-key-trk_kafle, .stApp .st-key-trk_kafle_reszta {
+            .stApp .st-key-trk_kafle {
                 grid-template-columns: repeat(5, minmax(0, 1fr)); }
         }
         </style>"""
@@ -2138,24 +2154,36 @@ def _trk_lista_zawodnikow(plans: list) -> None:
         st.info("Brak planów.")
         return
 
+    def _klucz(ath: str) -> str:
+        return "trk_z_" + hashlib.md5(ath.encode("utf-8")).hexdigest()[:10]
+
+    def _inicjaly(ath: str) -> str:
+        cz = [c for c in re.split(r"\s+", ath.strip()) if c]
+        lit = "".join(c[0] for c in cz[:2]).upper()
+        return re.sub(r"[^\w]", "", lit) or "?"
+
+    # inicjały i „AKTYWNY” jako ::before/::after — przycisk Streamlita nie
+    # przyjmuje HTML w etykiecie (wygląd jak kafelki Podopiecznych, 2026-10-16)
+    st.markdown("<style>" + "".join(
+        f".stApp .st-key-{_klucz(ath)} button::before{{content:\"{_inicjaly(ath)}\"}}"
+        + (f".stApp .st-key-{_klucz(ath)} button::after{{content:\"AKTYWNY\"}}" if akt else "")
+        for akt, lista in ((True, teraz), (False, reszta)) for ath, _ in lista) + "</style>",
+        unsafe_allow_html=True)
+
     def _przycisk(ath: str, plan: dict) -> None:
         # kafelek = imię i nazwisko; plan (aktualny albo ostatni) otwiera się
         # po stuknięciu, starszy wybiera się już w środku (Filip 2026-09-29)
-        klucz = "trk_z_" + hashlib.md5(ath.encode("utf-8")).hexdigest()[:10]
-        if st.button(ath, key=klucz, use_container_width=True):
+        if st.button(ath, key=_klucz(ath), use_container_width=True):
             st.query_params["p"] = plan["id"]
             for k in ("t", "w"):
                 st.query_params.pop(k, None)
             st.rerun()
 
+    # jedna siatka jak w Podopiecznych: najpierw aktywni (zielone „AKTYWNY”),
+    # potem reszta — wcześniej zwinięta pod „Pozostali” (Filip 2026-10-16)
     with st.container(key="trk_kafle"):
-        for ath, plan in teraz:
+        for ath, plan in teraz + reszta:
             _przycisk(ath, plan)
-    if reszta:
-        with st.expander(f"Pozostali ({len(reszta)})"):
-            with st.container(key="trk_kafle_reszta"):
-                for ath, plan in reszta:
-                    _przycisk(ath, plan)
 
 
 def _render_gym_mode() -> None:
