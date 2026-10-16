@@ -4632,18 +4632,31 @@ def main() -> None:
                     # plan zamyka dopiero „← Plany" na jego ekranie
                     st.session_state["app_mode"] = _m
                     st.rerun()
-            # TOOLS (ściągi) zaraz pod Podopiecznymi, przed Pomocą — jak w powłoce
-            # (Filip 2026-10-16: na dole długiej strony trzeba było przewijać)
+            # TOOLS zaraz pod Podopiecznymi, przed Pomocą — jak w powłoce
+            # (Filip 2026-10-16: na dole długiej strony trzeba było przewijać);
+            # rozwijana lista, start zwinięta (Filip 2026-10-17: będzie ich więcej)
             if _sekcja == "ZAWODNICY":
                 from vald.shell import _narzedzia, _sciaga_duza
                 _tools = _narzedzia()
                 if _tools:
                     st.markdown(
-                        "<div style='font-family:var(--aph-text); font-size:10.5px;"
-                        "font-weight:700; letter-spacing:0.08em; text-transform:uppercase;"
-                        " color:var(--aph-mute); margin:10px 0 2px;'>Tools</div>",
+                        "<style>[data-testid='stSidebar'] .st-key-navtools_tog button{"
+                        "justify-content:space-between!important;border:none!important;"
+                        "background:transparent!important;box-shadow:none!important;"
+                        "min-height:30px!important;padding:4px 6px!important;margin-top:6px;"
+                        "border-radius:6px!important}"
+                        "[data-testid='stSidebar'] .st-key-navtools_tog button:hover{background:#f4f3ef!important}"
+                        "[data-testid='stSidebar'] .st-key-navtools_tog button p{"
+                        "font-family:var(--aph-text);font-size:10.5px!important;font-weight:700;"
+                        "letter-spacing:0.08em;text-transform:uppercase;color:var(--aph-mute)!important;"
+                        "margin:0!important}</style>",
                         unsafe_allow_html=True)
-                    for _n in _tools:
+                    _otw = bool(st.session_state.get("navtools_otw"))
+                    if st.button(f"Tools {'▾' if _otw else '▸'}", key="navtools_tog",
+                                 use_container_width=True):
+                        st.session_state["navtools_otw"] = not _otw
+                        st.rerun()
+                    for _n in (_tools if _otw else []):
                         # ten sam format etykiety co reszta menu (pogrubiona nazwa)
                         if st.button(f"**{_n['tytul']}**\n\n", key=f"nav_tool_{_n['id']}",
                                      use_container_width=True):

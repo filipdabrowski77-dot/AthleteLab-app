@@ -48,8 +48,16 @@ select{appearance:none;background-image:none}
 .navitem.on{background:var(--fill);color:var(--ink);font-weight:700}
 .navitem.on i{background:var(--ink)}
 .side .spacer{flex:1}
-/* TOOLS pod Podopiecznymi (Filip 2026-10-16): ściągi — klik otwiera duże okno */
+/* TOOLS pod Podopiecznymi (Filip 2026-10-16): klik otwiera duże okno.
+   Rozwijana lista, start zwinięty — narzędzi będzie więcej (Filip 2026-10-17) */
 .navitem.tool{white-space:normal;line-height:1.25}
+.side h3.toolsh{padding-left:0;padding-right:0;padding-bottom:3px}
+.toolstog{display:flex;align-items:center;justify-content:space-between;width:100%;border:none;
+  background:transparent;cursor:pointer;font:inherit;letter-spacing:inherit;text-transform:inherit;
+  color:inherit;padding:5px 6px;border-radius:6px;text-align:left}
+.toolstog:hover{background:#f4f3ef;color:var(--ink)}
+.toolstog b{font-size:11px;font-weight:700;transition:transform .15s;transform:rotate(-90deg)}
+.toolstog.otw b{transform:none}
 .me{display:flex;align-items:center;gap:8px;padding:10px 10px 0;border-top:1px solid var(--hair2)}
 .me i{width:24px;height:24px;border-radius:999px;background:#ecebe6;font-size:10.5px;font-weight:700;
   color:var(--dim);display:inline-flex;align-items:center;justify-content:center}
@@ -603,6 +611,7 @@ let S = {screen:"start", planTab:"plany", askBase:false, exTab:"all", cat:"Wszys
          wOtw:{},   // Wykonanie: zwinięte / rozwinięte treningi i sekcje
          planQuery:"", exQuery:"", share:false, modal:false, menu:false, coachMenu:false,
          navCollapsed:waski(),   // start rozwinięty (na telefonie zwinięty) — bez pamiętania stanu
+         toolsOtw:false,         // lista TOOLS w menu: start zwinięta
          // widok listy podopiecznych — wybór przeżywa zamknięcie karty
          rosterView:(()=>{ try{ return localStorage.getItem("aph.roster") || "kafelki"; }
                            catch(_){ return "kafelki"; } })(),
@@ -635,14 +644,20 @@ function sidebar(){
   const NAV_WID = D.tylko_plany && !D.pt_komunikat
     ? NAV.map(g=>({...g, items:g.items.filter(it=>it.id!=="testing")}))
     : NAV;
-  // TOOLS (ściągi) zaraz pod Podopiecznymi, przed Pomocą — na dole długiej
-  // strony trzeba było przewijać (Filip 2026-10-16)
+  // TOOLS zaraz pod Podopiecznymi, przed Pomocą — na dole długiej strony
+  // trzeba było przewijać (Filip 2026-10-16); rozwijana lista, start zwinięty
+  // (Filip 2026-10-17: „będzie ich więcej, chcę tylko klikać i rozwijać”)
   const TOOLS = (D.narzedzia||[]).length
-    ? {group:"Tools", items:D.narzedzia.map(n=>({tool:true, id:n.id, label:n.tytul}))} : null;
+    ? {group:"Tools", tools:true, items:D.narzedzia.map(n=>({tool:true, id:n.id, label:n.tytul}))} : null;
   const z = NAV_WID.findIndex(g=>g.group==="Zawodnicy");
   const NAV_T = TOOLS ? [...NAV_WID.slice(0, z+1), TOOLS, ...NAV_WID.slice(z+1)] : NAV_WID;
-  const groups = NAV_T.map(g=>`<h3>${esc(g.group)}</h3><div class="navgroup">` + g.items.map(it=>{
-    if(it.tool) return `<button class="navitem tool" data-act="sciaga" data-id="${esc(it.id)}"><i></i>${esc(it.label)}</button>`;
+  const groups = NAV_T.map(g=>g.tools
+    ? `<h3 class="toolsh"><button class="toolstog${S.toolsOtw?" otw":""}" data-act="toolstog"
+         aria-expanded="${S.toolsOtw?"true":"false"}">${esc(g.group)}<b>▾</b></button></h3>`
+      + (S.toolsOtw ? `<div class="navgroup">` + g.items.map(it=>
+          `<button class="navitem tool" data-act="sciaga" data-id="${esc(it.id)}"><i></i>${esc(it.label)}</button>`
+        ).join("") + `</div>` : "")
+    : `<h3>${esc(g.group)}</h3><div class="navgroup">` + g.items.map(it=>{
     const on = S.screen===it.id || (it.id==="plans" && S.screen==="plan")
       || (it.id==="testing" && S.screen==="brak_pt");
     return `<button class="navitem${on?" on":""}" data-act="nav" data-v="${it.id}"><i></i>${esc(it.label)}</button>`;
@@ -1811,6 +1826,7 @@ document.addEventListener("click", e=>{
       S.coachMenu = false; S.screen = "start"; S.planTab = "plany"; S.share = false; S.menu = false;
       render(); act("switch_coach",{id:b.dataset.id}); break;
     case "navtoggle": S.navCollapsed = !S.navCollapsed; render(); break;
+    case "toolstog": S.toolsOtw = !S.toolsOtw; render(); break;
     case "dyktando": act("dyktando",{}); break;
     case "undo_delete_plan": case "zamknij_cofnij":
       D.undo = null; render(); act(a, {}); break;

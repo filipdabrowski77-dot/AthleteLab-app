@@ -1660,7 +1660,7 @@ def _render_workout_page(plan_id: str, sid: str) -> None:
             f"{html.escape(plan.get('name', ''))} · "
             f"{html.escape(ses[idx].get('title') or 'Trening ' + _letter(idx))}</div>",
             unsafe_allow_html=True)
-        if c3.button("Ściągi", key="wk_sciagi", use_container_width=True):
+        if c3.button("Tools", key="wk_sciagi", use_container_width=True):
             st.session_state["sciagi_otwarte"] = not otwarte
             st.rerun()
     if not otwarte:
@@ -1678,9 +1678,30 @@ def _render_workout_page(plan_id: str, sid: str) -> None:
         _tr_workout_body(plan_id, sid)
 
 
-@st.dialog("Ściąga", width="large")
 def _sciaga_duza(id_: str) -> None:
+    """Narzędzie z TOOLS w dużym oknie. Tytuł okna = nazwa narzędzia
+    (Filip 2026-10-17: bez słowa „ściąga”), więc treść idzie bez <h2>."""
+    tytul = next((n["tytul"] for n in _narzedzia() if n["id"] == id_), "")
+    st.dialog(_tytul_okna(tytul) or "Tools", width="large")(_okno_narzedzia)(id_)
+
+
+def _tytul_okna(t: str) -> str:
+    """Streamlit renderuje tytuł okna jako Markdown etykiety i zdejmuje listy,
+    nagłówki i cytaty („1. Rozgrzewka” → „Rozgrzewka”, „2024.” → pusto) —
+    znak na początku tytułu własnego obrazu poprzedzamy backslashem."""
+    import re
+    t = re.sub(r"^(\s*\d+)([.)])", r"\1\\\2", t)
+    return re.sub(r"^(\s*)([#>+\-*=_])", r"\1\\\2", t)
+
+
+def _okno_narzedzia(id_: str) -> None:
     from . import narzedzia, sciagi
+    # tytuł okna w stylu nagłówka tabel (Archivo Black), nie domyślny Streamlita
+    st.markdown("<style>div[role='dialog'] > div:first-child h2,"
+                "div[role='dialog'] > div:first-child [data-testid='stMarkdownContainer'] p"
+                "{font-family:'Archivo Black',Archivo,sans-serif!important;"
+                "font-size:clamp(18px,2vw,24px)!important;letter-spacing:-.02em;line-height:1.15}</style>",
+                unsafe_allow_html=True)
     if narzedzia.jest(id_):
         # tabela rysowana w apce: okno prawie na cały ekran (Filip 2026-10-16:
         # „żeby na całą stronę odpalała się taka tabelka”)
@@ -1697,10 +1718,9 @@ def _sciaga_duza(id_: str) -> None:
                     "div[role='dialog'] [data-testid='stHtml']{width:100%!important;max-width:100%!important}</style>",
                     unsafe_allow_html=True)
         st.markdown(narzedzia.css(), unsafe_allow_html=True)
-        st.html(narzedzia.tresc(id_))
+        st.html(narzedzia.tresc(id_, naglowek=False))
         return
     ob = sciagi.obraz(id_)
-    tytul = next((x["tytul"] for x in sciagi.lista() if x["id"] == id_), "")
     # st.image(width="stretch") kurczył kontener do 16 px (pomiar 2026-10-16) —
     # obraz zawsze na pełną szerokość okna
     st.markdown("<style>[role='dialog'] [data-testid='stElementContainer']:has([data-testid='stImage']),"
@@ -1708,12 +1728,10 @@ def _sciaga_duza(id_: str) -> None:
                 "[role='dialog'] [data-testid='stImageContainer'],[role='dialog'] [data-testid='stImage'] img"
                 "{width:100%!important;max-width:100%!important;height:auto!important}</style>",
                 unsafe_allow_html=True)
-    if tytul:
-        st.markdown(f"**{html.escape(tytul)}**")
     if ob:
         st.image(ob[0], width="stretch")
     else:
-        st.caption("Tej ściągi już nie ma.")
+        st.caption("Tego już nie ma w Tools.")
 
 
 def _render_sciagi_panel() -> None:
@@ -1723,14 +1741,14 @@ def _render_sciagi_panel() -> None:
     from . import sciagi
     with st.container(key="sc_panel"):
         h1, h2 = st.columns([5, 1], vertical_alignment="center")
-        h1.markdown("<div class='aph-sc-tyt'>Ściągi</div>", unsafe_allow_html=True)
+        h1.markdown("<div class='aph-sc-tyt'>Tools</div>", unsafe_allow_html=True)
         if h2.button("✕", key="sc_zamknij", help="Zamknij panel"):
             st.session_state["sciagi_otwarte"] = False
             st.rerun()
         try:
             items = sciagi.lista()
         except RuntimeError as e:
-            st.error(f"Nie mogę wczytać ściąg. {e}")
+            st.error(f"Nie mogę wczytać Tools. {e}")
             return
         from . import narzedzia
         for n in narzedzia.NARZEDZIA:          # tabele rysowane w apce — otwierają duże okno
@@ -1768,7 +1786,7 @@ def _render_sciagi_panel() -> None:
                     st.session_state["sc_usun_pewny"] = wyb
                 st.rerun()
         n = st.session_state.get("sc_nonce", 0)
-        with st.expander("+ Dodaj ściągę", expanded=not items):
+        with st.expander("+ Dodaj obraz", expanded=not items):
             tytul = st.text_input("Tytuł", key=f"sc_tytul_{n}",
                                   placeholder="np. Tabela %1RM")
             plik = st.file_uploader("Obraz (PNG, JPG, WEBP)", key=f"sc_plik_{n}",

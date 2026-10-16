@@ -61,7 +61,7 @@ def dodaj(tytul: str, dane: bytes, mime: str) -> dict:
     """Nowa ściąga na końcu listy. ValueError przy złym typie / za dużym pliku."""
     tytul = (tytul or "").strip()[:120]
     if not tytul:
-        raise ValueError("Wpisz tytuł ściągi")
+        raise ValueError("Wpisz tytuł")
     if mime not in TYPY:
         raise ValueError("Obsługiwane obrazy: PNG, JPG, WEBP, GIF")
     if not dane:

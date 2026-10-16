@@ -86,7 +86,7 @@ _CSS = """<style>
 .nz .rm th,.nz .rm td{padding:2px 6px;border-bottom:1px solid var(--hair);font-size:12.5px;line-height:1.35;text-align:center}
 .nz .rm td{white-space:nowrap}
 .nz .rm thead th{font-size:10.5px;font-weight:700;color:var(--dim);background:#faf9f6;line-height:1.2;vertical-align:bottom;padding:4px 5px}
-.nz .rm thead th small{display:block;font-weight:500;font-size:9.5px;color:var(--mute)}
+.nz .rm thead th small{display:block;font-weight:700;font-size:10px;color:#3c3a33!important}
 .nz .rm thead tr:first-child th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);background:#f2f1ec}
 .nz .rm thead tr:first-child th.pril,.nz .rm td.pril{background:#fdf6e3}
 .nz .rm td.proc{font-weight:800}
@@ -212,8 +212,10 @@ _REV = [(1, 100, 95, 89, 83), (2, 95, 92, 86, 81), (3, 92, 89, 83, 79), (4, 89, 
         (9, 77, 75, 71, 68), (10, 75, 73, 70, 67), (11, 73, 71, 68, 65), (12, 71, 70, 67, 64),
         (13, 70, 68, 65, 63), (14, 68, 67, 64, 62), (15, 67, 65, 63, 61), (16, 65, 64, 62, None),
         (17, 64, 63, 61, None), (18, 63, 62, None, None), (19, 62, 61, None, None), (20, 61, None, None, None)]
-_EF = [("Max effort", "ME", "do upadku"), ("Near max", "NME", "1 powt. w zapasie"),
-       ("Hard", "HE", "3 powt. w zapasie"), ("Medium hard", "MHE", "5 powt. w zapasie")]
+# podpis kolumny = RPE zamiast „powt. w zapasie” (Filip 2026-10-17: do upadku RPE 10,
+# 1 w zapasie RPE 9, 3 w zapasie RPE 7, 5 w zapasie RPE 5) — w obu tabelach
+_EF = [("Max effort", "ME", "RPE 10"), ("Near max", "NME", "RPE 9"),
+       ("Hard", "HE", "RPE 7"), ("Medium hard", "MHE", "RPE 5")]
 
 
 def _1rm() -> str:
@@ -237,7 +239,8 @@ def _1rm() -> str:
             s = max(4, min(70, (p - 58) * 1.6))           # cieniowanie: im ciężej, tym ciemniej
             kom.append(f'<td class="hm" style="--s:{s:.0f}%;--c:{"#fff" if s > 45 else "#1c1b18"}">{p}%</td>')
         rev.append(f'<tr><td class="proc">{powt}</td>{"".join(kom)}</tr>')
-    rev_glowa = "".join(f"<th>{s}<small>{escape(o)}</small></th>" for _, s, o in _EF)
+    # pełne nazwy także w prawej tabeli, nie same skróty (Filip 2026-10-17)
+    rev_glowa = ef_glowa
     return (f'<div class="nz"><h2>%1RM · poziomy wysiłku · Prilepin</h2>'
             f'<p class="pod">Ile powtórzeń przy danym %1RM na każdym poziomie wysiłku i ile powtórzeń w serii daje dany %1RM.</p>'
             f'<div class="rm-uklad">'
@@ -250,7 +253,7 @@ def _1rm() -> str:
             f'<tr><th colspan="5">Powtórzenia w serii → %1RM</th></tr>'
             f'<tr><th>Powt.</th>{rev_glowa}</tr></thead><tbody>{"".join(rev)}</tbody></table></div>'
             f'</div>'
-            f'<p class="zrodlo">Źródło: tabela „Effort Levels” + „Prilepin\'s Chart” ze screena od Filipa, przepisana 1:1.</p></div>')
+            f'<p class="zrodlo">Źródło: tabela „Effort Levels” + „Prilepin\'s Chart” ze screena od Filipa, przepisana 1:1; podpisy RPE od Filipa.</p></div>')
 
 
 _HTML = {"nz-gojenie": _gojenie, "nz-izometria": _izometria, "nz-1rm": _1rm}
@@ -266,10 +269,17 @@ def css() -> str:
     return _CSS
 
 
-def tresc(id_: str) -> str:
-    """Treść narzędzia bez <style> (do st.html) albo pusty napis."""
+def tresc(id_: str, naglowek: bool = True) -> str:
+    """Treść narzędzia bez <style> (do st.html) albo pusty napis.
+    naglowek=False: bez <h2> z nazwą — w oknie nazwa stoi w tytule okna."""
     f = _HTML.get(id_)
-    return f() if f else ""
+    if not f:
+        return ""
+    t = f()
+    if not naglowek:
+        tytul = next(n["tytul"] for n in NARZEDZIA if n["id"] == id_)
+        t = t.replace(f"<h2>{escape(tytul)}</h2>", "", 1)
+    return t
 
 
 def html(id_: str) -> str:
