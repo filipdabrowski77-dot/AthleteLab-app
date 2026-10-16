@@ -48,9 +48,8 @@ select{appearance:none;background-image:none}
 .navitem.on{background:var(--fill);color:var(--ink);font-weight:700}
 .navitem.on i{background:var(--ink)}
 .side .spacer{flex:1}
-/* TOOLS na dole menu (Filip 2026-10-16): ściągi — klik otwiera duże okno */
-.side .narzedzia{padding:14px 0 12px}
-.side .narzedzia .navitem{white-space:normal;line-height:1.25}
+/* TOOLS pod Podopiecznymi (Filip 2026-10-16): ściągi — klik otwiera duże okno */
+.navitem.tool{white-space:normal;line-height:1.25}
 .me{display:flex;align-items:center;gap:8px;padding:10px 10px 0;border-top:1px solid var(--hair2)}
 .me i{width:24px;height:24px;border-radius:999px;background:#ecebe6;font-size:10.5px;font-weight:700;
   color:var(--dim);display:inline-flex;align-items:center;justify-content:center}
@@ -636,7 +635,14 @@ function sidebar(){
   const NAV_WID = D.tylko_plany && !D.pt_komunikat
     ? NAV.map(g=>({...g, items:g.items.filter(it=>it.id!=="testing")}))
     : NAV;
-  const groups = NAV_WID.map(g=>`<h3>${esc(g.group)}</h3><div class="navgroup">` + g.items.map(it=>{
+  // TOOLS (ściągi) zaraz pod Podopiecznymi, przed Pomocą — na dole długiej
+  // strony trzeba było przewijać (Filip 2026-10-16)
+  const TOOLS = (D.narzedzia||[]).length
+    ? {group:"Tools", items:D.narzedzia.map(n=>({tool:true, id:n.id, label:n.tytul}))} : null;
+  const z = NAV_WID.findIndex(g=>g.group==="Zawodnicy");
+  const NAV_T = TOOLS ? [...NAV_WID.slice(0, z+1), TOOLS, ...NAV_WID.slice(z+1)] : NAV_WID;
+  const groups = NAV_T.map(g=>`<h3>${esc(g.group)}</h3><div class="navgroup">` + g.items.map(it=>{
+    if(it.tool) return `<button class="navitem tool" data-act="sciaga" data-id="${esc(it.id)}"><i></i>${esc(it.label)}</button>`;
     const on = S.screen===it.id || (it.id==="plans" && S.screen==="plan")
       || (it.id==="testing" && S.screen==="brak_pt");
     return `<button class="navitem${on?" on":""}" data-act="nav" data-v="${it.id}"><i></i>${esc(it.label)}</button>`;
@@ -647,8 +653,6 @@ function sidebar(){
       <button class="navtoggle" data-act="navtoggle" title="Zwiń panel">‹</button></div>
     ${groups}
     <div class="spacer"></div>
-    ${(D.narzedzia||[]).length ? `<div class="narzedzia"><h3>Tools</h3><div class="navgroup">` + D.narzedzia.map(n=>
-      `<button class="navitem" data-act="sciaga" data-id="${esc(n.id)}"><i></i>${esc(n.tytul)}</button>`).join("") + `</div></div>` : ""}
     <div class="me"><i>${esc(D.user.initials)}</i><span>${esc(D.user.name)}</span>
       ${D.wyloguj ? `<button class="wyloguj" data-act="wyloguj" title="Wyloguj">Wyloguj</button>` : ""}</div>
   </div>`;
