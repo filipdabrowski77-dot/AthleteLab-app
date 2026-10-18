@@ -20,6 +20,10 @@ NARZEDZIA = [
     {"id": "nz-gojenie", "tytul": "Tissue healing timelines"},
     {"id": "nz-izometria", "tytul": "Isometric loading prescription table"},
     {"id": "nz-1rm", "tytul": "%1RM · poziomy wysiłku · Prilepin"},
+    {"id": "nz-vbt", "tytul": "Vitruve VBT chart"},
+    {"id": "nz-strefy", "tytul": "Velocity Zones"},
+    {"id": "nz-jordan", "tytul": "Matt Jordan · Loading parameters"},
+    {"id": "nz-energia", "tytul": "Matt Jordan · Energy system"},
 ]
 
 _CSS = """<style>
@@ -96,6 +100,58 @@ _CSS = """<style>
 .nz .rm tr.gr td{border-top:2px solid #fff}
 .nz .rev{min-width:380px}
 .nz .rev td.hm{font-weight:600;background:color-mix(in srgb,#1c1b18 var(--s),#fff);color:var(--c)}
+/* VBT (Vitruve) i strefy prędkości — zwarte, nie na całą szerokość okna (Filip 2026-10-18) */
+.nz .waska{max-width:1040px}
+.nz .vbt{min-width:760px}
+.nz .vbt th,.nz .vbt td{padding:3px 6px;font-size:13px;text-align:center;white-space:nowrap}
+.nz .vbt thead th{font-size:12px;font-weight:800;color:#fff!important;background:#3f3d8f;border-left:1px solid rgba(255,255,255,.18)}
+.nz .vbt thead th.rm1{background:#f3d77a;color:#1c1b18!important}
+.nz .vbt thead th:first-child{background:#f2f1ec;color:var(--dim)!important;text-align:left;font-size:10.5px;
+  letter-spacing:.06em;text-transform:uppercase;position:sticky;left:0;z-index:2}
+.nz .vbt th.cw{text-align:left;font-size:13px;font-weight:800;background:#fff;position:sticky;left:0;z-index:2;
+  box-shadow:1px 0 0 var(--hair);border-bottom:1px solid var(--line);width:128px}
+.nz .vbt td.zr{font-size:10.5px;color:var(--mute);text-align:center;padding:4px 6px 0;white-space:normal}
+.nz .vbt td.v{font-weight:700;background:color-mix(in srgb,#3f3d8f 7%,#fff);border-bottom:1px solid var(--line);
+  border-left:1px dashed #d6d4e8}
+.nz .vbt td.v.rm1{background:#fbf1cf}
+.nz .vbt td.v.brak{color:#b8b4aa;font-weight:500}
+@media (max-width:600px){.nz .vbt th.cw{width:96px;font-size:12px}}
+.nz .vz{min-width:720px;padding:26px 30px 14px}
+.nz .vz-os,.nz .vz-pr{position:relative;height:20px}
+.nz .vz-os span{position:absolute;transform:translateX(-50%);font-size:12px;font-weight:800;white-space:nowrap}
+.nz .vz-os b{position:absolute;left:0;top:-16px;font-size:10.5px;letter-spacing:.06em;color:var(--dim)}
+.nz .vz-pas{position:relative;height:84px;border-radius:10px;margin:4px 0 6px;
+  background:linear-gradient(90deg,#2fbf4a 0%,#5aa53c 28%,#7f8d3a 48%,#b4613b 70%,#d23b3b 100%)}
+.nz .vz-seg{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;
+  text-align:center;font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+  color:rgba(28,27,24,.78);padding:0 6px;line-height:1.25}
+.nz .vz-seg+.vz-seg{border-left:2px solid rgba(28,27,24,.55)}
+.nz .vz-seg small{font-size:10.5px;font-weight:700;margin-right:12px;opacity:.75}
+.nz .vz-pr span{position:absolute;transform:translateX(-50%);font-size:12.5px;font-weight:800;white-space:nowrap}
+.nz .vz-pr b{position:absolute;left:0;font-size:10.5px;letter-spacing:.06em;color:var(--dim);top:2px}
+/* Matt Jordan — kolory komórek jak na grafice (Filip 2026-10-18: „utrzymaj kolory tabelki”) */
+.nz .mj-ramka{overflow-x:auto;-webkit-overflow-scrolling:touch;background:#000;border-radius:12px;padding:3px;max-width:1280px}
+.nz .mj{min-width:1060px;border-collapse:separate;border-spacing:3px}
+.nz .mj th,.nz .mj td{font-size:12.5px;font-weight:700;text-align:center;padding:4px 6px;color:#111!important;line-height:1.2}
+.nz .mj thead th{background:#0b1a5e;color:#fff!important;font-size:12.5px;padding:7px 6px}
+.nz .mj thead th.pion{writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;padding:6px 3px;width:26px}
+.nz .mj td.boczny{position:relative;padding:0;width:30px}
+.nz .mj td.boczny span{position:absolute;left:50%;transform:translate(-50%,-50%) rotate(180deg);writing-mode:vertical-rl;
+  white-space:nowrap;font-size:12px;font-weight:800}
+.nz .mj td.strefa span{writing-mode:vertical-rl;transform:rotate(180deg);font-size:12.5px;font-weight:800}
+.nz .mj td.puste{background:#000}
+.nz .mj td.adapt{padding:6px 0;width:34px;vertical-align:middle}
+.nz .mj td.adapt span{display:inline-block;writing-mode:vertical-rl;white-space:nowrap;font-size:12px;font-weight:800}
+.nz .mj td.adapt.neur{background:linear-gradient(180deg,#5cc3f7,#9db6dc)}
+.nz .mj td.adapt.morf{background:linear-gradient(180deg,#b5b0d4,#e9a3ad)}
+/* Energy system (JSCEP) — niebieska skala strefy 1→7 jak na grafice */
+.nz .es-ramka{max-width:980px}
+.nz .es{border-collapse:separate;border-spacing:6px 5px;min-width:600px}
+.nz .es th{font-size:13px;font-weight:800;color:var(--ink);padding:2px 8px;text-align:center}
+.nz .es td{font-size:14px;font-weight:800;text-align:center;padding:6px 10px;border:2.5px solid #111;border-radius:9px;
+  color:#111!important;line-height:1.2}
+.nz .es td small{display:block;font-size:12.5px;font-weight:700;color:#111!important}
+.nz .mj td.tut{background:linear-gradient(180deg,#169fe8 0%,#13a9e4 38%,#14bf63 55%,#e0605a 80%,#f06b6b 100%)}
 </style>"""
 
 # ── Tissue Healing Timelines ────────────────────────────────────────────────
@@ -256,7 +312,155 @@ def _1rm() -> str:
             f'<p class="zrodlo">Źródło: tabela „Effort Levels” + „Prilepin\'s Chart” ze screena od Filipa, przepisana 1:1; podpisy RPE od Filipa.</p></div>')
 
 
-_HTML = {"nz-gojenie": _gojenie, "nz-izometria": _izometria, "nz-1rm": _1rm}
+# ── Vitruve VBT chart ───────────────────────────────────────────────────────
+# Mean propulsive velocity (m/s) dla %1RM — przepisane 1:1 z grafiki Vitruve od
+# Filipa (2026-10-18); badanie i protokół przy każdym ćwiczeniu jak na grafice
+_VBT_KOL = ["1RM", "95%", "90%", "85%", "80%", "75%", "70%", "65%", "60%", "55%", "50%", "45%", "40%"]
+_VBT = [
+    ("Bench pull", "Sánchez Medina et al. (2014) — prone lying rowing on bench with Smith machine",
+     [0.53, 0.59, 0.65, 0.72, 0.78, 0.85, 0.92, 0.99, 1.06, 1.13, 1.21, 1.28, 1.36]),
+    ("Back squat", "Sánchez Medina et al. (2014) — deep squat with Smith machine and pauses",
+     [0.32, 0.42, 0.51, 0.59, 0.68, 0.76, 0.84, 0.92, 1.00, 1.07, 1.14, 1.21, 1.28]),
+    ("Pull up", "Sánchez Moreno et al. (2017) — prone pull up",
+     [0.22, 0.31, 0.39, 0.50, 0.57, 0.65, 0.74, 0.83, 0.91, 1.00, 1.09, None, None]),
+    ("Military press", "Muñoz et al. (2014) — military press behind the neck with Smith machine",
+     [0.20, 0.27, 0.34, 0.41, 0.49, 0.55, 0.62, 0.69, 0.75, 0.81, 0.86, 0.92, 0.97]),
+    ("Bench press", "González Badillo i Sánchez Medina (2010) — bench press with Smith machine and pauses",
+     [0.18, 0.25, 0.32, 0.39, 0.47, 0.55, 0.62, 0.70, 0.78, 0.87, 0.95, 1.07, 1.13]),
+    ("Deadlift", "Helms et al. (2017) — deadlift, expert powerlifters, 1RM = 237,3 kg",
+     [0.14, 0.21, 0.29, 0.37, 0.46, None, None, None, None, None, None, None, None]),
+    ("Hip thrust", "Hoyo, Núñez et al. (2017) — predicting loading intensity measuring velocity in barbell hip thrust",
+     [0.24, None, 0.36, None, 0.48, None, 0.60, None, 0.72, None, None, None, None]),
+]
+
+
+def _vbt() -> str:
+    glowa = "".join(f'<th class="{"rm1" if i == 0 else ""}">{k}</th>' for i, k in enumerate(_VBT_KOL))
+    wiersze = []
+    for nazwa, zrodlo, v in _VBT:
+        kom = "".join(
+            f'<td class="v{" rm1" if i == 0 else ""}">{x:.2f}</td>' if x is not None
+            else f'<td class="v brak{" rm1" if i == 0 else ""}">–</td>' for i, x in enumerate(v))
+        wiersze.append(f'<tr><th class="cw" rowspan="2">{escape(nazwa)}</th>'
+                       f'<td class="zr" colspan="{len(_VBT_KOL)}">{escape(zrodlo)}</td></tr><tr>{kom}</tr>')
+    return (f'<div class="nz"><h2>Vitruve VBT chart</h2>'
+            f'<p class="pod">Mean propulsive velocity (m/s) dla każdego %1RM.</p>'
+            f'<div class="ramka waska"><table class="vbt"><thead><tr><th>Ćwiczenie</th>{glowa}</tr></thead>'
+            f'<tbody>{"".join(wiersze)}</tbody></table></div>'
+            f'<p class="zrodlo">Źródło: grafika Vitruve „Mean propulsive velocity (m/s) for each % of 1RM” '
+            f'ze screena od Filipa, przepisana 1:1; badanie przy każdym ćwiczeniu.</p></div>')
+
+
+# ── Velocity Zones ──────────────────────────────────────────────────────────
+# prędkości i nazwy stref 1:1 z grafiki od Filipa (2026-10-18); granice stref
+# w %1RM NIE mają liczb na grafice — odczyt z położenia linii (szacunek)
+_STREFY = [(0, 24, "Starting strength", ">1,3 m/s"), (24, 43, "Speed / strength", "1,3–1 m/s"),
+           (43, 64, "Strength / speed", "1–0,75 m/s"), (64, 88, "Accelerative strength", "0,75–0,5 m/s"),
+           (88, 100, "Absolute strength", "<0,5 m/s")]
+
+
+def _strefy() -> str:
+    os_ = "".join(f'<span style="left:{p}%">{p}{"%" if p else ""}</span>' for p in range(0, 101, 10))
+    seg = "".join(
+        f'<div class="vz-seg" style="left:{a}%;width:{b - a}%">'
+        f'{"<small>None</small>" if a == 0 else ""}{escape(n)}</div>' for a, b, n, _ in _STREFY)
+    pr = "".join(f'<span style="left:{(a + b) / 2}%">{escape(v)}</span>' for a, b, _, v in _STREFY)
+    return (f'<div class="nz"><h2>Velocity Zones</h2>'
+            f'<p class="pod">Strefy prędkości wzdłuż %1RM.</p>'
+            f'<div class="ramka waska"><div class="vz">'
+            f'<div class="vz-os"><b>% 1RM</b>{os_}</div>'
+            f'<div class="vz-pas">{seg}</div>'
+            f'<div class="vz-pr">{pr}</div></div></div>'
+            f'<p class="zrodlo">Źródło: grafika „Velocity Zones” ze screena od Filipa — nazwy stref i zakresy prędkości '
+            f'przepisane 1:1; granice stref w %1RM odczytane z położenia linii na grafice (bez liczb w źródle).</p></div>')
+
+
+# ── Matt Jordan — Loading parameters ────────────────────────────────────────
+# przepisane 1:1 z grafiki od Filipa (2026-10-18), kolory komórek jak na grafice;
+# objaśnienia gwiazdek i jednostki przerwy na grafice nie widać
+_MJ_B1, _MJ_B2, _MJ_G1, _MJ_G2, _MJ_R1, _MJ_R2, _MJ_O = ("#2bb0f2", "#6cc5fa", "#00c97b", "#8df3cd",
+                                                        "#f89c9b", "#fbbdbd", "#fdc18d")
+_MJ = [  # (metoda, cel, powt., intensywność, serie, tempo E:P:C, przerwa, kolor)
+    ("Reactive Strength", "Stretch Shorten Cycle Ability", "6-10", "Body Mass", "3-6", "Short-Long", "1-2", _MJ_B1),
+    ("Heavy Power", "Maximal Muscle Power", "3-6", "60-80%", "4-6", "Fast", "1.5-3", _MJ_B2),
+    ("Heavy RFD", "Late Rate of Force Development", "3-6", "60-80%", "4-6", "Fast", "1.5-3", _MJ_B1),
+    ("Light Power", "Maximal Muscle Power", "5-8", "20-60%", "5-8", "Fast", "1-2.5", _MJ_B2),
+    ("Light RFD", "Initial Rate of Force Development", "5-8", "20-60%", "5-8", "Fast", "1-2.5", _MJ_B1),
+    ("Eccentric Decel/Braking", "Eccentric Rate of Force Development", "3-5", "Body Mass-60%", "3-5", "X:1-3:1", "1-2.5", _MJ_B2),
+    ("Maximal Strength", "Maximal Muscle Strength", "1-5", "90-100% (Very Heavy)", "3-5 ***", "2-4:1-3:X", "2.5-5", _MJ_G1),
+    ("Maximal Eccentric Strength", "Maximal Eccentric Muscle Strength", "3-5", "90-110% (Very Heavy)", "3-5 ***", "2-10:0:A", "2.5-5", _MJ_G2),
+    ("Max Rep Exhaustive", "Muscle Hypertrophy", "5-12", "70-85% (Heavy)", "3-4 ***", "2-4:1-3:1-3", "2-3", _MJ_R1),
+    ("Max Set Exhaustive", "Muscle Hypertrophy", "5-12", "50-70% (Moderate)", "5-10 **", "1-3:1-2:1-3", "1-2", _MJ_R2),
+    ("Assistant Strength", "Structural Balance", "8-15", "60-80% (Moderate)", "2-4", "1-3:1-3:1-3", "1-2", _MJ_R1),
+    ("Slow Tempo Exhaustive", "Muscle Hypertrophy", "5-8", "60-80% (Moderate)", "3-5", "4-6:1-3:4-6", "1-3", _MJ_R2),
+    ("Low Load Exhaustive", "Muscle Hypertrophy/Strength Endurance", "15-30", "30-60% (Light)", "2-4", "1-2:0:1", "2-3", _MJ_R1),
+    ("Technical Development", "Movement Competency/Motor Control", "2-8", "Light", "3-10", "NA", "1-2", _MJ_O),
+]
+# strefy (wiersze od–do, 0-indeksowo) i etykiety TUT na pasku z grafiki
+_MJ_STREFY = [(0, 5, "Zone 1", _MJ_B1), (6, 7, "Zone 3", _MJ_G1), (8, 12, "Zone 2", _MJ_R1)]
+_MJ_TUT = [("< 10", 3 / 13), ("5-20", 7 / 13), ("20-40", 9 / 13), ("40-60", 11.5 / 13)]
+
+
+def _jordan() -> str:
+    glowa = ('<tr><th class="pion">TUT (s)</th><th class="pion">Strength zone</th><th>Strength Method</th>'
+             '<th>Target Strength Ability</th><th>Rep</th><th>Intensity</th><th>Set Range<br>* Sets to</th>'
+             '<th>Tempo<br>E:P:C</th><th>Interset Rest</th><th class="pion">Adaptation</th></tr>')
+    tut = "".join(f'<span style="top:{y * 100:.1f}%">{escape(t)}</span>' for t, y in _MJ_TUT)
+    wiersze = []
+    for i, (met, cel, rep, inten, serie, tempo, rest, k) in enumerate(_MJ):
+        lewe = ""
+        if i == 0:
+            lewe += f'<td class="boczny tut" rowspan="13">{tut}</td>'
+        elif i == 13:
+            lewe += '<td class="puste"></td>'
+        st = next((z for z in _MJ_STREFY if z[0] == i), None)
+        if st:
+            lewe += (f'<td class="strefa" rowspan="{st[1] - st[0] + 1}" style="background:{st[3]}">'
+                     f'<span>{st[2]}</span></td>')
+        elif i == 13:
+            lewe += '<td class="puste"></td>'
+        komorki = "".join(f'<td style="background:{k}">{escape(x)}</td>' for x in (met, cel, rep, inten, serie, tempo, rest))
+        # dwie komórki zamiast jednej z dwoma napisami — przy niskich wierszach napisy nachodziły
+        prawe = ('<td class="adapt neur" rowspan="7"><span>Neural Adaptations</span></td>' if i == 0
+                 else '<td class="adapt morf" rowspan="6"><span>Muscle Morphology Adaptation</span></td>' if i == 7
+                 else '<td class="puste"></td>' if i == 13 else "")
+        wiersze.append(f"<tr>{lewe}{komorki}{prawe}</tr>")
+    return (f'<div class="nz"><h2>Matt Jordan · Loading parameters</h2>'
+            f'<p class="pod">Metoda siłowa → cel, powtórzenia, intensywność, serie, tempo, przerwa.</p>'
+            f'<div class="mj-ramka"><table class="mj"><thead>{glowa}</thead><tbody>{"".join(wiersze)}</tbody></table></div>'
+            f'<p class="zrodlo">Źródło: tabela Matta Jordana ze screena od Filipa, przepisana 1:1 (kolory jak na grafice). '
+            f'Objaśnienia gwiazdek (*, **, ***) i jednostki przerwy na grafice nie widać.</p></div>')
+
+
+# ── Matt Jordan — JSCEP Energy System Table ────────────────────────────────
+# przepisane 1:1 z grafiki od Filipa (2026-10-18), kolory stref jak na grafice
+_ES = [("Zone 1", "Sub Lactate Threshold 1", "", "55-75", "0.8-1.5", "#bde3fd"),
+       ("Zone 2", "Lactate Threshold 1", "(Aerobic Threshold - AeT)", "76-85", "1.6-2.9", "#9fd6fb"),
+       ("Zone 3", "Lactate Threshold 2", "(Anaerobic Threshold - AnT)", "86-90", "3.0-4.0", "#74c6fa"),
+       ("Zone 4", "Critical Power", "", "91-95", "4.1-6.0", "#33b5f8"),
+       ("Zone 5", "Maximal Aerobic Power", "", "96-100", "6.1-10.0", "#0aa0ec"),
+       ("Zone 6", "Lactate Capacity", "", "Max", "10.1-12.0", "#0688d0"),
+       ("Zone 7", "Lactate Power", "", "Max", "> 12.0", "#0670aa")]
+
+
+def _energia() -> str:
+    wiersze = "".join(
+        f'<tr><td style="background:{k}">{z}</td>'
+        f'<td style="background:{k}">{escape(n)}{f"<small>{escape(d)}</small>" if d else ""}</td>'
+        f'<td style="background:{k}">{hr}</td><td style="background:{k}">{escape(la)}</td></tr>'
+        for z, n, d, hr, la, k in _ES)
+    return (f'<div class="nz"><h2>Matt Jordan · Energy system</h2>'
+            f'<p class="pod">JSCEP Energy System Table — strefy, tętno i mleczan.</p>'
+            f'<div class="ramka es-ramka" style="border:0;background:transparent"><table class="es"><thead><tr>'
+            f'<th>Zone</th><th>Energy System</th><th>Heart Rate (%)</th><th>Blood Lactate (mmol/L)</th>'
+            f'</tr></thead><tbody>{wiersze}</tbody></table></div>'
+            f'<p class="zrodlo">Źródło: „JSCEP Energy System Table” (@JordanStrength) ze screena od Filipa, przepisana 1:1. '
+            f'Koncepcja wg: Seiler S, Tønnessen E. Intervals, Thresholds and Long Slow Distance: the Role of Intensity '
+            f'and Duration in Endurance Training. Training [Internet]. 2009;13(13):32–53 (zapis jak na grafice).</p></div>')
+
+
+_HTML = {"nz-gojenie": _gojenie, "nz-izometria": _izometria, "nz-1rm": _1rm,
+         "nz-vbt": _vbt, "nz-strefy": _strefy, "nz-jordan": _jordan, "nz-energia": _energia}
 
 
 def jest(id_: str) -> bool:
