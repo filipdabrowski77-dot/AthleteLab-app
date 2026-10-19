@@ -267,5 +267,6 @@ def build_plan_pdf_green(plan: dict, url_map: dict | None = None) -> bytes:
     with tempfile.TemporaryDirectory() as tmp:
         out = str(Path(tmp) / "plan.pdf")
         G.buduj(dni, linki, out, zawodnik=naglowek,
-                okres="", start=None, n_tygodni=weeks_n)
+                okres="", start=None, n_tygodni=weeks_n,
+                od_tygodnia=plan.get("pdf_od_tygodnia", 1))
         return Path(out).read_bytes()

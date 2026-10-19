@@ -355,7 +355,7 @@ def _elementy_dnia(d, W, linki, S, wys_wspolne=None):
             kol.append(W * szer_t)
             # plan jednotygodniowy: bez „WEEK 1" — sama rozpiska
             gl.append(Paragraph('SERIE × POWTÓRZENIA' if n_t == 1
-                                else f'WEEK {i}', S.hdr))
+                                else f'WEEK {i + getattr(S, "od_tyg", 1) - 1}', S.hdr))
         if ma_rest:
             kol.append(W * .075)
             gl.append(Paragraph('REST', S.hdr))
@@ -466,7 +466,7 @@ def _wysokosc(elementy, W, H):
 
 
 def buduj(dni, linki, wyjscie, zawodnik='', okres='', start=None,
-          n_tygodni=4):
+          n_tygodni=4, od_tygodnia=1):
     doc = BaseDocTemplate(wyjscie, pagesize=landscape(A4),
                           leftMargin=11 * mm, rightMargin=11 * mm,
                           topMargin=6 * mm, bottomMargin=6 * mm,
@@ -488,6 +488,8 @@ def buduj(dni, linki, wyjscie, zawodnik='', okres='', start=None,
         S = Style(s)
         S.zawodnik, S.okres_txt, S.tygodnie = zawodnik, okres, tygodnie
         S.n_tyg = max(1, int(n_tygodni or 4))
+        # numeracja kolumn od wybranego tygodnia (np. tylko WEEK 3 i WEEK 4)
+        S.od_tyg = max(1, int(od_tygodnia or 1))
         return S
 
     # Jedna skala dla całego dokumentu — największa, przy której KAŻDY dzień
