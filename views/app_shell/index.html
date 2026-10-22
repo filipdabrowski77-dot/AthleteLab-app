@@ -121,6 +121,8 @@ h1{font-size:30px;font-weight:800;letter-spacing:-.015em;margin:0}
 .postep tbody th span{font-size:11.5px;color:var(--mute)}
 .postep td{font-weight:650;color:var(--ink)}
 .postep tbody tr{cursor:pointer}
+.postep tbody tr.skok{cursor:default}
+.postep tbody tr.skok th{min-width:0}
 .postep tbody tr:last-child th,.postep tbody tr:last-child td{border-bottom:0}
 .thead,.trow{display:grid;gap:12px;align-items:center}
 .thead{padding:9px 16px;border-bottom:1px solid var(--hair);background:var(--tint)}
@@ -1240,14 +1242,14 @@ function screenAthletes(){
 function screenAthlete(){
   const a = D.athlete;
   const np = a.plans.length + (a.upcoming || []).length + (a.current ? 1 : 0),
-        nt = a.tests.length;
+        nt = a.tests.length, nsk = (a.skoki||[]).length;
   const tab = S.profTab || "przeglad";
 
   const wyk = a.wykonanie || [];
   const zakladki = `<div class="segs profzak">
       <button class="seg${tab==="przeglad"?" on":""}" data-act="prof_tab" data-v="przeglad">Przegląd</button>
       <button class="seg${tab==="wykonanie"?" on":""}" data-act="prof_tab" data-v="wykonanie">Wykonanie${wyk.length?` (${wyk.length})`:""}</button>
-      <button class="seg${tab==="testy"?" on":""}" data-act="prof_tab" data-v="testy">Testy siłowe${nt?` (${nt})`:""}</button>
+      <button class="seg${tab==="testy"?" on":""}" data-act="prof_tab" data-v="testy">Testy${nt+nsk?` (${nt+nsk})`:""}</button>
     </div>`;
 
   /* ---- Przegląd ---- */
@@ -1312,8 +1314,22 @@ function screenAthlete(){
     </div>`;
   };
 
-  const testy = nt ? (
-      grupa("Upper", "Upper", "")
+  // skoki z VALD: najwyższy CMJ + jego RSI-mod, najwyższy SJ (Filip 2026-10-22)
+  const skoki = nsk ? `<div class="sekcja">
+      <h2>Skoki <span class="ilez">VALD</span></h2>
+      <div class="card postep"><table>
+        <thead><tr><th>Data</th><th>CMJ</th><th>RSI-mod</th><th>SJ</th></tr></thead>
+        <tbody>${a.skoki.map(w=>`<tr class="skok">
+          <th><b>${esc(w.date)}</b></th>
+          <td>${w.cmj==="—"?"—":esc(w.cmj)+" cm"}</td><td>${esc(w.rsi)}</td>
+          <td>${w.sj==="—"?"—":esc(w.sj)+" cm"}</td>
+        </tr>`).join("")}</tbody>
+      </table></div>
+    </div>` : "";
+
+  const testy = (nt || nsk) ? (
+      skoki
+    + grupa("Upper", "Upper", "")
     + grupa("Lower", "Lower", "")
     + grupa("Pozostałe", "Inne", "")
     ) : `<div class="card"><div class="pusto">Brak testów.</div></div>`;

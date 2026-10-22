@@ -583,6 +583,17 @@ def _profil_pelny(name: str, plans: list[dict]) -> dict:
     minione = [p for p in d["plans"]
                if p.get("id") != biez_id and (p.get("start_date") or "") <= dzis]
 
+    # skoki z VALD (tools/testy_skoki.py): CMJ najwyższy skok + jego RSI-mod,
+    # SJ najwyższy skok — jeden wiersz na dzień testów (Filip 2026-10-22)
+    try:
+        from . import store as _st
+        skoki = (_st.kv_get("testy_skoki") or {}).get(name) or []
+    except RuntimeError:
+        skoki = []
+
+    def _pl(x, n: int) -> str:
+        return "—" if x is None else f"{x:.{n}f}".replace(".", ",")
+
     return {
         "name": name,
         "initials": _initials(name),
@@ -604,6 +615,8 @@ def _profil_pelny(name: str, plans: list[dict]) -> dict:
             "week": t["week"],
             "future": bool(t["date"] and t["date"] >= date.today().isoformat()),
         } for t in d["tests"]],
+        "skoki": [{"date": _d(w.get("date", "")), "cmj": _pl(w.get("cmj"), 1),
+                   "rsi": _pl(w.get("rsi"), 2), "sj": _pl(w.get("sj"), 1)} for w in skoki],
     }
 
 
