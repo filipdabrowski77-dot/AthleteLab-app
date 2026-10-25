@@ -26,6 +26,7 @@ TEST_PATTERNS: dict[TestType, list[str]] = {
     "DJ": [r"\bDJ\b", r"drop[\s\-]?jump"],
     "RSAIP": [r"\bRSAIP\b", r"run[\s\-]?specific[\s\-]?ankle"],
     "RSKIP": [r"\bRSKIP\b", r"run[\s\-]?specific[\s\-]?knee"],
+    "SLJ": [r"\bSLJ\b", r"single[\s\-]?leg[\s\-]?(cmj|jump)"],
 }
 
 ATHLETE_CANDIDATES = ["Athlete", "Name", "Profile", "Player", "Subject"]

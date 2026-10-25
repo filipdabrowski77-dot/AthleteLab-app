@@ -61,8 +61,6 @@ from vald.parser import (
 )
 from vald.viz import (
     FLAG_COLORS,
-    asymmetry_bipolar_trend,
-    asymmetry_overview_bar,
     asymmetry_vertical_column,
     key_metrics_timeline_chart,
     metric_sparkline,
@@ -72,7 +70,7 @@ from vald.viz import (
 # Aktywne typy testów na dashboardzie — inne (SJ, IMTP, DJ, SLHJ, SQT, RSAIP,
 # ABCMJ, SLSEICR itp.) są w bazie ale ukrywane w UI. Dodaj "SJ" tu jak będziesz
 # gotowy żeby też pokazywać Squat Jump.
-ENABLED_TEST_TYPES: tuple[str, ...] = ("CMJ", "SJ", "HOP", "DJ", "IMTP", "RSAIP", "RSKIP")
+ENABLED_TEST_TYPES: tuple[str, ...] = ("CMJ", "SLJ", "SJ", "HOP", "DJ", "IMTP", "RSAIP", "RSKIP")
 
 
 TEST_LABELS = {
@@ -83,6 +81,7 @@ TEST_LABELS = {
     "DJ": "DJ — Drop Jump",
     "RSAIP": "RSAIP — Run Specific Ankle Iso Push",
     "RSKIP": "RSKIP — Run Specific Knee Iso Push",
+    "SLJ": "SL CMJ — Single Leg CMJ",
     "UNKNOWN": "Nierozpoznany typ",
 }
 
@@ -2121,6 +2120,9 @@ st.markdown(
       }
       .stApp .st-key-aph_tabbar [data-testid="stElementContainer"] {
         width: auto !important;
+        /* bez ściskania: na telefonie zakładki nachodziły na siebie,
+           teraz pasek przewija się w bok (2026-10-25) */
+        flex: 0 0 auto !important;
       }
       .stApp [class*="st-key-tabbtn_"] button {
         width: auto !important;
@@ -3815,9 +3817,77 @@ def _report_day_best_series(
     return out
 
 
-@st.dialog("📄 Raport PDF", width="large")
+# PDF „Testy” (styl zaakceptowany przez Filipa 24.10.2026, skill testy-pdf):
+# tytuły po polsku tylko tam, gdzie Filip je spolszczył; domyślny zestaw
+# CMJ = wysokość + RSI-mod i cztery asymetrie z PDF-ów.
+_TESTY_PL = {
+    "Jump Height": "Wysokość wyskoku",
+    "Ecc. Duration": "Eccentric Duration",
+    "Ecc. Peak Velocity": "Eccentric Peak Velocity",
+    "CM Depth": "Countermovement Depth",
+    "Contact Time": "Czas kontaktu",
+    "Best RSI": "RSI",
+    "Mean RSI": "RSI · średnia 5 najlepszych",
+    "Best Jump Height": "Wysokość wyskoku · najlepszy hop",
+    "Best Contact Time": "Czas kontaktu · najlepszy hop",
+    "Mean Contact Time": "Czas kontaktu",
+}
+_TESTY_LINE_DEFAULT = {"CMJ": ["Jump Height", "RSI-mod"], "SJ": ["Jump Height"]}
+_TESTY_ASYM_DEFAULT = {
+    "CMJ": ["Ecc. Mean Force", "Conc. Mean Force", "F@V=0 Asym", "Ecc. Decel RFD"],
+}
+_REPORT_META_COLS = {"Date", "Time", "Name", "TestId", "TrialId", "Test Type", "TrialLimb",
+                     "Rep", "Reps", "Tags", "ExternalId", "Bodyweight in Kilograms", "BW [KG]"}
+
+
+def _report_extra_columns(sub: pd.DataFrame, taken: set[str]) -> dict[str, str]:
+    """Inne metryki do PDF-u: liczbowe kolumny testu z pełnym pokryciem u tego
+    zawodnika (≥ 99 % prób), bez asymetrii, stron L/R i ratio (":" — pułapka
+    Contraction Time 42 ms). Etykieta = dokładna nazwa kolumny."""
+    out: dict[str, str] = {}
+    n = len(sub)
+    if not n:
+        return out
+    for c in sub.columns:
+        cs = str(c)
+        low = cs.lower()
+        if (cs in taken or cs.strip() in _REPORT_META_COLS or cs.startswith("__")
+                or "asym" in low or ":" in cs or cs.rstrip().endswith(("(L)", "(R)"))
+                or "inches" in low):
+            continue
+        if not pd.api.types.is_numeric_dtype(sub[c]):
+            continue
+        v = pd.to_numeric(sub[c], errors="coerce")
+        if v.notna().sum() / n >= 0.99 and v.abs().sum() > 0:
+            out[" ".join(cs.split())] = cs
+    return out
+
+
+def _report_day_value_series(sub: pd.DataFrame, col: str, date_col: str,
+                             how: str) -> "pd.Series":
+    """Wartość dnia jak w PDF-ach „Testy”: max (wynik), min (wynik, gdzie
+    niżej = lepiej) albo średnia wszystkich prób (strategia)."""
+    d = pd.DataFrame({
+        "_day": pd.to_datetime(sub[date_col], errors="coerce").dt.date,
+        "v": pd.to_numeric(sub[col], errors="coerce"),
+    }).dropna()
+    if d.empty:
+        return pd.Series(dtype=float)
+    g = d.groupby("_day")["v"]
+    out = (g.max() if how == "max" else g.min() if how == "min" else g.mean()).sort_index()
+    out.index = pd.to_datetime(out.index)
+    return out
+
+
+@st.dialog("Drukuj PDF", width="large")
 def _report_dialog(name: str) -> None:
-    """Wybór testów + metryk → PDF 'Raport testów — Imię Nazwisko'."""
+    """Wybór testów + metryk → PDF „Testy” w stylu zaakceptowanym przez
+    Filipa (bez imienia na stronie, krzywe, asymetrie w słupkach)."""
+    from vald import testy_pdf as _tp
+    if st.session_state.get("_rpt_for") != name:   # plik poprzedniego zawodnika
+        for k in ("_rpt_pdf", "_rpt_html", "_rpt_fname", "_rpt_sig", "_rpt_druk"):
+            st.session_state.pop(k, None)
+        st.session_state["_rpt_for"] = name
     df = st.session_state.get("data")
     if df is None or df.empty:
         st.info("Brak danych zawodnika.")
@@ -3826,11 +3896,12 @@ def _report_dialog(name: str) -> None:
     if not date_col:
         st.info("Brak dat w danych.")
         return
-    splits = {
-        tt: df[df["Test Type"] == tt]
-        for tt in ENABLED_TEST_TYPES
-        if "Test Type" in df.columns and not df[df["Test Type"] == tt].empty
-    }
+    # ta sama detekcja co zakładki strony (w bibliotece hop ma Test Type „HJ”,
+    # porównanie z „HOP” gubiło 10/5 Hop Test — przegląd 2026-10-25);
+    # SL CMJ bez wydruku (L/P z jednego dnia, inny układ)
+    _wykryte = detect_test_type_df(df)
+    splits = {tt: _wykryte[tt] for tt in ENABLED_TEST_TYPES
+              if tt != "SLJ" and tt in _wykryte and not _wykryte[tt].empty}
     if not splits:
         st.info("Brak testów do raportu.")
         return
@@ -3847,6 +3918,11 @@ def _report_dialog(name: str) -> None:
     for tt in sel_tests:
         sub = splits[tt]
         line_opts = _report_line_options(sub, tt)
+        extras: dict[str, str] = {}
+        if tt in ("CMJ", "SJ"):
+            taken = {match_column(sub, m) for m in METRICS_BY_TEST.get(tt, []) if not m.asymmetry}
+            extras = {k: v for k, v in _report_extra_columns(sub, taken).items()
+                      if k not in line_opts}
         asym_opts = _report_asym_options(sub, tt)
         st.markdown(
             f"<div style='font-family:var(--aph-text); font-size:12px; "
@@ -3854,34 +3930,57 @@ def _report_dialog(name: str) -> None:
             f"margin:10px 0 2px;'>{tt}</div>",
             unsafe_allow_html=True,
         )
-        c1, c2 = st.columns([1.2, 1])
-        with c1:
-            sel_lines = st.multiselect(
-                "Metryki — trend w czasie",
-                options=line_opts,
-                default=line_opts[:3],
-                key=f"rpt_lines_{tt}",
-            )
-        with c2:
-            sel_asym = st.multiselect(
-                "Asymetrie — słupki L/R",
-                options=asym_opts,
-                default=[],
-                key=f"rpt_asym_{tt}",
-            ) if asym_opts else []
-        selections[tt] = {"lines": sel_lines, "asym": sel_asym}
+        dom = [x for x in _TESTY_LINE_DEFAULT.get(tt, []) if x in line_opts] or line_opts[:2]
+        sel_lines = st.multiselect(
+            "Metryki",
+            options=line_opts + sorted(extras),
+            default=dom,
+            key=f"rpt_lines_{tt}",
+            help="Najpierw metryki ze strony, niżej wszystkie inne kolumny testu.",
+        )
+        sel_asym: list[str] = []
+        if asym_opts:
+            if st.checkbox("Asymetrie", value=True, key=f"rpt_asym_on_{tt}"):
+                dom_a = ([x for x in _TESTY_ASYM_DEFAULT.get(tt, []) if x in asym_opts]
+                         or asym_opts[:4])
+                sel_asym = st.multiselect(
+                    "Asymetrie — słupki L/P",
+                    options=asym_opts,
+                    default=dom_a,
+                    key=f"rpt_asym_{tt}",
+                )
+        selections[tt] = {"lines": sel_lines, "asym": sel_asym, "extras": extras}
 
     if not any(v["lines"] or v["asym"] for v in selections.values()):
         st.caption("Wybierz przynajmniej jedną metrykę.")
         return
 
-    if st.button("Generuj PDF", type="primary", key="rpt_generate",
+    # dzień z nieudanym pomiarem można pominąć tylko w wydruku (jak --exclude
+    # w skillu testy-pdf), bez kasowania prób w apce
+    dni_testow = sorted({
+        d for tt in selections
+        for d in pd.to_datetime(splits[tt][date_col], errors="coerce").dt.date.dropna()
+    })
+    pomin = set(st.multiselect(
+        "Pomiń dni", options=dni_testow, default=[], placeholder="brak",
+        format_func=lambda d: d.strftime("%d.%m.%Y"), key="rpt_skip_days",
+    ))
+
+    # podpis wyboru: plik/wydruk pokazujemy tylko dla zestawu, z którego powstał
+    # (przegląd 2026-10-25: po zmianie metryk albo „Pomiń dni” zostawał stary PDF)
+    sig = repr((name, sel_tests, {t: (v["lines"], v["asym"]) for t, v in selections.items()},
+                sorted(pomin)))
+    if st.button("Drukuj PDF", type="primary", key="rpt_generate",
                  use_container_width=True):
-        with st.spinner("Buduję raport…"):
+        with st.spinner("Buduję PDF…"):
             sections: list[dict] = []
             for tt, sel in selections.items():
                 sub = splits[tt]
-                charts: list[dict] = []
+                if pomin:
+                    sub = sub[~pd.to_datetime(sub[date_col], errors="coerce").dt.date.isin(pomin)]
+                lines: list[dict] = []
+                lrs: list[dict] = []
+                asyms: list[dict] = []
                 primary_col = None
                 if tt in ("CMJ", "SJ"):
                     primary_col = "Jump Height (Imp-Mom) [cm] "
@@ -3889,6 +3988,7 @@ def _report_dialog(name: str) -> None:
                     primary_col = "RSI (Flight/Contact Time)"
                 elif tt == "IMTP":
                     primary_col = "Peak Vertical Force"
+                srednie: list[str] = []
 
                 for lbl in sel["lines"]:
                     if tt == "DJ":
@@ -3902,18 +4002,15 @@ def _report_dialog(name: str) -> None:
                             )
                             if not s.empty:
                                 # VALD eksportuje Contact Time dla DJ
-                                # w SEKUNDACH, mimo nazwy kolumny „[ms]".
-                                # Bez tego raport pokazywał 0,18 z osią „ms"
-                                # zamiast 183 ms (Filip 2026-09-04).
-                                # Ten sam auto-detect co w widoku DJ (max < 5).
+                                # w SEKUNDACH, mimo nazwy kolumny „[ms]"
+                                # (Filip 2026-09-04) — ten sam auto-detect co w widoku DJ.
                                 if col.strip().startswith("Contact Time"):
                                     _mx = pd.to_numeric(s, errors="coerce").max()
                                     if pd.notna(_mx) and _mx < 5:
                                         s = s * 1000
-                                charts.append({
-                                    "kind": "line", "unit": unit,
-                                    "title": f"{lbl} · drop {_dj_height_label(hv)}",
-                                    "series": s,
+                                lines.append({
+                                    "title": f"{_TESTY_PL.get(lbl, lbl)} · drop {_dj_height_label(hv)}",
+                                    "unit": unit, "s": s, "neutral": "Contact" in lbl,
                                 })
                     elif tt in ("RSAIP", "RSKIP"):
                         col, unit, _dec = next(
@@ -3928,10 +4025,14 @@ def _report_dialog(name: str) -> None:
                             sub[sub.get("TrialLimb") == "Right"], tt, col,
                             date_col, by_col="Peak Vertical Force",
                         )
-                        charts.append({
-                            "kind": "line2", "title": lbl, "unit": unit,
-                            "series_l": sl, "series_r": sr,
-                        })
+                        lrs.append({"title": lbl, "unit": unit, "dec": _dec, "l": sl, "r": sr})
+                    elif lbl in sel["extras"]:
+                        col = sel["extras"][lbl]
+                        unit = col[col.find("[") + 1:col.find("]")] if "[" in col else ""
+                        s = _report_day_value_series(sub, col, date_col, "mean")
+                        if not s.empty:
+                            lines.append({"title": lbl, "unit": unit, "s": s, "neutral": True})
+                            srednie.append(lbl)
                     else:
                         m = next(
                             (m for m in METRICS_BY_TEST.get(tt, [])
@@ -3940,14 +4041,25 @@ def _report_dialog(name: str) -> None:
                         mcol = match_column(sub, m) if m else None
                         if not mcol:
                             continue
-                        s = _report_day_best_series(
-                            sub, tt, mcol, date_col, by_col=primary_col
-                            if primary_col in sub.columns else None,
-                        )
+                        if tt in ("CMJ", "SJ"):
+                            # reguły PDF-ów „Testy”: wynik = najlepszy dnia,
+                            # strategia (metryki bez kierunku) = średnia dnia
+                            how = ("mean" if m.neutral_direction
+                                   else "max" if m.higher_better else "min")
+                            s = _report_day_value_series(sub, mcol, date_col, how)
+                            if how == "mean":
+                                srednie.append(_TESTY_PL.get(lbl, lbl))
+                        else:
+                            s = _report_day_best_series(
+                                sub, tt, mcol, date_col, by_col=primary_col
+                                if primary_col in sub.columns else None,
+                            )
                         if not s.empty:
-                            charts.append({
-                                "kind": "line", "title": lbl,
-                                "unit": m.unit or "", "series": s,
+                            lines.append({
+                                "title": _TESTY_PL.get(lbl, lbl),
+                                "desc": _tp.RSI_MOD_DESC if lbl == "RSI-mod" else "",
+                                "unit": m.unit or "", "s": s,
+                                "neutral": m.neutral_direction,
                             })
 
                 for lbl in sel["asym"]:
@@ -3960,19 +4072,10 @@ def _report_dialog(name: str) -> None:
                             sub[sub.get("TrialLimb") == "Right"], tt,
                             "Peak Vertical Force", date_col,
                         )
-                        both = pd.concat(
-                            {"L": sl, "R": sr}, axis=1,
-                        ).dropna()
+                        both = pd.concat({"L": sl, "R": sr}, axis=1).dropna()
                         if not both.empty:
-                            signed = (
-                                (both["R"] - both["L"])
-                                / both.max(axis=1) * 100.0
-                            )
-                            charts.append({
-                                "kind": "asym",
-                                "title": "Peak Force — asymetria",
-                                "series": signed,
-                            })
+                            signed = (both["R"] - both["L"]) / both.max(axis=1) * 100.0
+                            asyms.append({"title": "Peak Force Asymmetry", "s": signed})
                     else:
                         pair = next(
                             ((m, c) for m, c in resolve_metrics(
@@ -3981,52 +4084,61 @@ def _report_dialog(name: str) -> None:
                         )
                         if not pair:
                             continue
-                        signed = _signed_asym_mean_per_day(
-                            sub, pair[1], date_col,
-                        )
+                        signed = _signed_asym_mean_per_day(sub, pair[1], date_col)
                         if not signed.empty:
-                            charts.append({
-                                "kind": "asym", "title": lbl,
-                                "series": signed,
-                            })
+                            asyms.append({"title": pair[0].name, "s": signed})
 
-                if charts:
+                if lines or lrs or asyms:
+                    if tt in ("CMJ", "SJ"):
+                        opis = "najlepszy skok dnia"
+                        if srednie:
+                            opis += " · " + ", ".join(srednie) + ": średnia dnia"
+                    else:
+                        opis = "najlepsza próba dnia"
+                    asym_sub = ("średnia ze skoków dnia" if tt in ("CMJ", "SJ")
+                                else "najlepsza próba każdej nogi" if tt in ("RSAIP", "RSKIP")
+                                else "średnia prób dnia")
                     sections.append({
-                        "test": TEST_LABELS.get(tt, tt),
-                        "accent": _PDF_TEST_ACCENT.get(tt, "#2F6BD8"),
-                        "charts": charts,
+                        # „Counter Movement Jump” jak w zaakceptowanych PDF-ach (bez „CMJ — ”)
+                        "title": TEST_LABELS.get(tt, tt).split(" — ")[-1], "sub": opis,
+                        "lines": lines, "lr": lrs, "asyms": asyms, "asym_sub": asym_sub,
                     })
 
-            # Meta strony tytułowej
-            dts = pd.to_datetime(df[date_col], errors="coerce").dropna()
-            span = (
-                f"{dts.min():%d.%m.%Y} – {dts.max():%d.%m.%Y}"
-                if not dts.empty else ""
+            dni = [d for sec in sections
+                   for x in sec["lines"] + sec["asyms"] for d in x["s"].index]
+            dni += [d for sec in sections for x in sec["lr"] for d in x["l"].index]
+            if not dni:
+                st.warning("Brak danych dla wybranych metryk.")
+                return
+            period = f"{min(dni):%d.%m.%Y} – {max(dni):%d.%m.%Y}"
+            html = _tp.build_report_html(
+                period, sections,
+                header=sections[0]["title"] if len(sections) == 1 else "",
             )
-            meta = {
-                "sport": (get_profile(name) or {}).get("sport", ""),
-                "span": span,
-                "n_days": int(dts.dt.date.nunique()) if not dts.empty else None,
-                "tests": " · ".join(selections.keys()),
-            }
-            # import tutaj, nie na górze: ciągnie matplotlib (kilka sekund
-            # na zimnym cache fontów), a raport i tak powstaje po kliknięciu
-            from vald.report import build_report_pdf
-            pdf_bytes = build_report_pdf(name, meta, sections)
-            st.session_state["_rpt_pdf"] = pdf_bytes
-            st.session_state["_rpt_fname"] = (
-                f"Raport_{name.replace(' ', '_')}_{pd.Timestamp.now():%Y%m%d}.pdf"
-            )
+            st.session_state["_rpt_html"] = html
+            st.session_state["_rpt_pdf"] = _tp.render_pdf(html)
+            st.session_state["_rpt_fname"] = f"Testy {name}.pdf"
+            st.session_state["_rpt_sig"] = sig
+            st.session_state["_rpt_druk"] = True
 
-    if st.session_state.get("_rpt_pdf"):
+    aktualny = st.session_state.get("_rpt_sig") == sig
+    if aktualny and st.session_state.get("_rpt_pdf"):
         st.download_button(
             "⬇ Pobierz PDF",
             data=st.session_state["_rpt_pdf"],
-            file_name=st.session_state.get("_rpt_fname", "raport.pdf"),
+            file_name=st.session_state.get("_rpt_fname", "Testy.pdf"),
             mime="application/pdf",
             use_container_width=True,
             key="rpt_download",
         )
+    elif aktualny and st.session_state.get("_rpt_html") and st.session_state.pop("_rpt_druk", False):
+        # bez Chromium (Streamlit Cloud): ten sam wydruk z okna druku przeglądarki;
+        # tylko raz, zaraz po kliknięciu — ponowne otwarcie okna nie drukuje
+        # starego raportu samo (przegląd 2026-10-25)
+        import streamlit.components.v1 as _components
+        st.caption("Otworzy się okno druku — wybierz „Zapisz jako PDF”.")
+        _components.html(_tp.print_page(st.session_state["_rpt_html"]),
+                         height=720, scrolling=True)
 
 
 @st.dialog("👤 Profil zawodnika")
@@ -4442,9 +4554,16 @@ def main() -> None:
         return
     # Performance testing: „← Start" po lewej paska (Filip 2026-09-02 —
     # powrót do menu bez sidebaru), „⋯" po prawej jak dotąd
+    # W profilu zawodnika górnego paska nie ma — „Start” i sync VALD siedzą
+    # w nagłówku zawodnika (Filip 2026-10-25: nic osobno, nie zajmuje miejsca)
+    _profil_open = _mode_top == "tests" and bool(
+        st.session_state.get("loaded_from_library")
+        or st.session_state.get("_pending_athlete_open")
+    )
     _back_col, _, util_col = (st.columns([0.9, 8.3, 0.7],
                                          vertical_alignment="center")
-                              if _mode_top == "tests" else (None, None, None))
+                              if _mode_top == "tests" and not _profil_open
+                              else (None, None, None))
     if _back_col is not None:
         st.markdown(
             """<style>.stApp .st-key-pt_back_home button{
@@ -4471,43 +4590,12 @@ def main() -> None:
                 if last_sync_dt is not None else "brak pulla"
             )
             with util_col.popover("⋯", use_container_width=False):
-                st.caption(f"Ostatnia synchronizacja VALD: {relative}")
-                if st.button(
-                    "⟳ Sync teraz",
-                    key="btn_refresh_vald_api",
-                    use_container_width=True,
-                ):
-                    with st.spinner("Sync z VALD API…"):
-                        success, log = _run_vald_api_refresh(full=False)
-                    st.session_state["_last_pull_log"] = log
-                    if success:
-                        st.toast("Sync OK — odśwież (Cmd+R)", icon="✅")
-                    else:
-                        st.toast("Sync nieudany — zobacz log (⋯)", icon="❌")
-                        st.session_state["_last_pull_failed"] = True
-                if st.button(
-                    "Full re-pull (historia, ~1–5 min)",
-                    key="btn_full_sync_vald_api",
-                    use_container_width=True,
-                ):
-                    with st.spinner("Full re-pull VALD… ~1–5 min."):
-                        success, log = _run_vald_api_refresh(full=True)
-                    st.session_state["_last_pull_log"] = log
-                    if success:
-                        st.toast("Full re-pull OK — odśwież (Cmd+R)", icon="✅")
-                    else:
-                        st.toast("Full re-pull nieudany", icon="❌")
-                        st.session_state["_last_pull_failed"] = True
-                if st.session_state.get("_last_pull_log"):
-                    if st.button("Pokaż log ostatniego pulla",
-                                 key="btn_show_pull_log",
-                                 use_container_width=True):
-                        _pull_log_dialog(st.session_state["_last_pull_log"])
+                _vald_sync_menu(relative)
 
     # Cienka szara linia separator między top bar a content — taka sama jak
     # border-bottom pod tabs CMJ/HOP. Daje wizualne oddzielenie strefy brand
     # od strefy content (hero + reszta).
-    if _mode_top == "tests":
+    if _mode_top == "tests" and not _profil_open:
         st.markdown(
             '<hr class="aph-v2-topbar-divider"/>',
             unsafe_allow_html=True,
@@ -4529,8 +4617,7 @@ def main() -> None:
         _trening.append(("tests", "Performance testing", ""))
     _NAV = [("WORKSPACE", [("home", "Start", "")]),
             ("TRENING", _trening),
-            ("ZAWODNICY", [("athletes", "Podopieczni", "")]),
-            ("POMOC", [("help", "Instrukcja obsługi", "")])]
+            ("ZAWODNICY", [("athletes", "Podopieczni", "")])]
     with st.sidebar:
         st.markdown(
             "<div style='display:flex; align-items:center; gap:10px; "
@@ -4765,9 +4852,47 @@ def _delete_athlete_csv(name: str) -> None:
                 pass
 
 
+def _vald_sync_menu(relative: str) -> None:
+    """Sync z VALD API (data ostatniej synchronizacji, Sync teraz, Full re-pull,
+    log) — w górnym pasku listy zawodników i w nagłówku profilu."""
+    st.caption(f"Ostatnia synchronizacja VALD: {relative}")
+    if st.button(
+        "⟳ Sync teraz",
+        key="btn_refresh_vald_api",
+        use_container_width=True,
+    ):
+        with st.spinner("Sync z VALD API…"):
+            success, log = _run_vald_api_refresh(full=False)
+        st.session_state["_last_pull_log"] = log
+        if success:
+            st.toast("Sync OK — odśwież (Cmd+R)", icon="✅")
+        else:
+            st.toast("Sync nieudany — zobacz log (⋯)", icon="❌")
+            st.session_state["_last_pull_failed"] = True
+    if st.button(
+        "Full re-pull (historia, ~1–5 min)",
+        key="btn_full_sync_vald_api",
+        use_container_width=True,
+    ):
+        with st.spinner("Full re-pull VALD… ~1–5 min."):
+            success, log = _run_vald_api_refresh(full=True)
+        st.session_state["_last_pull_log"] = log
+        if success:
+            st.toast("Full re-pull OK — odśwież (Cmd+R)", icon="✅")
+        else:
+            st.toast("Full re-pull nieudany", icon="❌")
+            st.session_state["_last_pull_failed"] = True
+    if st.session_state.get("_last_pull_log"):
+        if st.button("Pokaż log ostatniego pulla",
+                     key="btn_show_pull_log",
+                     use_container_width=True):
+            _pull_log_dialog(st.session_state["_last_pull_log"])
+
+
 def _render_back_button() -> None:
     """← do gridu wszystkich zawodników. Kompaktowy, bez rozpychania banera."""
-    if st.button("← Athletes", key="btn_back_to_grid"):
+    if st.button(":material/arrow_back:", key="btn_back_to_grid", help="Zawodnicy",
+                 type="tertiary"):
         _clear_per_athlete_state()
         st.rerun()
 
@@ -4841,111 +4966,74 @@ def _render_athlete_hero(
         "unknown": "—",
     }
     status_label = status_label_map[status]
-    status_class = "" if status == "active" else status
 
-    # 🔴 Wrapper przez st.container(key=...) — NIE przez st.markdown('<div>').
-    # Streamlit auto-domyka div z markdownu → karta hero miała zerową wysokość,
-    # avatar/meta lewitowały bez ramy i stykały się z tabami (screenshot
-    # 2026-07-03), a style .aph-v2-actions nigdy nie łapały przycisków.
+    # Minimalistyczny nagłówek (Filip 2026-10-25): mały avatar z kropką
+    # statusu, imię i sport w jednej linii, akcje jako ikony. Status „Active”
+    # to sama zielona kropka; przy zaległym teście krótki szary dopisek.
+    meta = [sport] if sport else []
+    for k_, suf in (("age", " lat"), ("height_cm", " cm"), ("weight_kg", " kg")):
+        v_ = profile.get(k_) or profile.get(k_.split("_")[0])
+        if v_:
+            meta.append(f"{v_}{suf}")
+    zaleglosc = ""
+    if status in ("stale", "overdue") and days_since is not None:
+        zaleglosc = f"ostatni test {days_since} dni temu"
     hero_box = st.container(key="aph_hero")
     with hero_box:
-        # Hero row — Streamlit columns (back, avatar, identity, actions).
-        # av_c celowo wąska (0.5) — avatar to 64px, większa waga zostawiała
-        # zbyt dużą przerwę między ikonką z inicjałami a imieniem zawodnika.
-        back_c, av_c, id_c, act_c = st.columns(
-            [0.55, 0.5, 4.4, 1.7], vertical_alignment="center",
-        )
-
+        back_c, id_c, act_c = st.columns([0.85, 5.0, 1.9], vertical_alignment="center")
     with back_c:
-        _render_back_button()
-
-    with av_c:
-        dot_class = "" if status == "active" else status_class
-        # Avatar z subtle A-mark watermark w tle (mockup style)
-        st.markdown(
-            f"""
-            <div class="aph-v2-avatar">
-              <svg class="aph-v2-avatar-mark" viewBox='0 0 200 200' aria-hidden='true'>
-                <defs>
-                  <clipPath id='av-a-{initials}'>
-                    <polygon points='100,18 188,182 152,182 100,80 48,182 12,182' />
-                  </clipPath>
-                </defs>
-                <g clip-path='url(#av-a-{initials})'>
-                  <rect x='0' y='0' width='200' height='200' fill='#F2EFE8'/>
-                  <rect x='0' y='130' width='200' height='8' fill='#0E0E10'/>
-                  <rect x='0' y='152' width='200' height='8' fill='#0E0E10'/>
-                  <rect x='0' y='174' width='200' height='8' fill='#0E0E10'/>
-                  <rect x='0' y='141' width='200' height='5' fill='#B54A32'/>
-                </g>
-              </svg>
-              <span class="aph-v2-avatar-initials">{initials}</span>
-              <span class="aph-v2-avatar-dot {dot_class}"></span>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
+        with st.container(key="aph_hero_nav", horizontal=True, gap="small"):
+            if st.button(":material/home:", key="pt_back_home", help="Start",
+                         type="tertiary"):
+                st.session_state["app_mode"] = "home"
+                st.rerun()
+            _render_back_button()
     with id_c:
-        meta_items: list[tuple[str, str]] = []
-        if sport:
-            meta_items.append(("Sport", sport))
-        # Opcjonalne pola z profile — pokażemy gdy są
-        age = profile.get("age")
-        height_cm = profile.get("height_cm") or profile.get("height")
-        weight_kg = profile.get("weight_kg") or profile.get("weight")
-        if age:
-            meta_items.append(("Age", str(age)))
-        if height_cm:
-            meta_items.append(("Height", f"{height_cm} cm"))
-        if weight_kg:
-            meta_items.append(("Weight", f"{weight_kg} kg"))
-        meta_html = "".join(
-            f"""
-            <div class="aph-v2-meta-item">
-              <span class="aph-v2-meta-label">{k}</span>
-              <span class="aph-v2-meta-value">{v}</span>
-            </div>
-            """
-            for k, v in meta_items
-        )
         st.markdown(
-            f"""
-            <div class="aph-v2-identity">
-              <div class="aph-v2-name-row">
-                <h1 class="aph-v2-name">{name}</h1>
-                <span class="aph-v2-badge-active {status_class}">● {status_label}</span>
-              </div>
-              <div class="aph-v2-meta">{meta_html}</div>
-            </div>
-            """,
+            "<style>"
+            ".stApp .aphx{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}"
+            ".stApp .st-key-aph_hero{padding:8px 14px !important;margin-bottom:12px !important}"
+            ".stApp .st-key-aph_hero_nav{flex-wrap:nowrap !important}"
+            ".stApp .st-key-aph_hero_nav button{min-height:0 !important;padding:2px !important;"
+            "color:#898781 !important}"
+            ".stApp .aphx-av{position:relative;width:34px;height:34px;border-radius:10px;"
+            "background:var(--aph-ink);color:#fff !important;display:grid;place-items:center;"
+            "font-family:var(--aph-display);font-size:13px;flex:0 0 34px}"
+            ".stApp .aphx-dot{position:absolute;right:-3px;top:-3px;width:11px;height:11px;"
+            "border-radius:99px;border:2px solid var(--aph-card,#fff);background:#3BA776}"
+            ".stApp .aphx-dot.stale,.stApp .aphx-dot.overdue{background:#c9c6bd}"
+            ".stApp .aphx-dot.unknown{display:none}"
+            ".stApp .aphx-name{font-family:var(--aph-display);font-size:24px;letter-spacing:-0.02em;"
+            "color:var(--aph-ink) !important;line-height:1.1}"
+            ".stApp .aphx-meta{font-size:12px;color:#898781 !important}"
+            ".stApp .st-key-aph_hero_actions button{width:32px;height:32px;min-height:0 !important;"
+            "padding:0 !important;border-radius:10px !important;border:1px solid #e1e0d9 !important;"
+            "background:transparent !important;box-shadow:none !important}"
+            ".stApp .st-key-aph_hero_actions button:hover{border-color:var(--aph-ink) !important}"
+            "</style>",
             unsafe_allow_html=True,
         )
-
+        # treść osobno: kontener z <style> apka chowa (:has(style))
+        st.markdown(
+            f"<div class='aphx'><span class='aphx-av'>{initials}"
+            f"<i class='aphx-dot {status}' title='{status_label}'></i></span>"
+            f"<span class='aphx-name'>{name}</span>"
+            f"<span class='aphx-meta'>{' · '.join(meta + ([zaleglosc] if zaleglosc else []))}</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
     with act_c:
-        # Pojedyncza pill "Edit" widoczna, Norms/Delete schowane do popovera
-        # "⋯" (More) żeby hero był czysty. Kontener z key → działający scope
-        # dla CSS akcji (stary wrapper-div markdown był auto-domykany = pusty).
-        with st.container(key="aph_hero_actions"):
-            edit_col, report_col, more_col = st.columns(
-                [1.7, 1.9, 0.9], vertical_alignment="center",
-            )
-            with report_col:
-                if st.button(
-                    "📄 Raport", key=f"btn_report_hero_{name}",
-                    use_container_width=True,
-                ):
-                    _report_dialog(name)
-        with edit_col:
-            if st.button(
-                "✏ Edit", key=f"btn_edit_hero_{name}",
-                use_container_width=True,
-            ):
+        with st.container(key="aph_hero_actions", horizontal=True,
+                          horizontal_alignment="right", gap="small"):
+            if st.button(":material/edit:", key=f"btn_edit_hero_{name}", help="Edytuj profil"):
                 _athlete_profile_dialog(name)
-        with more_col:
-            # NORMS przeniesiony do session strip (per test tab). W popoverze
-            # tylko realne akcje — placeholder '+ New session (wkrótce)' OUT.
-            with st.popover("⋯", use_container_width=True):
+            if st.button(":material/print:", key=f"btn_report_hero_{name}", help="Drukuj PDF"):
+                _report_dialog(name)
+            if _VALD_API_ROOT.exists():
+                with st.popover(":material/sync:", help="Synchronizacja VALD"):
+                    _ls = _last_api_pull_at()
+                    _vald_sync_menu(_humanize_since(_ls) if _ls is not None else "brak pulla")
+            with st.popover(":material/more_horiz:", help="Więcej"):
                 _render_hero_delete_button(name)
 
 
@@ -5277,6 +5365,22 @@ def _show_empty_state() -> None:
 def _render(df: pd.DataFrame) -> None:
     athlete_col = find_column(df, ATHLETE_CANDIDATES)
     date_col = find_column(df, DATE_CANDIDATES)
+    # Profil wyników węższy niż reszta apki — na szerokim ekranie 1750 px
+    # kafelki i wykresy były rozciągnięte (Filip 2026-10-25).
+    st.markdown(
+        "<style>.main .block-container,[data-testid='stMainBlockContainer'],"
+        "[data-testid='block-container']{max-width:1240px !important;}"
+        # karta głównej metryki i przycisk notatki w jednym stylu z kafelkami
+        ".stApp [class*='st-key-explorer_']{background:var(--aph-card,#fff);"
+        "border:1px solid #e1e0d9;border-radius:12px;padding:14px 16px 6px;}"
+        ".stApp [class*='st-key-btn_test_note_'] button{background:transparent !important;"
+        "border:1px solid #e1e0d9 !important;border-radius:999px !important;"
+        "box-shadow:none !important;min-height:0 !important;padding:7px 14px !important;}"
+        ".stApp [class*='st-key-btn_test_note_'] button p{font-size:13px !important;"
+        "font-weight:600 !important;color:#52514e !important;}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
 
     # Pojedynczy zawodnik na widok — bez sklejania/porównywania osób.
     # Jeśli wybrany jest profil z biblioteki, filtruj do niego;
@@ -5330,7 +5434,7 @@ def _render(df: pd.DataFrame) -> None:
     tab_keys = [k for k in ENABLED_TEST_TYPES if k in splits]
 
     # Mixed case labels (mockup style)
-    _MIXED_TAB_LABEL = {"CMJ": "CMJ", "HOP": "10/5 Hop Test", "SJ": "SJ", "DJ": "Drop Jump", "IMTP": "IMTP", "RSAIP": "RSAIP", "RSKIP": "RSKIP"}
+    _MIXED_TAB_LABEL = {"CMJ": "CMJ", "SLJ": "SL CMJ", "HOP": "10/5 Hop Test", "SJ": "SJ", "DJ": "Drop Jump", "IMTP": "IMTP", "RSAIP": "RSAIP", "RSKIP": "RSKIP"}
 
     if tab_keys:
         # 🚀 WŁASNE taby (przyciski) zamiast st.tabs — st.tabs renderuje
@@ -5392,7 +5496,7 @@ def _render(df: pd.DataFrame) -> None:
                 pass
             test_keys_n = [
                 t for t in ENABLED_TEST_TYPES
-                if t in splits and not splits[t].empty
+                if t != "SLJ" and t in splits and not splits[t].empty
             ]
             if test_keys_n:
                 has_eur = (
@@ -5698,6 +5802,99 @@ def _render_overview_tab(
 # Widok dla jednego typu testu — 4 zakładki (Perf/Strat/Asym/Tabela)
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Single leg CMJ — te same metryki co CMJ, lewa i prawa obok siebie z jednego
+# dnia (Filip 2026-10-25). Jednostki z definicji VALD (result_definitions).
+_SLJ_METRYKI: list[tuple[str, str | None, str, str]] = [
+    ("Jump Height", "Jump Height (Imp-Mom) [cm] ", "cm", "Wynik"),
+    ("RSI-mod", None, "m/s", "Wynik"),          # liczone: JH / Contraction Time
+    ("Ecc. Peak Velocity", "Eccentric Peak Velocity [m/s] ", "m/s", "Strategia"),
+    ("CM Depth", "Countermovement Depth [cm] ", "cm", "Strategia"),
+    ("Ecc. Duration", "Eccentric Duration [ms] ", "ms", "Strategia"),
+    ("Contraction Time", "Contraction Time [ms] ", "ms", "Strategia"),
+    ("Ecc. Mean Force", "Eccentric Mean Force", "N", "Ekscentryka"),
+    ("Ecc. Decel Impulse", "Eccentric Deceleration Impulse", "N s", "Ekscentryka"),
+    ("Ecc. Decel RFD", "Eccentric Deceleration RFD", "N/s", "Ekscentryka"),
+    ("F@V=0", "Force at Zero Velocity / BM [N/kg] ", "N/kg", "Ekscentryka"),
+    ("Conc. Mean Force", "Concentric Mean Force", "N", "Koncentryka"),
+    ("Concentric Impulse", "Concentric Impulse", "N s", "Koncentryka"),
+    ("P1 Conc. Impulse", "P1 Concentric Impulse", "N s", "Koncentryka"),
+    ("P2 Conc. Impulse", "P2 Concentric Impulse", "N s", "Koncentryka"),
+    ("Peak Landing Force", "Peak Landing Force", "N", "Lądowanie"),
+    ("Landing Stiffness", "Landing Stiffness", "N/m", "Lądowanie"),
+]
+_SLJ_FAZY = {"Wynik": "var(--aph-ink)", "Strategia": "#898781", "Ekscentryka": "#14B8A6",
+             "Koncentryka": "#3BA776", "Lądowanie": "#7C6FF0"}
+
+
+def _slj_strona(day_rows: pd.DataFrame, strona: str) -> dict[str, float]:
+    """Najlepszy skok danej nogi w dniu (max Jump Height) → wartości metryk.
+    RSI-mod liczony jak w CMJ: wysokość [m] / czas skurczu [s]."""
+    rows = day_rows[day_rows.get("TrialLimb").astype(str) == strona]
+    jh = "Jump Height (Imp-Mom) [cm] "
+    if rows.empty or jh not in rows.columns:
+        return {}
+    v = pd.to_numeric(rows[jh], errors="coerce")
+    if v.notna().sum() == 0:
+        return {}
+    best = rows.loc[v.idxmax()]
+    out: dict[str, float] = {}
+    for lbl, col, _u, _f in _SLJ_METRYKI:
+        if col is None:
+            j = pd.to_numeric(best.get(jh), errors="coerce")
+            ct = pd.to_numeric(best.get("Contraction Time [ms] "), errors="coerce")
+            if pd.notna(j) and pd.notna(ct) and ct > 0:
+                out[lbl] = float(j) / 100 / (float(ct) / 1000)
+        elif col in rows.columns:
+            x = pd.to_numeric(best.get(col), errors="coerce")
+            if pd.notna(x):
+                out[lbl] = float(x)
+    return out
+
+
+def _render_slcmj_view(sub: pd.DataFrame, date_col: str | None) -> None:
+    """SL CMJ: wybór dnia, potem karty L | P pogrupowane w fazy."""
+    from vald import testy_pdf as _tp
+    if not date_col or date_col not in sub.columns:
+        st.info("Brak dat w danych.")
+        return
+    d = sub.copy()
+    d["_day"] = pd.to_datetime(d[date_col], errors="coerce").dt.date
+    dni = sorted(d["_day"].dropna().unique().tolist(), reverse=True)
+    if not dni:
+        st.info("Brak danych.")
+        return
+    etyk = {x.strftime("%d.%m.%Y"): x for x in dni}
+    wybor = dni[0]
+    if len(dni) > 1:
+        lbl = st.pills("Dzień", options=list(etyk), default=list(etyk)[0],
+                       key="slj_day_pick", label_visibility="collapsed")
+        wybor = etyk.get(lbl or list(etyk)[0], dni[0])
+    day_rows = d[d["_day"] == wybor]
+    lewa, prawa = _slj_strona(day_rows, "Left"), _slj_strona(day_rows, "Right")
+    st.markdown(_tp.SCREEN_CSS, unsafe_allow_html=True)
+    st.markdown(f'<div class="tpdf">{_tp.legend(strefa=False, proste=True)}</div>',
+                unsafe_allow_html=True)
+    for faza, kolor in _SLJ_FAZY.items():
+        karty = [
+            _tp.lr_pair_card(lbl, lewa.get(lbl), prawa.get(lbl), unit,
+                             kierunek=(faza != "Strategia"))
+            for lbl, _c, unit, f in _SLJ_METRYKI if f == faza
+        ]
+        karty = [k for k in karty if k]
+        if not karty:
+            continue
+        st.markdown(
+            f"<div style='display:flex; align-items:center; gap:10px; margin:14px 0 10px;'>"
+            f"<span style='width:4px; height:20px; border-radius:99px; background:{kolor}; "
+            f"display:inline-block;'></span><span style='font-family:var(--aph-display); "
+            f"font-size:17px; letter-spacing:-0.01em; color:var(--aph-ink);'>{faza}</span></div>",
+            unsafe_allow_html=True,
+        )
+        klasa = "tgrid c4" if len(karty) == 4 else "tgrid"
+        st.markdown(f'<div class="tpdf"><div class="{klasa}">{"".join(karty)}</div></div>',
+                    unsafe_allow_html=True)
+
+
 def _render_test_view(
     sub: pd.DataFrame,
     test_type: str,
@@ -5714,6 +5911,9 @@ def _render_test_view(
     # Wybór zawodnika obsłużony w _render — tu zawsze jedna osoba.
     if sub.empty:
         st.info("Brak danych po filtrze.")
+        return
+    if test_type == "SLJ":
+        _render_slcmj_view(sub, date_col)
         return
 
     # Parse dates (gdy są)
@@ -5748,10 +5948,11 @@ def _render_test_view(
     # WYŻEJ — na poziomie tabs row (jeden globalny, po prawej tabs).
     selected_row: pd.Series | None = None
     selected_day = None
+    note_col = None
     if has_dates and single_athlete:
-        pick_col, stats_col = st.columns([1.4, 2.6], vertical_alignment="top")
-        with stats_col:
-            _render_summary_line(sub, athlete_col, date_col)
+        # statystyki (testy, dni, zakres) są w Overview — tu tylko dzień,
+        # skok i notatka w jednym rzędzie (Filip 2026-10-25: za dużo tekstu)
+        pick_col, note_col, _rest = st.columns([1.15, 1.2, 1.65], vertical_alignment="center")
         # Slot na rozwinięty panel pickera — FULL WIDTH, W FLOW (push-down).
         # Wcześniej panel był absolute-overlayem w wąskiej kolumnie pilla
         # i ZAKRYWAŁ karty Key metrics (Filip: "jedno najeżdża na drugie").
@@ -5773,7 +5974,11 @@ def _render_test_view(
     loaded_name = st.session_state.get("loaded_from_library") or (
         athletes_in_data[0] if athletes_in_data else None
     )
-    _render_test_day_notes(loaded_name, selected_day, test_type)
+    if note_col is not None:
+        with note_col:
+            _render_test_day_notes(loaded_name, selected_day, test_type)
+    else:
+        _render_test_day_notes(loaded_name, selected_day, test_type)
 
     # Kluczowe kafelki — pokazują wartości z WYBRANEJ próby + delta vs poprzednia sesja
     if has_dates and selected_row is not None:
@@ -5792,44 +5997,55 @@ def _render_test_view(
         )
         st.markdown("")
 
+    # Asymetria widoczna od razu pod główną metryką, w stylu PDF-ów „Testy” —
+    # trzy fazy (Ekscentryka / Koncentryka / Lądowanie) ze słupkami L/P.
+    # Wcześniej siedziała zwinięta w „Deep dive” (Filip 2026-10-25).
+    asym_resolved = next(
+        (resolved for sec, resolved in available if sec == "asymmetry"), [],
+    )
+    show_asym = test_type not in ("RSAIP", "RSKIP") and bool(asym_resolved)
+    if show_asym:
+        st.markdown(
+            "<div style='display:flex; align-items:baseline; gap:10px; "
+            "margin:18px 0 8px;'>"
+            "<div style='font-family:var(--aph-display); font-size:20px; "
+            "letter-spacing:-0.02em; color:var(--aph-ink);'>Asymetria</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        _render_section_grid(
+            sub, "asymmetry", asym_resolved, athlete_col, date_col,
+            has_dates=has_dates, test_type=test_type,
+            selected_row=selected_row, selected_day=selected_day,
+        )
+        st.markdown("")
+
     # Sekcje "dalsze" pokazujemy TYLKO gdy test ma zdefiniowane metryki
     # w danej kategorii — puste expandery / "Nie dotyczy" to szum (Filip).
     has_perf_strat = any(
         resolved for sec, resolved in available if sec in ("performance", "strategy")
     )
-    asym_resolved = next(
-        (resolved for sec, resolved in available if sec == "asymmetry"), [],
-    )
 
     # ── DEEP DIVE — jedna zgrupowana sekcja zamiast luźnych szarych pasków.
-    # Kolejność wg wagi dla S&C: Asymmetry → All metrics → Comparison table.
-    show_asym = test_type not in ("RSAIP", "RSKIP") and bool(asym_resolved)
-    if show_asym or has_perf_strat:
+    # Kolejność wg wagi dla S&C: All metrics → Comparison table.
+    if has_perf_strat:
         st.markdown(
             "<div style='display:flex; align-items:baseline; gap:10px; "
             "margin:22px 0 8px;'>"
             "<div style='font-family:var(--aph-display); font-size:20px; "
             "letter-spacing:-0.02em; color:var(--aph-ink);'>Deep dive</div>"
-            "<div style='font-family:var(--aph-text); font-size:12px; "
-            "color:var(--aph-mute);'>asymetrie · wszystkie metryki · tabela</div>"
             "</div>",
             unsafe_allow_html=True,
         )
 
-    if show_asym:
-        with st.expander("Asymmetry · left / right per faza", expanded=False):
-            _render_section_grid(
-                sub, "asymmetry", asym_resolved, athlete_col, date_col,
-                has_dates=has_dates, test_type=test_type,
-                selected_row=selected_row, selected_day=selected_day,
-            )
-
+    # przełączniki zamiast expanderów: zwinięty expander i tak liczył wykresy
+    # i tabele przy każdym kliknięciu — strona zamulała (Filip 2026-10-25)
     if has_dates and has_perf_strat:
-        with st.expander("All metrics · trend overview", expanded=False):
+        if st.toggle("All metrics · trend overview", key=f"dd_all_{test_type}"):
             _render_key_metrics_timeline(sub, test_type, athlete_col, date_col)
 
     if has_perf_strat or show_asym:
-        with st.expander("Comparison table · sesje obok siebie", expanded=False):
+        if st.toggle("Comparison table", key=f"dd_table_{test_type}"):
             _render_comparison_table(sub, test_type, athlete_col, date_col)
 
 
@@ -5877,10 +6093,10 @@ def _render_test_day_notes(athlete: str | None, day, test_type: str) -> None:
     note = get_test_note(athlete, day)
     day_label = day.strftime("%Y-%m-%d") if hasattr(day, "strftime") else str(day)[:10]
     if note:
-        snippet = note if len(note) <= 90 else note[:87] + "…"
-        label = f"📝 {snippet}"
+        snippet = note if len(note) <= 60 else note[:57] + "…"
+        label = f"Notatka: {snippet}"
     else:
-        label = "📝 Dodaj notatkę"
+        label = "Dodaj notatkę"
     if st.button(
         label,
         key=f"btn_test_note_{test_type}_{day_label}",
@@ -6149,36 +6365,33 @@ def _render_trial_picker(
     # ── Krok 4: mockup-style label "11 May 2026 · 5 jumps · 14:02" ──
     day_rows = s[s["_day"] == selected_day]
     n_jumps_day = len(day_rows)
-    if pd.api.types.is_datetime64_any_dtype(day_rows[date_col]) and not day_rows.empty:
-        t_min = day_rows[date_col].min().strftime("%H:%M")
-        time_str = t_min if t_min != "00:00" else ""
+    # krótko i po polsku: „16.10.2026 · skok 4 z 8” (Filip 2026-10-25: za dużo
+    # tekstu, brzydkie daty) — bez godziny i liczby testów
+    date_str = (selected_day.strftime("%d.%m.%Y") if hasattr(selected_day, "strftime")
+                else str(selected_day))
+    expander_label = date_str
+    if hop_series_pick:
+        try:
+            expander_label += f"  ·  próba {series_ids.index(chosen_series) + 1}"
+        except Exception:
+            pass
     else:
-        time_str = ""
-    _rep_word = "hop" if test_type == "HOP" else "jump"
-    jump_word = _rep_word if n_jumps_day == 1 else _rep_word + "s"
-    # English mixed case format zgodny z mockupem
-    date_str = selected_day.strftime("%-d %b %Y") if hasattr(selected_day, "strftime") else str(selected_day)
-    expander_label = f"{date_str}  ·  {n_jumps_day} {jump_word}"
-    if time_str:
-        expander_label += f"  ·  {time_str}"
+        # pozycja w WYBRANEJ serii, nie w całym dniu (przegląd 2026-10-25:
+        # „skok 4 z 8” mieszało serię z liczbą skoków dnia)
+        slowo = "próba" if test_type in ("RSAIP", "RSKIP", "IMTP") else "skok"
+        try:
+            if len(series_ids) > 1:
+                expander_label += f"  ·  seria {series_ids.index(chosen_series) + 1}"
+            expander_label += (f"  ·  {slowo} {series_rows.index.get_loc(sel_skok_idx) + 1}"
+                               f" z {len(series_rows)}")
+        except Exception:
+            expander_label += f"  ·  {n_jumps_day} prób"
     # DJ: wysokości spadania użyte w tym dniu (np. "⬇ 30/40 cm")
     if test_type == "DJ" and not day_rows.empty:
         hs = _dj_height_series(day_rows).dropna().unique()
         if len(hs):
             hs_txt = "/".join(str(int(x)) for x in sorted(hs))
             expander_label += f"  ·  ⬇ {hs_txt} cm"
-
-    # jump #N (CMJ/SJ) lub trial #N (HOP — wybieramy serię 10/5, nie pojedynczy hop)
-    if hop_series_pick:
-        try:
-            expander_label += f"  ·  trial #{series_ids.index(chosen_series) + 1}"
-        except Exception:
-            pass
-    else:
-        try:
-            expander_label += f"  ·  jump #{series_rows.index.get_loc(sel_skok_idx) + 1}"
-        except Exception:
-            pass
 
     # ── Kontrolowany popover zamiast st.expander ─────────────────────────
     # st.expander nie da się zamknąć programowo → po kliknięciu skoku popover
@@ -6238,19 +6451,15 @@ def _render_trial_picker(
             for d in days_sorted:
                 drows = s[s["_day"] == d]
                 nd = len(drows)
-                try:
-                    tmin = drows[date_col].min().strftime("%H:%M")
-                    tmin = "" if tmin == "00:00" else tmin
-                except Exception:
-                    tmin = ""
                 d_iso = d.isoformat() if hasattr(d, "isoformat") else str(d)
                 d_date = (
-                    d.strftime("%-d %b %Y") if hasattr(d, "strftime") else str(d)
+                    d.strftime("%d.%m.%Y") if hasattr(d, "strftime") else str(d)
                 )
                 is_sel = (d == selected_day)
-                sub_txt = (
-                    f"{nd} {_rep_word}s · {tmin}" if tmin else f"{nd} {_rep_word}s"
-                )
+                # krótko, bez godziny (Filip 2026-10-25: za dużo tekstu)
+                sub_txt = (f"{nd} hop" + ("" if nd == 1 else "ów")) if test_type == "HOP" else (
+                    f"{nd} skok" + ("" if nd == 1 else "i" if 2 <= nd % 10 <= 4
+                                    and not 12 <= nd % 100 <= 14 else "ów"))
                 best_html = ""
                 if best_val_col is not None:
                     bv = pd.to_numeric(drows.get(best_val_col), errors="coerce").max()
@@ -6280,18 +6489,12 @@ def _render_trial_picker(
                 for ti, sid in enumerate(series_ids, start=1):
                     srows = day_trials[day_trials[series_col] == sid]
                     nh = len(srows)
-                    try:
-                        st_t = srows[date_col].min().strftime("%H:%M")
-                    except Exception:
-                        st_t = ""
                     brsi_txt = "—"
                     if mrsi_col is not None:
                         brsi = pd.to_numeric(srows[mrsi_col], errors="coerce").max()
                         if pd.notna(brsi):
                             brsi_txt = _fmt_metric(brsi, 2).replace(".", ",")
-                    is_sel_t = (sid == chosen_series)
-                    star = "★" if is_sel_t else "☆"
-                    lbl = f"{star}  Trial {ti} · {nh} hops · {st_t} · RSI {brsi_txt}"
+                    lbl = f"Próba {ti}  ·  RSI {brsi_txt}  ·  {nh} hopów"
                     if st.button(
                         lbl, key=f"sp_trial_{test_type}_{sel_day_iso}_{sid}",
                         use_container_width=True,
@@ -6321,7 +6524,6 @@ def _render_trial_picker(
                     """Wiersz próby per TYP TESTU — właściwa metryka i jednostka
                     (wcześniej wszystko szło szablonem CMJ: RSAIP pokazywał
                     Peak Force w N podpisany '… cm', RSI '—')."""
-                    star = "★" if is_sel else "☆"
                     try:
                         t_txt = pd.to_datetime(row.get(date_col)).strftime("%H:%M")
                     except Exception:
@@ -6353,11 +6555,11 @@ def _render_trial_picker(
                             parts.append(_fmt_metric(jh_v, 1).replace(".", ",") + " cm")
                         if pd.notna(pp_v):
                             parts.append(f"PP {_fmt_metric(pp_v, 1).replace('.', ',')} W/kg")
-                    else:  # CMJ — zostaje jak było (Filip: 'tam już mamy ładnie')
+                    else:  # CMJ
                         if jh_col is not None:
                             v = _row_num(row, jh_col)
                             if pd.notna(v):
-                                parts.append(_fmt_metric(v, 2).replace(".", ",") + " cm")
+                                parts.append(_fmt_metric(v, 1).replace(".", ",") + " cm")
                         if mrsi_col is not None:
                             rv = _row_num(row, mrsi_col)
                             if pd.notna(rv):
@@ -6367,7 +6569,7 @@ def _render_trial_picker(
                     core = " · ".join(parts)
                     word = "Próba" if test_type in ("RSAIP", "RSKIP", "IMTP") else "Skok"
                     tail = f" · {t_txt}" if t_txt and test_type in ("RSAIP", "RSKIP", "IMTP") else ""
-                    return f"{star}  {word} {jpos} · {core}{tail}"
+                    return f"{word} {jpos}  ·  {core}{tail}"
 
                 for jpos, jidx in enumerate(series_rows.index.tolist(), start=1):
                     row = series_rows.loc[jidx]
@@ -6404,7 +6606,7 @@ def _render_trial_picker(
                 "<div style='font-family:var(--aph-mono); font-size:10px; "
                 "letter-spacing:0.14em; text-transform:uppercase; "
                 "color:var(--aph-mute); margin-bottom:6px;'>"
-                "🗑️ Usuwanie z bazy</div>",
+                "Usuń z bazy</div>",
                 unsafe_allow_html=True,
             )
 
@@ -6425,7 +6627,7 @@ def _render_trial_picker(
                 with btn_cols[0]:
                     if st.session_state.get(trial_confirm_key):
                         if st.button(
-                            f"✅ Usuń próbę {trial_short}",
+                            "Potwierdź: usuń skok",
                             use_container_width=True, type="primary",
                             key=f"btn_confirm_trial_del_{test_type}_{trial_iso}",
                         ):
@@ -6450,7 +6652,7 @@ def _render_trial_picker(
                             st.rerun()
                     else:
                         if st.button(
-                            f"🦵 Próba {trial_short}",
+                            "Skok",
                             use_container_width=True,
                             key=f"btn_trial_del_{test_type}_{trial_iso}",
                             help=f"Usuń wybraną próbę {trial_short} z bazy",
@@ -6466,7 +6668,7 @@ def _render_trial_picker(
                 with btn_cols[1]:
                     if st.session_state.get(series_confirm_key):
                         if st.button(
-                            f"✅ Usuń serię {series_idx_label} ({series_rows_count})",
+                            f"Potwierdź: usuń serię {series_idx_label}",
                             use_container_width=True, type="primary",
                             key=f"btn_confirm_series_del_{test_type}_{test_id_str}",
                         ):
@@ -6486,7 +6688,7 @@ def _render_trial_picker(
                             st.rerun()
                     else:
                         if st.button(
-                            f"🎯 Seria {series_idx_label} ({series_rows_count})",
+                            f"Seria {series_idx_label}",
                             use_container_width=True,
                             key=f"btn_series_del_{test_type}_{test_id_str}",
                             help=(
@@ -6502,7 +6704,7 @@ def _render_trial_picker(
             with btn_cols[2]:
                 if st.session_state.get(day_confirm_key):
                     if st.button(
-                        f"✅ Usuń dzień ({day_rows_count})",
+                        "Potwierdź: usuń dzień",
                         use_container_width=True, type="primary",
                         key=f"btn_confirm_session_del_{test_type}_{day_iso}",
                     ):
@@ -6522,7 +6724,7 @@ def _render_trial_picker(
                         st.rerun()
                 else:
                     if st.button(
-                        f"📅 Dzień ({day_rows_count})",
+                        "Cały dzień",
                         use_container_width=True,
                         key=f"btn_session_del_{test_type}_{day_iso}",
                         help=(
@@ -7003,31 +7205,33 @@ def _render_metric_explorer_tile(
     if n_days < 2:
         return  # Trend bez sensu dla 1 dnia
 
-    with st.container(key=f"explorer_{test_type}"):
-        # Section heading
-        st.markdown(
-            "<div style='display:flex; align-items:center; gap:7px; margin:0 0 8px;'>"
-            "<span style='width:8px; height:8px; border-radius:99px; "
-            "background:var(--aph-accent); display:inline-block;'></span>"
-            "<span style='font-family:var(--aph-text); font-size:11px; "
-            "letter-spacing:0.08em; text-transform:uppercase; font-weight:700; "
-            "color:var(--aph-ink);'>Single metric explorer</span></div>",
-            unsafe_allow_html=True,
-        )
+    # Szybkie przełączanie: kluczowe metryki jako przyciski, reszta w „Inne”
+    # (Filip 2026-10-25: „żebym mógł zobaczyć każdą metrykę i przeklikać”).
+    key_cols: list[tuple[str, str, MetricDef]] = []
+    for lbl in KEY_TILES.get(test_type, []):
+        m = label_to_def.get(lbl)
+        c = match_column(sub, m) if m else None
+        if c and c in candidate_cols:
+            key_cols.append((lbl, c, m))
+    INNE = "Inne"
+    AGG_BEST = "Best jump"
+    AGG_TOP3 = "Mean of top 3"
 
-        # ── Toggle agregacji + selectbox metryki ────────────────────────────
-        AGG_BEST = "Best jump"
-        AGG_TOP3 = "Mean of top 3 jumps"
-        agg_col, metric_col_ui = st.columns([1.7, 2.3], gap="small")
-        with agg_col:
-            agg_mode = st.radio(
-                "Tryb agregacji",
-                options=[AGG_BEST, AGG_TOP3],
-                horizontal=True,
-                key=f"single_metric_agg_{test_type}",
-                label_visibility="collapsed",
-            )
-        with metric_col_ui:
+    with st.container(key=f"explorer_{test_type}"):
+        top_l, top_r = st.columns([3.2, 1.1], vertical_alignment="center")
+        with top_l:
+            opcje = [k for k, _c, _m in key_cols] + [INNE]
+            wybor = st.pills(
+                "Metryka", options=opcje, default=opcje[0],
+                key=f"xpill_{test_type}", label_visibility="collapsed",
+            ) or opcje[0]
+        with top_r:
+            agg_mode = st.segmented_control(
+                "Tryb", options=[AGG_BEST, AGG_TOP3], default=AGG_BEST,
+                key=f"xagg_{test_type}", label_visibility="collapsed",
+            ) or AGG_BEST
+        m_def: MetricDef | None = None
+        if wybor == INNE or not key_cols:
             chosen_col = st.selectbox(
                 "Metric",
                 options=candidate_cols,
@@ -7036,7 +7240,9 @@ def _render_metric_explorer_tile(
                 key=f"single_metric_explorer_{test_type}",
                 label_visibility="collapsed",
             )
-
+            m_def = next((m for _l, c, m in key_cols if c == chosen_col), None)
+        else:
+            _l, chosen_col, m_def = next(x for x in key_cols if x[0] == wybor)
 
         # Buduj serię per dzień zgodnie z trybem
         if agg_mode == AGG_BEST:
@@ -7066,137 +7272,43 @@ def _render_metric_explorer_tile(
             st.info("Brak wartości dla tej metryki.")
             return
 
-        # Latest value + delta vs previous session
+        # Wartość + Δ % do poprzedniej sesji. Kolor tylko przy metrykach
+        # o znanym kierunku — explorer pozwala wybrać DOWOLNĄ kolumnę
+        # (wyżej ≠ lepiej przy CM Depth, Contraction Time; Filip 2026-09-04).
+        from vald import testy_pdf as _tp
         latest_v = float(chosen_vals.iloc[-1])
         prev_v = float(chosen_vals.iloc[-2]) if len(chosen_vals) >= 2 else float("nan")
+        kierunek = m_def is not None and not m_def.neutral_direction
+        pill = ""
         if not pd.isna(prev_v) and prev_v != 0:
-            delta_pct = (latest_v - prev_v) / abs(prev_v) * 100
-            delta_str = f"{'+' if delta_pct >= 0 else ''}{delta_pct:.1f}".replace(".", ",") + "%"
-            delta_color = "#16a34a" if delta_pct >= 0 else "#dc2626"
-            delta_arrow = "↑" if delta_pct >= 0 else "↓"
-            delta_html = (
-                f"<span style='color:{delta_color}; font-weight:700; "
-                f"font-family:var(--aph-mono); font-size:13px; margin-left:8px;'>"
-                f"{delta_arrow} {delta_str}</span>"
-            )
-        else:
-            delta_html = ""
-
-        nice_label = _format_metric_label(chosen_col)
-        # Jednostka — z nawiasu kwadratowego w col name jeśli jest
-        m_unit = ""
+            dp = (latest_v - prev_v) / abs(prev_v) * 100
+            tone = ""
+            if kierunek and abs(dp) >= 0.05:
+                tone = "up" if (dp > 0) == m_def.higher_better else "down"
+            arrow = "▲" if dp > 0 else ("▼" if dp < 0 else "")
+            pill = f'<span class="pill {tone}">{arrow} {_tp.num(abs(dp), 1)} %</span>'
+        nice_label = m_def.label if m_def else _format_metric_label(chosen_col)
         unit_match = re.search(r"\[([^\]]+)\]", chosen_col)
-        if unit_match:
-            m_unit = unit_match.group(1)
-
-        # Header z bieżącą wartością + delta
+        m_unit = m_def.unit if m_def and m_def.unit else (unit_match.group(1) if unit_match else "")
+        vals = chosen_vals.tolist()
+        days = list(chosen_vals.index)
+        dec = _tp.auto_dec(vals)
+        ids = _tp._Ids()
+        neutral = not (kierunek and m_def.higher_better)
+        n = len(vals)
+        # szeroki wykres na komputer/tablet, osobny węższy na telefon (SVG
+        # skaluje tekst razem z wykresem — w 390 px byłby nieczytelny)
+        szeroki = _tp.chart(days, vals, dec, ids, w=900, h=250, pad_top=30,
+                            pad_bot=58 if n <= 14 else 34, delta_row=n <= 14,
+                            neutral=neutral, label_limit=14, date_limit=14)
+        waski = _tp.chart(days, vals, dec, ids, w=360, h=210, pad_top=26, pad_bot=34,
+                          delta_row=False, label_limit=6, date_limit=5)
         st.markdown(
-            f"""
-            <div style="display:flex; align-items:baseline; gap:10px;
-                        margin:10px 0 2px 0; flex-wrap:wrap;">
-              <span style="font-family:var(--aph-display); font-size:30px; font-weight:800;
-                           color:var(--aph-ink); letter-spacing:-0.02em;
-                           font-variant-numeric:tabular-nums; line-height:1;">
-                {_fmt_pl(latest_v, 2)}</span>
-              <span style="font-size:13px; color:var(--aph-dim); font-weight:600;
-                           font-family:var(--aph-mono);">{m_unit}</span>
-              {delta_html}
-            </div>
-            <div style="font-size:12.5px; color:var(--aph-mute); font-weight:600;
-                        margin:0 0 12px 0;">{nice_label}
-              <span style="color:var(--aph-faint, #b8b4aa);">
-                &nbsp;·&nbsp;{len(chosen_vals)} {"sesja" if len(chosen_vals) == 1
-                else ("sesje" if 2 <= len(chosen_vals) % 10 <= 4
-                      and not 12 <= len(chosen_vals) % 100 <= 14 else "sesji")}</span>
-            </div>
-            """,
+            f'<div class="tpdf"><div class="xhead"><span class="ctitle">{nice_label}</span>'
+            f'<span class="big">{_fmt_pl(latest_v, _auto_decimals(latest_v))}</span>'
+            f'<span class="unit">{m_unit}</span>{pill}</div>'
+            f'<div class="xwide">{szeroki}</div><div class="xnarrow">{waski}</div></div>',
             unsafe_allow_html=True,
-        )
-
-        # Buduj fig — używam istniejącego metric_trend_chart pattern, ale custom
-        # bo nie mamy MetricDef dla każdej kolumny. Inline Plotly:
-        import plotly.graph_objects as go
-        x_vals = list(chosen_vals.index)
-        y_vals = chosen_vals.tolist()
-        # Linia neutralna. Wcześniej barwiła się na zielono/czerwono wg tego,
-        # czy ostatnia wartość jest wyższa od pierwszej — a explorer pozwala
-        # wybrać DOWOLNĄ kolumnę, także taką, gdzie wyżej znaczy gorzej
-        # (CM Depth, Contraction Time, Ecc. Duration). Zielona linia sugerowała
-        # tam poprawę, której nie było (Filip 2026-09-04). Ocenę zostawiamy
-        # delcie procentowej przy metrykach o znanym kierunku.
-        line_color = "#3c3a33"
-        fill_rgba = "rgba(60,58,51,0.07)"
-        fig = go.Figure()
-        # Baseline (niewidoczna) na dole zakresu → fill obszaru NIE ciągnie osi
-        # do zera i nie zalewa wykresu przy metrykach typu 40-50 cm.
-        y_lo_d, y_hi_d = min(y_vals), max(y_vals)
-        _span = (y_hi_d - y_lo_d) or (abs(y_hi_d) or 1)
-        base_y = y_lo_d - _span * 0.30
-        fig.add_trace(go.Scatter(
-            x=x_vals, y=[base_y] * len(x_vals),
-            mode="lines", line=dict(width=0),
-            hoverinfo="skip", showlegend=False,
-        ))
-        fig.add_trace(go.Scatter(
-            x=x_vals, y=y_vals,
-            mode="lines+markers",
-            line=dict(width=2.5, color=line_color, shape="linear"),
-            marker=dict(size=7, color="#FFFFFF", line=dict(width=2.5, color=line_color)),
-            fill="tonexty",
-            fillcolor=fill_rgba,
-            hovertemplate=(
-                f"<b>{nice_label}</b><br>"
-                f"%{{x|%d %b %Y}} · <b>%{{y:.2f}}</b> {m_unit}<extra></extra>"
-            ),
-        ))
-        # Halo + solid większy marker na ostatnim punkcie (mockup-style)
-        AKCENT = "#1c1b18"          # ostatnia sesja — jedyny mocny punkt
-        fig.add_trace(go.Scatter(
-            x=[x_vals[-1]], y=[y_vals[-1]], mode="markers",
-            marker=dict(size=20, color=AKCENT, opacity=0.10, line=dict(width=0)),
-            hoverinfo="skip", showlegend=False,
-        ))
-        fig.add_trace(go.Scatter(
-            x=[x_vals[-1]], y=[y_vals[-1]], mode="markers",
-            marker=dict(size=10, color=AKCENT, line=dict(width=2, color="#fff")),
-            hoverinfo="skip", showlegend=False,
-        ))
-        # Y-axis zoom do zakresu danych — trend czytelny (mockup nie zaczyna od 0)
-        y_range = [base_y, y_hi_d + _span * 0.22]
-        fig.update_layout(
-            template="plotly_white",
-            height=440,
-            margin=dict(l=52, r=26, t=10, b=42),
-            showlegend=False,
-            xaxis=dict(title="", showgrid=True, gridcolor="rgba(28,27,24,0.045)",
-                       showline=True, linecolor="rgba(28,27,24,0.12)",
-                       zeroline=False, ticks="outside", ticklen=4,
-                       tickcolor="rgba(28,27,24,0.12)",
-                       tickformat="%d %b", tickfont=dict(size=11.5)),
-            yaxis=dict(title=dict(text=m_unit, font=dict(size=11)),
-                       showgrid=True, gridcolor="rgba(28,27,24,0.07)",
-                       griddash="dot", showline=False, zeroline=False, range=y_range,
-                       tickfont=dict(size=11.5)),
-            plot_bgcolor="rgba(0,0,0,0)",
-            paper_bgcolor="rgba(0,0,0,0)",
-            hovermode="x unified",
-            font=dict(family="Archivo, system-ui, sans-serif", size=11.5, color="#6f6b61"),
-            hoverlabel=dict(bgcolor="#FFFFFF", bordercolor="rgba(28,27,24,0.15)",
-                            font=dict(size=12.5, family="Archivo, system-ui, sans-serif",
-                                      color="#1c1b18")),
-        )
-        # Value callout bubble na ostatnim punkcie (mockup "49.5 cm")
-        fig.add_annotation(
-            x=x_vals[-1], y=y_vals[-1],
-            text=f"<b>{_fmt_pl(y_vals[-1], 1)}</b> {m_unit}".strip(),
-            showarrow=False, xanchor="right", yshift=20, xshift=-2,
-            font=dict(family="JetBrains Mono, monospace", size=12, color="#FFFFFF"),
-            bgcolor="#1c1b18", borderpad=5, opacity=0.95,
-        )
-        st.plotly_chart(
-            fig, use_container_width=True,
-            config={"displayModeBar": False},
-            key=f"single_metric_chart_{test_type}_{chosen_col}",
         )
 
 
@@ -7360,116 +7472,6 @@ def _render_key_metrics_timeline(
             side_col=None, all_athletes=[athlete_name], height=460,
         )
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-
-def _render_kpi_card_v2(
-    m: MetricDef,
-    mcol: str,
-    latest: float,
-    prev: float,
-    sub: pd.DataFrame,
-    date_col: str | None,
-    *,
-    primary: bool,
-    test_type: str,
-    series_mode: str = "best_jump",
-    top_n: int = 3,
-) -> None:
-    """KPI card w stylu mockupu.
-    `latest`/`prev` z callera. `series_mode` decyduje co pokazuje sparkline:
-    - 'best_jump': wartość z best skoku per dzień (Sekcja 1)
-    - 'top_n_mean': mean top N rows by primary per dzień (Sekcja 2)
-    - 'default': fallback do _series_per_day (max/mean per section)"""
-    if m.asymmetry and not pd.isna(latest):
-        latest = abs(latest)
-    if m.asymmetry and not pd.isna(prev):
-        prev = abs(prev)
-
-    # Per-day series dla sparkline — dopasowane do source value sekcji
-    if series_mode == "best_jump":
-        series = _series_best_jump_per_day(sub, test_type, m, mcol, date_col)
-    elif series_mode == "top_n_mean":
-        series = _series_top_n_mean_per_day(sub, test_type, m, mcol, date_col, top_n)
-    else:
-        series = _series_per_day(sub, m, mcol, date_col, test_type=test_type)
-    series_clean = (
-        series.dropna() if not series.empty else pd.Series(dtype=float)
-    )
-    y_vals: list[float] = series_clean.tolist()
-    spark_dates = list(series_clean.index)
-
-    # Wartość
-    if pd.isna(latest):
-        value_text = "—"
-    else:
-        display_val = abs(latest) if m.asymmetry else latest
-        value_text = _fmt_pl(display_val, _auto_decimals(display_val))
-
-    unit_text = m.unit or ""
-
-    # Delta % vs poprzednia sesja (day-over-day)
-    if pd.isna(latest) or pd.isna(prev) or prev == 0:
-        delta_html = "<span class='aph-v2-delta-pill neutral'>—</span>"
-        sparkline_color = "var(--aph-mute)"
-    else:
-        if m.asymmetry:
-            latest_cmp, prev_cmp = abs(latest), abs(prev)
-        else:
-            latest_cmp, prev_cmp = latest, prev
-        delta_pct = (latest_cmp - prev_cmp) / abs(prev_cmp) * 100.0
-        if m.neutral_direction or abs(delta_pct) < 0.05:
-            tone_class = "neutral"
-            sparkline_color = "var(--aph-mute)"
-            arrow = "→" if abs(delta_pct) < 0.05 else ("↑" if delta_pct > 0 else "↓")
-        else:
-            if m.asymmetry:
-                improved = delta_pct < 0
-            else:
-                improved = (delta_pct > 0) == m.higher_better
-            tone_class = "up" if improved else "down"
-            sparkline_color = "var(--aph-good)" if improved else "var(--aph-bad)"
-            arrow = "↑" if delta_pct > 0 else "↓"
-        sign = "+" if delta_pct > 0 else ""
-        delta_html = (
-            f"<span class='aph-v2-delta-pill {tone_class}'>"
-            f"{arrow} {sign}{delta_pct:.1f}".replace(".", ",") + "%</span>"
-        )
-
-    # Karta jasna (także primary) — sparkline w kolorze trendu (good/bad/mute),
-    # widoczny na jasnym tle. Primary tylko większy (wyższy sparkline).
-    if primary:
-        fill_alpha = 0.16
-        spark_h = 44
-    else:
-        fill_alpha = 0.14
-        spark_h = 36
-
-    sparkline_html = _inline_sparkline_svg(
-        y_vals, color=sparkline_color, fill_alpha=fill_alpha, h=spark_h,
-        dates=spark_dates, unit=unit_text,
-    )
-
-    card_class = "aph-v2-kpi-card primary" if primary else "aph-v2-kpi-card"
-
-    st.markdown(
-        f"""
-        <article class="{card_class}">
-          <div class="aph-v2-kpi-header">
-            <span class="aph-v2-kpi-label">{m.label}</span>
-          </div>
-          <div class="aph-v2-kpi-value-row">
-            <span class="aph-v2-kpi-value">{value_text}</span>
-            <span class="aph-v2-kpi-unit">{unit_text}</span>
-          </div>
-          <div class="aph-v2-kpi-spark">{sparkline_html}</div>
-          <div class="aph-v2-kpi-footer">
-            {delta_html}
-            <span class="aph-v2-kpi-vs-label">vs previous</span>
-          </div>
-        </article>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 def _render_dj_special_key_tiles(
@@ -8241,7 +8243,6 @@ def _render_key_tiles_from_row(
     if not chosen:
         return
 
-    total = len(chosen)
     primary_label = PRIMARY_METRIC_LABEL.get(test_type, "Jump Height")
     top_n = STRATEGY_TOP_N_BY_TEST.get(test_type, 3)
 
@@ -8323,28 +8324,66 @@ def _render_key_tiles_from_row(
             if prev_day is not None else pd.DataFrame()
         )
 
-    cols = st.columns(total, gap="small")
-    for i, (col_ui, (m, mcol)) in enumerate(zip(cols, chosen)):
-        with col_ui:
-            if mode == MODE_MEAN:
-                latest_v = _mean_value_in_rows(top_rows_today, m, mcol)
-                prev_v = _mean_value_in_rows(top_rows_prev, m, mcol)
-                series_mode = "top_n_mean"
-            else:
-                latest_v = (
-                    _row_value(sel_row, m, mcol) if sel_row is not None
-                    else float("nan")
-                )
-                prev_v = (
-                    _row_value(prev_best_row, m, mcol)
-                    if prev_best_row is not None else float("nan")
-                )
-                series_mode = "best_jump"
-            _render_kpi_card_v2(
-                m, mcol, latest_v, prev_v, sub, date_col,
-                primary=(i == 0), test_type=test_type,
-                series_mode=series_mode, top_n=top_n,
+    # Kafelki w stylu PDF-ów „Testy” (Filip 2026-10-25): 3 główne na górze,
+    # reszta mniejsza pod spodem. Liczby jak dotąd (wybrana próba / top N),
+    # zmienił się tylko wygląd: krzywa z wartościami przy punktach.
+    from vald import testy_pdf as _tp
+    ids = _tp._Ids()
+    tiles: list[str] = []
+    for i, (m, mcol) in enumerate(chosen):
+        if mode == MODE_MEAN:
+            latest_v = _mean_value_in_rows(top_rows_today, m, mcol)
+            prev_v = _mean_value_in_rows(top_rows_prev, m, mcol)
+            series = _series_top_n_mean_per_day(sub, test_type, m, mcol, date_col, top_n)
+        else:
+            latest_v = (
+                _row_value(sel_row, m, mcol) if sel_row is not None
+                else float("nan")
             )
+            prev_v = (
+                _row_value(prev_best_row, m, mcol)
+                if prev_best_row is not None else float("nan")
+            )
+            series = _series_best_jump_per_day(sub, test_type, m, mcol, date_col)
+        tiles.append(_key_tile_html(
+            m, latest_v, prev_v, series.dropna() if not series.empty else series,
+            ids, small=(i >= 3),
+        ))
+    rows_html = f'<div class="tgrid">{"".join(tiles[:3])}</div>'
+    if tiles[3:]:
+        rows_html += f'<div class="tgrid">{"".join(tiles[3:])}</div>'
+    # styl osobno: kontener z <style> apka chowa (:has(style), linia ~711)
+    st.markdown(_tp.SCREEN_CSS, unsafe_allow_html=True)
+    st.markdown(f'<div class="tpdf">{rows_html}</div>', unsafe_allow_html=True)
+
+
+def _key_tile_html(
+    m: MetricDef, latest: float, prev: float, series: pd.Series, ids, *,
+    small: bool,
+) -> str:
+    """Jeden kafelek Key metrics: wartość, Δ % do poprzedniej sesji (zielony/
+    czerwony wg kierunku metryki, szary dla metryk bez kierunku) i krzywa."""
+    from vald import testy_pdf as _tp
+    if pd.isna(latest):
+        value_text = "—"
+    else:
+        display_val = abs(latest) if m.asymmetry else latest
+        value_text = _fmt_pl(display_val, _auto_decimals(display_val))
+    delta_text, tone = "", ""
+    if not (pd.isna(latest) or pd.isna(prev) or prev == 0):
+        a, b = (abs(latest), abs(prev)) if m.asymmetry else (latest, prev)
+        delta_pct = (a - b) / abs(b) * 100.0
+        if m.neutral_direction or abs(delta_pct) < 0.05:
+            tone = ""
+        else:
+            improved = delta_pct < 0 if m.asymmetry else (delta_pct > 0) == m.higher_better
+            tone = "up" if improved else "down"
+        arrow = "▲" if delta_pct > 0 else ("▼" if delta_pct < 0 else "")
+        delta_text = f"{arrow} {_tp.num(abs(delta_pct), 1)} %".strip()
+    return _tp.screen_tile(
+        m.label, value_text, m.unit or "", delta_text, tone, series, ids,
+        small=small,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -8369,83 +8408,13 @@ def _render_section_grid(
     # w sekcji (Filip: szybciej niż cofać się do trial pickera na górze).
     # Selectbox sync'uje state z głównym pickerem (selected_day_{test_type}).
     if section == "asymmetry":
-        asym_row = selected_row
-        asym_day = selected_day
-
-        if (has_dates and date_col and date_col in sub.columns
-                and selected_day is not None):
-            # Selectbox dnia w sekcji asymetrii — wszystkie dni testowe z sub
-            days_dt = pd.to_datetime(sub[date_col], errors="coerce")
-            all_test_days = sorted(
-                set(d for d in days_dt.dt.date.dropna()), reverse=True,
-            )
-            asym_day_selector_key = f"asym_section_day_picker_{test_type}"
-            try:
-                default_idx = all_test_days.index(selected_day)
-            except ValueError:
-                default_idx = 0
-            picked_asym_day = st.selectbox(
-                "🗓️ Dzień testowy (asymetrie)",
-                options=all_test_days,
-                index=default_idx,
-                format_func=lambda d: d.strftime("%-d %b %Y") if hasattr(d, "strftime") else str(d),
-                key=asym_day_selector_key,
-            )
-            # Sync z głównym pickerem (selected_day_{test_type})
-            if picked_asym_day != selected_day:
-                st.session_state[f"selected_day_{test_type}"] = picked_asym_day
-                st.rerun()
-            day_mask = days_dt.dt.date == selected_day
-            sub_day = sub[day_mask]
-            if not sub_day.empty:
-                n_trials = len(sub_day)
-                st.caption(
-                    f"📊 Mean asymetrii z {n_trials} test"
-                    f"{'u' if n_trials == 1 else 'ów'} w dniu "
-                    f"{selected_day.strftime('%Y-%m-%d')}"
-                )
-                # Pseudo-row z mean per kolumna asymetrii + dominującą stroną
-                row_data: dict = {}
-                if date_col in sub_day.columns and not sub_day[date_col].dropna().empty:
-                    row_data[date_col] = sub_day[date_col].dropna().iloc[0]
-                for m, col in resolved:
-                    side_resolved: str | None = None
-                    if col in sub_day.columns:
-                        vals_signed = pd.to_numeric(sub_day[col], errors="coerce").dropna()
-                        row_data[col] = (
-                            float(vals_signed.abs().mean())
-                            if not vals_signed.empty else float("nan")
-                        )
-                        # Strona dominująca — fallback ze znaku wartości.
-                        # VALD convention dla % (Asym): positive = R (prawa
-                        # dominuje), negative = L (lewa). Mode znaku ze wszystkich
-                        # rep'ów dnia daje najczęstszą dominację.
-                        if not vals_signed.empty:
-                            n_L = int((vals_signed < 0).sum())
-                            n_R = int((vals_signed > 0).sum())
-                            if n_L > n_R:
-                                side_resolved = "L"
-                            elif n_R > n_L:
-                                side_resolved = "R"
-                    # __side kolumna (jeśli pipeline ją dodał) ma priorytet nad sign fallback
-                    side_col = col + SIDE_SUFFIX
-                    if side_col in sub_day.columns:
-                        sides = sub_day[side_col].dropna().astype(str)
-                        sides = sides[sides.isin(["L", "R"])]
-                        if not sides.empty:
-                            mode = sides.mode()
-                            if not mode.empty:
-                                side_resolved = mode.iloc[0]
-                    row_data[side_col] = side_resolved
-                asym_row = pd.Series(row_data)
-                asym_day = selected_day
-
-        if asym_row is not None:
-            _render_asymmetry_summary_from_row(asym_row, resolved, test_type)
+        # dzień z głównego pickera na górze — osobny selectbox i pseudo-wiersz
+        # dnia zniknęły; karty i czipy liczą się z selected_day w siatce faz
+        # (Filip 2026-10-25: mniej tekstu; przegląd: zgodność z kafelkami)
         _render_asymmetry_phase_grid(
             sub, resolved, athlete_col, date_col,
             has_dates=has_dates, athletes=athletes,
-            selected_row=asym_row, selected_day=asym_day,
+            selected_row=selected_row, selected_day=selected_day,
             test_type=test_type,
         )
         return
@@ -8466,6 +8435,18 @@ def _render_section_grid(
                     selected_row=selected_row, selected_day=selected_day,
                     test_type=test_type,
                 )
+
+
+# Na wierzchu w CMJ — wybór Filipa 2026-10-25: ekscentryka = mean force,
+# deceleration impulse, deceleration RFD, F@V=0; koncentryka = mean force,
+# P1 i P2; lądowanie = peak force i stiffness. Reszta pod przełącznikiem.
+_ASYM_KEY_CMJ = {
+    "Eccentric Mean Force Asymmetry", "Eccentric Deceleration Impulse Asymmetry",
+    "Eccentric Deceleration RFD Asymmetry", "Force at Zero Velocity Asymmetry",
+    "Concentric Mean Force Asymmetry", "P1 Concentric Impulse Asymmetry",
+    "P2 Concentric Impulse Asymmetry", "Peak Landing Force Asymmetry",
+    "Landing Stiffness Asymmetry",
+}
 
 
 def _asymmetry_phase(m: MetricDef, test_type: str | None = None) -> str:
@@ -8497,8 +8478,15 @@ def _render_asymmetry_phase_grid(
     *, has_dates: bool, athletes: list[str],
     selected_row: pd.Series | None, selected_day,
     test_type: str | None = None,
+    _asym_rest: bool = False, _ylim: float | None = None,
 ) -> None:
     """Asymetrie pogrupowane w fazy (jedna pod drugą), metryki jako siatka 3 w rzędzie."""
+    # CMJ: na wierzchu kluczowe asymetrie (_ASYM_KEY_CMJ), pozostałe pod
+    # przełącznikiem — mniej kart i tekstu
+    rest: list[tuple[MetricDef, str]] = []
+    if test_type == "CMJ" and not _asym_rest:
+        rest = [(m, c) for m, c in resolved if m.name not in _ASYM_KEY_CMJ]
+        resolved = [(m, c) for m, c in resolved if m.name in _ASYM_KEY_CMJ]
     groups: dict[str, list[tuple[MetricDef, str]]] = {
         "eccentric": [], "concentric": [], "landing": [], "imtp_force": [], "other": [],
     }
@@ -8509,17 +8497,50 @@ def _render_asymmetry_phase_grid(
     # lądowanie = pomarańcz, IMTP = stalowy. Jedna kreska + nazwa — zero
     # emoji i dopisków (Filip: zbędne zdania robiły szum).
     PHASE_STYLE = {
-        "eccentric":  ("Ekscentryka",  "oklch(0.56 0.15 248)"),
-        "concentric": ("Koncentryka",  "oklch(0.64 0.15 162)"),
-        "landing":    ("Lądowanie",    "#e58c3a"),
+        # niebieski i pomarańczowy zarezerwowane dla lewej/prawej nogi
+        "eccentric":  ("Ekscentryka",  "#14B8A6"),
+        "concentric": ("Koncentryka",  "#3BA776"),
+        "landing":    ("Lądowanie",    "#7C6FF0"),
         "imtp_force": ("Siła (pull)",  "#5b7ba6"),
         "other":      ("Pozostałe",    "var(--aph-mute)"),
     }
+
+    from vald import testy_pdf as _tp
+    signed = {mcol: _signed_asym_mean_per_day(sub, mcol, date_col)
+              for _m, mcol in list(resolved) + list(rest)}
+    ylim = _ylim if _ylim is not None else _tp.shared_ylim(list(signed.values()))
+    # dzień jak w pickerze (kafelki Key metrics) — bez wyboru ostatni dzień testu
+    ref_day = selected_day
+    if ref_day is None and date_col and date_col in sub.columns:
+        _dd = pd.to_datetime(sub[date_col], errors="coerce").dropna()
+        ref_day = _dd.max().date() if not _dd.empty else None
+    if has_dates and not _asym_rest and any(len(v) for v in signed.values()):
+        st.markdown(_tp.SCREEN_CSS, unsafe_allow_html=True)
+        st.markdown(f'<div class="tpdf">{_tp.legend()}</div>', unsafe_allow_html=True)
 
     def _render_phase(metrics: list[tuple[MetricDef, str]], heading: str, caption: str) -> None:
         if not metrics:
             return
         ph_name, ph_color = PHASE_STYLE.get(caption, (heading, "var(--aph-ink)"))
+        # czipy z wybranego dnia (dawne karty faz nad wykresami) — trzy fazy
+        # z kolorem flagi zamiast osobnego rzędu kart i podpisów
+        # liczone z tych samych wartości co na kartach: średnia ze znakiem
+        # z dnia wybranego w pickerze (przegląd 2026-10-25 — wcześniej ostatni dzień)
+        n_flag = {"green": 0, "orange": 0, "red": 0}
+        for _m, _c in metrics:
+            _s = signed.get(_c)
+            if _s is None or not len(_s) or ref_day is None:
+                continue
+            _v = _s[_s.index.date == ref_day]
+            if len(_v):
+                _f = asymmetry_flag(abs(float(_v.iloc[0])))
+                n_flag[_f] = n_flag.get(_f, 0) + 1
+        chips = "".join(
+            f"<span class='aph-v2-phase-chip {cls}'>{n} {txt}</span>"
+            for key, cls, txt in (("green", "green", "OK"), ("orange", "muted", "watch"),
+                                  ("red", "red", "flag"))
+            for n in [n_flag.get(key, 0)] if n
+        )
         st.markdown(
             f"<div style='display:flex; align-items:center; gap:10px; "
             f"margin:14px 0 10px;'>"
@@ -8527,39 +8548,25 @@ def _render_asymmetry_phase_grid(
             f"background:{ph_color}; display:inline-block;'></span>"
             f"<span style='font-family:var(--aph-display); font-size:17px; "
             f"letter-spacing:-0.01em; color:var(--aph-ink);'>{ph_name}</span>"
-            f"<span style='font-family:var(--aph-text); font-size:11.5px; "
-            f"color:var(--aph-mute);'>mean per dzień · L/R</span></div>",
+            f"<span class='aph-v2-phase-chips' style='margin:0'>{chips}</span></div>",
             unsafe_allow_html=True,
         )
         if not has_dates:
             st.caption("Brak dat w danych.")
             st.markdown("")
             return
-        phase_slug = caption
-        key_prefix = f"asymtrend_{test_type}_{phase_slug}"
-        n_cols_trend = 2 if len(metrics) >= 2 else 1
-        for r in range(-(-len(metrics) // n_cols_trend)):
-            cols = st.columns(n_cols_trend, gap="medium")
-            for c in range(n_cols_trend):
-                idx = r * n_cols_trend + c
-                if idx >= len(metrics):
-                    continue
-                m, mcol = metrics[idx]
-                signed_per_day = _signed_asym_mean_per_day(sub, mcol, date_col)
-                with cols[c]:
-                    st.markdown(
-                        f"<div style='font-family: var(--aph-mono); "
-                        f"font-size: 12px; letter-spacing: 0.18em; "
-                        f"text-transform: uppercase; color: var(--aph-dim); "
-                        f"margin-bottom: 6px;'>{m.label}</div>",
-                        unsafe_allow_html=True,
-                    )
-                    fig = asymmetry_bipolar_trend(signed_per_day, height=320)
-                    st.plotly_chart(
-                        fig, use_container_width=True,
-                        config={"displayModeBar": False},
-                        key=f"{key_prefix}_{m.label}_{mcol}",
-                    )
+        # słupki w stylu PDF-ów „Testy”: średnia dnia ze znakiem, w górę
+        # niebieski = lewa, w dół pomarańczowy = prawa, strefa ±10 %,
+        # wspólna skala dla wszystkich asymetrii (Filip 2026-10-25)
+        cards = "".join(
+            _tp.screen_asym_card(m.label, signed[mcol], ylim, ref_day=ref_day)
+            for m, mcol in metrics if len(signed.get(mcol, ()))
+        )
+        if cards:
+            n_kart = sum(1 for m, mcol in metrics if len(signed.get(mcol, ())))
+            klasa = "tgrid c4" if n_kart == 4 else "tgrid"
+            st.markdown(f'<div class="tpdf"><div class="{klasa}">{cards}</div></div>',
+                        unsafe_allow_html=True)
         st.markdown("")
 
     _render_phase(groups["eccentric"], "Ekscentryka", "eccentric")
@@ -8567,6 +8574,12 @@ def _render_asymmetry_phase_grid(
     _render_phase(groups["landing"], "Lądowanie", "landing")
     _render_phase(groups["imtp_force"], "Siła (pull)", "imtp_force")
     _render_phase(groups["other"], "Pozostałe", "other")
+    if rest and st.toggle(f"Pozostałe asymetrie ({len(rest)})", key=f"asym_rest_{test_type}"):
+        _render_asymmetry_phase_grid(
+            sub, rest, athlete_col, date_col, has_dates=has_dates, athletes=athletes,
+            selected_row=selected_row, selected_day=selected_day, test_type=test_type,
+            _asym_rest=True, _ylim=ylim,
+        )
 
 
 def _series_per_day(
@@ -8797,92 +8810,6 @@ def _render_value_tile(
 # ─────────────────────────────────────────────────────────────────────────────
 # Asymmetry summary KPI (na górze zakładki Asymmetry)
 # ─────────────────────────────────────────────────────────────────────────────
-
-def _render_asymmetry_summary_from_row(
-    row: pd.Series, resolved: list[tuple[MetricDef, str]],
-    test_type: str | None = None,
-) -> None:
-    """Mini-podsumowanie asymetrii Z WYBRANEJ PRÓBY: split per faza (eccentric/concentric/landing).
-    Dla IMTP: jedna karta 'Force output' (test izometryczny — bez faz dynamic)."""
-    # Phase meta per test type (IMTP ma 1 fazę, pozostałe 3)
-    if test_type == "IMTP":
-        phase_meta = [("imtp_force", "Force output")]
-    else:
-        phase_meta = [
-            ("eccentric", "Eccentric"),
-            ("concentric", "Concentric"),
-            ("landing", "Landing"),
-        ]
-    phases: dict[str, list[tuple[MetricDef, str]]] = {k: [] for k, _ in phase_meta}
-    for m, mcol in resolved:
-        ph = _asymmetry_phase(m, test_type)
-        if ph in phases:
-            phases[ph].append((m, mcol))
-
-    phase_counts: dict[str, tuple[int, int, int, int]] = {}
-    flagged_all: list[tuple[MetricDef, str, float, str | None]] = []
-    for ph, metrics in phases.items():
-        n_grn = n_yel = n_red = 0
-        for m, mcol in metrics:
-            raw = row.get(mcol)
-            try:
-                mag = abs(float(raw))
-            except (TypeError, ValueError):
-                mag = float("nan")
-            side_val = row.get(mcol + SIDE_SUFFIX)
-            side_val = side_val if isinstance(side_val, str) else None
-            flagged_all.append((m, mcol, mag, side_val))
-            if pd.isna(mag):
-                continue
-            flag = asymmetry_flag(mag)
-            n_grn += int(flag == "green")
-            n_yel += int(flag == "orange")
-            n_red += int(flag == "red")
-        phase_counts[ph] = (n_grn, n_yel, n_red, len(metrics))
-
-    cols = st.columns(len(phase_meta))
-    for col_ui, (ph, label) in zip(cols, phase_meta):
-        n_grn, n_yel, n_red, total = phase_counts[ph]
-        # Big number = total flagged metrics (zielone+pomarańczowe+czerwone)
-        # Pod spodem mini chipy z kolorami
-        chip_badges = []
-        if n_grn > 0:
-            chip_badges.append(
-                f"<span class='aph-v2-phase-chip green'>{n_grn} OK</span>"
-            )
-        if n_yel > 0:
-            chip_badges.append(
-                f"<span class='aph-v2-phase-chip amber'>{n_yel} watch</span>"
-            )
-        if n_red > 0:
-            chip_badges.append(
-                f"<span class='aph-v2-phase-chip red'>{n_red} flag</span>"
-            )
-        if not chip_badges:
-            chip_badges = ["<span class='aph-v2-phase-chip muted'>brak danych</span>"]
-        chips_html = "".join(chip_badges)
-        with col_ui:
-            st.markdown(
-                f"""
-                <div class='aph-v2-phase-card'>
-                  <div class='aph-v2-phase-header'>
-                    <span class='aph-v2-phase-name'>{label}</span>
-                    <span class='aph-v2-phase-total'>{total} metryk</span>
-                  </div>
-                  <div class='aph-v2-phase-chips'>{chips_html}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    with st.expander("📊 Pokaż zbiorczy wykres asymetrii", expanded=False):
-        st.plotly_chart(
-            asymmetry_overview_bar(flagged_all),
-            use_container_width=True,
-            config={"displayModeBar": False},
-        )
-    st.markdown("")
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Logika "latest vs previous session" — agregacja per dzień testu
@@ -9958,7 +9885,9 @@ def _render_norms_chip(
 ) -> None:
     """Klikalny chip 'NORMS' wyrównany z zakładkami CMJ/HOP/Overview po prawej.
     `key_suffix` — żeby rozróżnić button per tab (każdy test_type ma osobny render)."""
-    test_keys = [t for t in ENABLED_TEST_TYPES if t in splits and not splits[t].empty]
+    # SL CMJ nie ma norm/PB (L/P z jednego dnia) — bez pustej zakładki
+    test_keys = [t for t in ENABLED_TEST_TYPES
+                 if t != "SLJ" and t in splits and not splits[t].empty]
     if not test_keys:
         return
     has_eur = (

@@ -207,6 +207,16 @@ CMJ_ASYMMETRY: list[MetricDef] = [
              "Klasyfikowana w fazie eccentric, bo to moment kończący hamowanie zejścia.",
     ),
     MetricDef(
+        name="Concentric Mean Force Asymmetry",
+        keywords=["concentric mean force % (asym)"],
+        unit="%",
+        higher_better=False,
+        asymmetry=True,
+        section="asymmetry",
+        pl_label="Conc. Mean Force",
+        desc="Asymetria średniej siły w fazie odbicia (jedna z 4 asymetrii w PDF-ie „Testy”).",
+    ),
+    MetricDef(
         name="Concentric Impulse Asymmetry",
         keywords=["concentric impulse % (asym)"],
         unit="%",
@@ -258,6 +268,17 @@ CMJ_ASYMMETRY: list[MetricDef] = [
         pl_label="Peak Landing Force",
         desc="Asymetria szczytowej siły lądowania — kluczowe dla ryzyka kontuzji "
              "po wylądowaniu.",
+    ),
+    MetricDef(
+        name="Landing Stiffness Asymmetry",
+        keywords=["landing stiffness % (asym)"],
+        unit="%",
+        higher_better=False,
+        asymmetry=True,
+        section="asymmetry",
+        pl_label="Landing Stiffness",
+        desc="Asymetria sztywności w lądowaniu (Filip 2026-10-25: lądowanie = "
+             "Peak Force i stiffness). W eksportach do 07.2026 bywa pusta.",
     ),
 ]
 
