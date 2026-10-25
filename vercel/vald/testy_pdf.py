@@ -188,7 +188,8 @@ def chart(days, vals, dec, ids: _Ids, *, w=330, h=150, pad_top=26, pad_bot=58,
 
 
 def bars(days, vals, ylim, *, w=330, h=230, pad_top=18, pad_bot=26, pad_x=14,
-         side_right=False, hi: int | None = None) -> str:
+         side_right=False, hi: int | None = None, max_dat: int = 12,
+         tylko_poza: bool = False) -> str:
     """Słupek w górę = lewa noga generuje więcej (VALD: wartość ujemna), w dół = prawa."""
     n = len(vals)
 
@@ -208,7 +209,7 @@ def bars(days, vals, ylim, *, w=330, h=230, pad_top=18, pad_bot=26, pad_x=14,
     sx, anc = (w - pad_x, "end") if side_right else (pad_x, "start")
     parts.append(f'<text x="{sx}" y="{pad_top - 6}" text-anchor="{anc}" class="side">L ↑</text>')
     parts.append(f'<text x="{sx}" y="{h - pad_bot + 1}" text-anchor="{anc}" class="side">P ↓</text>')
-    daty = _rzadkie(n, 12)                  # przy wielu sesjach co któraś data
+    daty = _rzadkie(n, max_dat)             # przy wielu sesjach co któraś data
     for i, (v, d) in enumerate(zip(vals, days)):
         b = -v
         cx = pad_x + slot * (i + 0.5)
@@ -228,7 +229,10 @@ def bars(days, vals, ylim, *, w=330, h=230, pad_top=18, pad_bot=26, pad_x=14,
         # podświetlony dzień (wybrany w pickerze) pełnym kolorem, reszta blado
         op = "" if hi is None or i == hi else ' fill-opacity="0.38"'
         parts.append(f'<path d="{path}" fill="{col}"{op}/>')
-        if n <= 12 or i in (0, n - 1) or i == hi:
+        # na stronie (tylko_poza) podpis tylko poza strefą ±10 % i przy wybranym
+        # dniu — w wąskich kartach wszystkie podpisy były nieczytelne
+        pokaz = (abs(v) > 10 or i == hi) if tylko_poza else (n <= 12 or i in (0, n - 1) or i == hi)
+        if pokaz:
             parts.append(f'<text x="{cx:.1f}" y="{ly:.1f}" class="bval">{num(abs(v), 1)}%</text>')
         if i in daty or i == hi:
             parts.append(f'<text x="{cx:.1f}" y="{h - 6}" class="date">{dm(d)}</text>')
@@ -517,17 +521,17 @@ def print_page(html: str) -> str:
 SCREEN_CSS = """
 <style>
 .stApp .tpdf { font-family: var(--aph-text, "Helvetica Neue", Helvetica, Arial, sans-serif); }
-.stApp .tpdf .tgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 12px; }
+.stApp .tpdf .tgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0 0 10px; }
 .stApp .tpdf .tgrid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .stApp .tpdf .tgrid.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .stApp .tpdf .card { background: var(--aph-card, #fff); border: 1px solid #e1e0d9; border-radius: 12px;
-  padding: 14px 16px 8px; min-width: 0; }
-.stApp .tpdf .card.small { padding: 12px 14px 6px; }
-.stApp .tpdf .ctitle { font-size: 14px; font-weight: 700; color: #0b0b0b !important; }
+  padding: 10px 12px 6px; min-width: 0; }
+.stApp .tpdf .card.small { padding: 9px 12px 4px; }
+.stApp .tpdf .ctitle { font-size: 13px; font-weight: 700; color: #0b0b0b !important; }
 .stApp .tpdf .csub { font-weight: 400; color: #898781 !important; font-size: 11.5px; margin-left: 6px; }
 .stApp .tpdf .hero { margin-top: 6px; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
-.stApp .tpdf .big { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.05; color: #0b0b0b !important; }
-.stApp .tpdf .card.small .big { font-size: 24px; }
+.stApp .tpdf .big { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.05; color: #0b0b0b !important; }
+.stApp .tpdf .card.small .big { font-size: 20px; }
 .stApp .tpdf .unit { font-size: 13px; color: #52514e !important; }
 .stApp .tpdf .delta { font-size: 12px; color: #52514e !important; margin: 4px 0 2px; display: flex; gap: 8px;
   align-items: center; flex-wrap: wrap; }
@@ -546,13 +550,13 @@ SCREEN_CSS = """
 .stApp .tpdf .chart .date { font-size: 9px; fill: #898781; text-anchor: middle; }
 .stApp .tpdf .chart .chg { font-size: 9.5px; fill: #898781; text-anchor: middle; font-weight: 600; }
 .stApp .tpdf .chart .bval { font-size: 9px; fill: #0E0E10; text-anchor: middle; font-weight: 600; }
-.stApp .tpdf .card.asym .big { font-size: 22px; }
+.stApp .tpdf .card.asym .big { font-size: 18px; }
 .stApp .tpdf .sL { color: #3B6FB0 !important; }
 .stApp .tpdf .sP { color: #E08A2B !important; }
 .stApp .tpdf .unit.sL, .stApp .tpdf .unit.sP { font-weight: 700; }
 .stApp .tpdf .xhead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 6px 0 2px; }
 .stApp .tpdf .xhead .ctitle { font-size: 15px; margin-right: 6px; }
-.stApp .tpdf .xhead .big { font-size: 30px; }
+.stApp .tpdf .xhead .big { font-size: 26px; }
 .stApp .tpdf .xnarrow { display: none; }
 @media (max-width: 640px) { .stApp .tpdf .xwide { display: none; } .stApp .tpdf .xnarrow { display: block; } }
 .stApp .tpdf .nodata { height: 60px; display: grid; place-items: center; font-size: 11px; color: #898781 !important; }
@@ -576,12 +580,13 @@ def screen_tile(title: str, value_text: str, unit: str, delta_text: str, tone: s
         d = auto_dec(vals) if dec is None else dec
         # dół wykresu z zapasem: etykieta pod najniższym punktem nie może
         # wchodzić na daty (podgląd 25.10 — CM Depth, Ecc. Duration)
+        # mniejsze kafelki (Filip 2026-10-25: zajmowały za dużo miejsca)
         if small:
-            wykres = chart(days, vals, d, ids, w=330, h=132, pad_top=24, pad_bot=40, delta_row=False,
-                           label_limit=6, date_limit=6)
+            wykres = chart(days, vals, d, ids, w=330, h=104, pad_top=20, pad_bot=34, delta_row=False,
+                           label_limit=4, date_limit=5)
         else:
-            wykres = chart(days, vals, d, ids, w=330, h=190, pad_top=28, pad_bot=42, delta_row=False,
-                           label_limit=8, date_limit=8)
+            wykres = chart(days, vals, d, ids, w=330, h=140, pad_top=24, pad_bot=36, delta_row=False,
+                           label_limit=6, date_limit=6)
     else:
         wykres = f'<div class="nodata">{"1 sesja" if vals else "—"}</div>'
     pill = f'<span class="pill {tone}">{_esc(delta_text)}</span>' if delta_text else ""
@@ -619,7 +624,8 @@ def screen_asym_card(title: str, s: pd.Series, ylim: float, ref_day=None) -> str
     <div class="card asym">
       <div class="ctitle">{_esc(title)}</div>
       <div class="hero">{hero}</div>
-      {bars(days, vals, ylim, w=330, h=210, side_right=True, hi=hi)}
+      {bars(days, vals, ylim, w=330, h=150, pad_top=16, pad_bot=22, side_right=True, hi=hi,
+            max_dat=6, tylko_poza=True)}
     </div>"""
 
 
@@ -649,7 +655,7 @@ def lr_pair_card(title: str, lv, rv, unit: str, dec: int | None = None,
                     f'<span class="unit s{noga}">{side(a, True)}</span>')
     else:
         hero = '<span class="big" style="color:#898781">—</span><span class="unit">jedna noga</span>'
-    w, h, base = 330, 150, 122
+    w, h, base = 330, 112, 88
     top = max(vals) * 1.18
     parts = [f'<svg viewBox="0 0 {w} {h}" width="100%" class="chart">',
              f'<line x1="40" y1="{base}" x2="{w - 40}" y2="{base}" class="axis"/>']

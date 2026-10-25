@@ -4978,41 +4978,47 @@ def _render_athlete_hero(
     zaleglosc = ""
     if status in ("stale", "overdue") and days_since is not None:
         zaleglosc = f"ostatni test {days_since} dni temu"
-    hero_box = st.container(key="aph_hero")
-    with hero_box:
-        back_c, id_c, act_c = st.columns([0.85, 5.0, 1.9], vertical_alignment="center")
-    with back_c:
-        with st.container(key="aph_hero_nav", horizontal=True, gap="small"):
+    st.markdown(
+        "<style>"
+        ".stApp .aphx{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}"
+        ".stApp .st-key-aph_hero{padding:8px 14px !important;margin-bottom:12px !important}"
+        ".stApp .st-key-aph_hero_nav{flex-wrap:nowrap !important}"
+        ".stApp .st-key-aph_hero_nav button{min-height:0 !important;padding:2px !important;"
+        "color:#898781 !important}"
+        ".stApp .aphx-av{position:relative;width:34px;height:34px;border-radius:10px;"
+        "background:var(--aph-ink);color:#fff !important;display:grid;place-items:center;"
+        "font-family:var(--aph-display);font-size:13px;flex:0 0 34px}"
+        ".stApp .aphx-dot{position:absolute;right:-3px;top:-3px;width:11px;height:11px;"
+        "border-radius:99px;border:2px solid var(--aph-card,#fff);background:#3BA776}"
+        ".stApp .aphx-dot.stale,.stApp .aphx-dot.overdue{background:#c9c6bd}"
+        ".stApp .aphx-dot.unknown{display:none}"
+        ".stApp .aphx-name{font-family:var(--aph-display);font-size:24px;letter-spacing:-0.02em;"
+        "color:var(--aph-ink) !important;line-height:1.1}"
+        ".stApp .aphx-meta{font-size:12px;color:#898781 !important}"
+        ".stApp .st-key-aph_hero_actions button{width:32px;height:32px;min-height:0 !important;"
+        "padding:0 !important;border-radius:10px !important;border:1px solid #e1e0d9 !important;"
+        "background:transparent !important;box-shadow:none !important}"
+        ".stApp .st-key-aph_hero_actions button:hover{border-color:var(--aph-ink) !important}"
+        # kontener nie przyjmuje width="content" — szerokość grup z CSS
+        ".stApp .st-key-aph_hero_actions,.stApp .st-key-aph_hero_nav{flex:0 0 auto !important;"
+        "width:auto !important;flex-wrap:nowrap !important}"
+        ".stApp .st-key-aph_hero_actions{margin-left:auto !important}"
+        ".stApp .st-key-aph_hero_actions [data-testid='stPopover'] button{width:auto !important;"
+        "padding:0 6px !important}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+    # jeden elastyczny rząd: nawigacja | imię | ikony — przy wąskim ekranie
+    # ikony przechodzą całą grupą pod imię zamiast łamać się po dwie
+    # (Filip 2026-10-25: „rozjeżdża się”)
+    with st.container(key="aph_hero", horizontal=True, vertical_alignment="center", gap="small"):
+        with st.container(key="aph_hero_nav", horizontal=True,
+                          vertical_alignment="center", gap="small"):
             if st.button(":material/home:", key="pt_back_home", help="Start",
                          type="tertiary"):
                 st.session_state["app_mode"] = "home"
                 st.rerun()
             _render_back_button()
-    with id_c:
-        st.markdown(
-            "<style>"
-            ".stApp .aphx{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}"
-            ".stApp .st-key-aph_hero{padding:8px 14px !important;margin-bottom:12px !important}"
-            ".stApp .st-key-aph_hero_nav{flex-wrap:nowrap !important}"
-            ".stApp .st-key-aph_hero_nav button{min-height:0 !important;padding:2px !important;"
-            "color:#898781 !important}"
-            ".stApp .aphx-av{position:relative;width:34px;height:34px;border-radius:10px;"
-            "background:var(--aph-ink);color:#fff !important;display:grid;place-items:center;"
-            "font-family:var(--aph-display);font-size:13px;flex:0 0 34px}"
-            ".stApp .aphx-dot{position:absolute;right:-3px;top:-3px;width:11px;height:11px;"
-            "border-radius:99px;border:2px solid var(--aph-card,#fff);background:#3BA776}"
-            ".stApp .aphx-dot.stale,.stApp .aphx-dot.overdue{background:#c9c6bd}"
-            ".stApp .aphx-dot.unknown{display:none}"
-            ".stApp .aphx-name{font-family:var(--aph-display);font-size:24px;letter-spacing:-0.02em;"
-            "color:var(--aph-ink) !important;line-height:1.1}"
-            ".stApp .aphx-meta{font-size:12px;color:#898781 !important}"
-            ".stApp .st-key-aph_hero_actions button{width:32px;height:32px;min-height:0 !important;"
-            "padding:0 !important;border-radius:10px !important;border:1px solid #e1e0d9 !important;"
-            "background:transparent !important;box-shadow:none !important}"
-            ".stApp .st-key-aph_hero_actions button:hover{border-color:var(--aph-ink) !important}"
-            "</style>",
-            unsafe_allow_html=True,
-        )
         # treść osobno: kontener z <style> apka chowa (:has(style))
         st.markdown(
             f"<div class='aphx'><span class='aphx-av'>{initials}"
@@ -5020,11 +5026,10 @@ def _render_athlete_hero(
             f"<span class='aphx-name'>{name}</span>"
             f"<span class='aphx-meta'>{' · '.join(meta + ([zaleglosc] if zaleglosc else []))}</span>"
             "</div>",
-            unsafe_allow_html=True,
+            unsafe_allow_html=True, width="stretch",
         )
-    with act_c:
         with st.container(key="aph_hero_actions", horizontal=True,
-                          horizontal_alignment="right", gap="small"):
+                          vertical_alignment="center", gap="small"):
             if st.button(":material/edit:", key=f"btn_edit_hero_{name}", help="Edytuj profil"):
                 _athlete_profile_dialog(name)
             if st.button(":material/print:", key=f"btn_report_hero_{name}", help="Drukuj PDF"):
@@ -7298,10 +7303,10 @@ def _render_metric_explorer_tile(
         n = len(vals)
         # szeroki wykres na komputer/tablet, osobny węższy na telefon (SVG
         # skaluje tekst razem z wykresem — w 390 px byłby nieczytelny)
-        szeroki = _tp.chart(days, vals, dec, ids, w=900, h=250, pad_top=30,
-                            pad_bot=58 if n <= 14 else 34, delta_row=n <= 14,
+        szeroki = _tp.chart(days, vals, dec, ids, w=900, h=215, pad_top=28,
+                            pad_bot=56 if n <= 14 else 34, delta_row=n <= 14,
                             neutral=neutral, label_limit=14, date_limit=14)
-        waski = _tp.chart(days, vals, dec, ids, w=360, h=210, pad_top=26, pad_bot=34,
+        waski = _tp.chart(days, vals, dec, ids, w=360, h=180, pad_top=24, pad_bot=34,
                           delta_row=False, label_limit=6, date_limit=5)
         st.markdown(
             f'<div class="tpdf"><div class="xhead"><span class="ctitle">{nice_label}</span>'
@@ -8263,9 +8268,8 @@ def _render_key_tiles_from_row(
     has_mean_mode = test_type not in ("IMTP",)
     MODE_SEL = "Selected jump"
     MODE_MEAN = f"Mean of top {top_n}"
-    # Dwa klikalne KAFELKI trybu obok nagłówka (Filip: zamiast radio) —
-    # aktywny lekko podświetlony (accent+tint przez dynamiczny CSS niżej).
-    # Default: Selected jump (= best skok dnia z pickera).
+    # Przełącznik trybu obok nagłówka (segmented control, jak w głównej
+    # metryce). Default: Selected jump (= best skok dnia z pickera).
     mode_key = f"km_mode_{test_type}"
     if st.session_state.get(mode_key) not in ("sel", "mean"):
         st.session_state[mode_key] = "sel"
@@ -8282,29 +8286,16 @@ def _render_key_tiles_from_row(
         )
     with head_r:
         if has_mean_mode:
-            active = st.session_state[mode_key]
-            st.markdown(
-                f"<style>"
-                f".stApp .st-key-km_tile_{test_type}_{active} button{{"
-                f"background:color-mix(in oklab,var(--aph-accent) 10%,var(--aph-card))!important;"
-                f"border:1.5px solid var(--aph-accent)!important;"
-                f"color:var(--aph-ink)!important; font-weight:700!important;}}"
-                f"</style>",
-                unsafe_allow_html=True,
-            )
-            t1, t2 = st.columns(2, gap="small")
-            with t1:
-                if st.button(MODE_SEL, key=f"km_tile_{test_type}_sel",
-                             use_container_width=True,
-                             help="Wartości z wybranej próby (picker)"):
-                    st.session_state[mode_key] = "sel"
-                    st.rerun()
-            with t2:
-                if st.button(MODE_MEAN, key=f"km_tile_{test_type}_mean",
-                             use_container_width=True,
-                             help=f"Średnia z top {top_n} skoków dnia"):
-                    st.session_state[mode_key] = "mean"
-                    st.rerun()
+            # przełącznik jak w głównej metryce (dwa przyciski ucinały napisy
+            # w wąskiej kolumnie — pomiar 2026-10-25)
+            with st.container(horizontal=True, horizontal_alignment="right"):
+                wyb = st.segmented_control(
+                    "Tryb", options=[MODE_SEL, MODE_MEAN],
+                    default=MODE_SEL if st.session_state[mode_key] == "sel" else MODE_MEAN,
+                    key=f"kmseg_{test_type}", label_visibility="collapsed",
+                ) or MODE_SEL
+            st.session_state[mode_key] = "mean" if wyb == MODE_MEAN else "sel"
+            mode = wyb
 
     if mode == MODE_MEAN:
         # Top N rows dnia po primary — mean KAŻDEJ metryki z TYCH SAMYCH rows
