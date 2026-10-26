@@ -4980,21 +4980,33 @@ def _render_athlete_hero(
         zaleglosc = f"ostatni test {days_since} dni temu"
     st.markdown(
         "<style>"
-        ".stApp .aphx{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}"
-        ".stApp .st-key-aph_hero{padding:8px 14px !important;margin-bottom:12px !important}"
+        ".stApp .aphx{display:flex;align-items:center;gap:14px;min-width:0}"
+        ".stApp .aphx-id{display:flex;flex-direction:column;gap:3px;min-width:0}"
+        # więcej miejsca w nagłówku (Filip 2026-10-26: „jest za mało przestrzeni”)
+        ".stApp .st-key-aph_hero{padding:14px 20px !important;margin-bottom:16px !important}"
+        # grupy ikon zajmowały po 266 px (flex 1 1 128px na wrapperze) i spychały
+        # imię na środek — wrappery tylko na szerokość ikon, imię bierze resztę
+        ".stApp .st-key-aph_hero>[data-testid='stLayoutWrapper']{flex:0 0 auto !important;"
+        "width:auto !important}"
+        ".stApp .st-key-aph_hero>[data-testid='stLayoutWrapper']:has(.st-key-aph_hero_actions)"
+        "{margin-left:auto !important}"
+        ".stApp .st-key-aph_hero>[data-testid='stElementContainer']{flex:1 1 0% !important;"
+        "min-width:200px !important;width:auto !important}"
         ".stApp .st-key-aph_hero_nav{flex-wrap:nowrap !important}"
         ".stApp .st-key-aph_hero_nav button{min-height:0 !important;padding:2px !important;"
         "color:#898781 !important}"
-        ".stApp .aphx-av{position:relative;width:34px;height:34px;border-radius:10px;"
+        ".stApp .aphx-av{position:relative;width:44px;height:44px;border-radius:12px;"
         "background:var(--aph-ink);color:#fff !important;display:grid;place-items:center;"
-        "font-family:var(--aph-display);font-size:13px;flex:0 0 34px}"
-        ".stApp .aphx-dot{position:absolute;right:-3px;top:-3px;width:11px;height:11px;"
+        "font-family:var(--aph-display);font-size:15px;flex:0 0 44px}"
+        ".stApp .aphx-dot{position:absolute;right:-3px;top:-3px;width:12px;height:12px;"
         "border-radius:99px;border:2px solid var(--aph-card,#fff);background:#3BA776}"
         ".stApp .aphx-dot.stale,.stApp .aphx-dot.overdue{background:#c9c6bd}"
         ".stApp .aphx-dot.unknown{display:none}"
-        ".stApp .aphx-name{font-family:var(--aph-display);font-size:24px;letter-spacing:-0.02em;"
+        ".stApp .aphx-name{font-family:var(--aph-display);font-size:28px;letter-spacing:-0.02em;"
         "color:var(--aph-ink) !important;line-height:1.1}"
-        ".stApp .aphx-meta{font-size:12px;color:#898781 !important}"
+        ".stApp .aphx-meta{font-size:12.5px;color:#898781 !important}"
+        "@media (max-width:640px){.stApp .aphx-name{font-size:22px}"
+        ".stApp .aphx-av{width:38px;height:38px;flex-basis:38px}}"
         ".stApp .st-key-aph_hero_actions button{width:32px;height:32px;min-height:0 !important;"
         "padding:0 !important;border-radius:10px !important;border:1px solid #e1e0d9 !important;"
         "background:transparent !important;box-shadow:none !important}"
@@ -5023,8 +5035,8 @@ def _render_athlete_hero(
         st.markdown(
             f"<div class='aphx'><span class='aphx-av'>{initials}"
             f"<i class='aphx-dot {status}' title='{status_label}'></i></span>"
-            f"<span class='aphx-name'>{name}</span>"
-            f"<span class='aphx-meta'>{' · '.join(meta + ([zaleglosc] if zaleglosc else []))}</span>"
+            f"<span class='aphx-id'><span class='aphx-name'>{name}</span>"
+            f"<span class='aphx-meta'>{' · '.join(meta + ([zaleglosc] if zaleglosc else []))}</span></span>"
             "</div>",
             unsafe_allow_html=True, width="stretch",
         )
@@ -5645,34 +5657,42 @@ def _render_overview_tab(
                 ("Contact Time @ best", _fmt(_num_at(row, "Contact Time [ms] "), 0) + " ms"),
             ]
         elif tt == "DJ":
-            groups = _dj_height_groups(d)
-            best_overall = None
-            for hv, gsub in groups:
-                vals = pd.to_numeric(
-                    gsub.get("RSI (Flight Time/Contact Time)", pd.Series(dtype=float)),
-                    errors="coerce",
-                )
-                if vals.isna().all():
-                    continue
-                bi = vals.idxmax()
-                item = (float(vals.loc[bi]), hv, gsub.loc[bi])
-                if best_overall is None or item[0] > best_overall[0]:
-                    best_overall = item
-                card["rows"].append(
-                    (f"Best RSI · drop {_dj_height_label(hv)}", _fmt(float(vals.loc[bi]), 2)),
-                )
-            if best_overall is None:
+            # Najlepsze AKTUALNE RSI (ostatni dzień testu) + trend najlepszego
+            # RSI per dzień; czas kontaktu i wysokość z tego samego skoku.
+            # Bez listy RSI per wysokość (Filip 2026-10-26): VALD zapisuje
+            # zmierzoną wysokość każdego zeskoku (25,7 / 30,4 cm…), więc grupy
+            # po zaokrągleniu robiły z jednej sesji 8 wierszy.
+            vals = pd.to_numeric(
+                d.get("RSI (Flight Time/Contact Time)", pd.Series(dtype=float)),
+                errors="coerce",
+            )
+            ok = vals.notna() & d["_dt"].notna()
+            if not ok.any():
                 return None
-            rsi, hv, row = best_overall
+            day = d["_dt"].dt.date
+            per_day = vals[ok].groupby(day[ok]).max().sort_index()
+            bi = vals[ok & (day == per_day.index[-1])].idxmax()
+            row, rsi = d.loc[bi], float(vals.loc[bi])
+            hv = _dj_height_series(d).loc[bi]
             card.update(
                 pv=_fmt(rsi, 2), pu="",
-                pl=f"Best RSI · {_dj_height_label(hv)}",
+                pl=f"Best RSI · drop {_dj_height_label(hv)}" if pd.notna(hv) else "Best RSI",
             )
-            # primary już pokazany — nie dubluj w rows gdy tylko 1 wysokość
-            if len(card["rows"]) == 1:
-                card["rows"] = [
-                    ("Jump Height @ best", _fmt(_num_at(row, "Jump Height (Flight Time)"), 1) + " cm"),
-                ]
+            ct = _num_at(row, "Contact Time [ms] ")
+            if pd.notna(ct) and ct < 5:
+                ct *= 1000   # VALD DJ: Contact Time w sekundach mimo „[ms]”
+            card["rows"] = [
+                ("Contact Time", _fmt(ct, 0) + " ms"),
+                ("Jump Height", _fmt(_num_at(row, "Jump Height (Flight Time)"), 1) + " cm"),
+            ]
+            if len(per_day) >= 2:
+                from vald import testy_pdf as _tp
+                # viewBox ≈ szerokość karty (~240 px) — napisy w skali 1:1
+                card["trend"] = "<div class='tpdf' style='margin-top:6px'>" + _tp.chart(
+                    list(per_day.index), [float(v) for v in per_day.values], 2, _tp._Ids(),
+                    w=240, h=106, pad_top=18, pad_bot=56, pad_x=22, delta_row=True,
+                    label_limit=4, date_limit=5,
+                ) + "</div>"
         elif tt == "IMTP":
             hit = _best("Peak Vertical Force")
             if not hit:
@@ -5790,11 +5810,15 @@ def _render_overview_tab(
             f"<div style='font-family:var(--aph-text); font-size:11px; "
             f"color:var(--aph-dim); margin-bottom:8px;'>{c['pl']}</div>"
             f"<div>{rows_html}</div>"
+            f"{c.get('trend', '')}"
             f"<div style='font-family:var(--aph-text); font-size:10.5px; "
             f"color:var(--aph-mute); margin-top:auto; padding-top:8px;'>"
             f"{' · '.join(foot_bits)}</div>"
             f"</div>"
         )
+    if any(c.get("trend") for c in cards):
+        from vald import testy_pdf as _tp
+        st.markdown(_tp.SCREEN_CSS, unsafe_allow_html=True)   # osobno: :has(style) chowa blok
     st.markdown(
         f"<div style='display:grid; "
         f"grid-template-columns:repeat(auto-fill, minmax(235px, 1fr)); "
