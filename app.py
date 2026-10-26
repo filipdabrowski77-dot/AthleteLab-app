@@ -5627,6 +5627,21 @@ def _render_overview_tab(
 
         card = {"tt": tt, "rows": [], "n_days": n_days_t, "date": ""}
 
+        def _trend(col: str, dec: int) -> str:
+            """Mały wykres najlepszego wyniku dnia (styl PDF „Testy”); od 2 dni."""
+            v = pd.to_numeric(d.get(col, pd.Series(dtype=float)), errors="coerce")
+            ok = v.notna() & d["_dt"].notna()
+            per_day = v[ok].groupby(d["_dt"].dt.date[ok]).max().sort_index()
+            if len(per_day) < 2:
+                return ""
+            from vald import testy_pdf as _tp
+            # viewBox ≈ szerokość karty (~240 px) — napisy w skali 1:1
+            return "<div class='tpdf' style='margin-top:6px'>" + _tp.chart(
+                list(per_day.index), [float(x) for x in per_day.values], dec, _tp._Ids(),
+                w=240, h=106, pad_top=18, pad_bot=56, pad_x=22, delta_row=True,
+                label_limit=4, date_limit=5,
+            ) + "</div>"
+
         if tt in ("CMJ", "SJ"):
             hit = _best("Jump Height (Imp-Mom) [cm] ")
             if not hit:
@@ -5639,6 +5654,7 @@ def _render_overview_tab(
                     ("Peak Power / BM", _fmt(_num_at(row, "Peak Power / BM [W/kg] "), 1) + " W/kg"),
                     ("Contraction Time", _fmt(_num_at(row, "Contraction Time [ms] "), 0) + " ms"),
                 ]
+                card["trend"] = _trend("Jump Height (Imp-Mom) [cm] ", 1)   # Filip 2026-10-26
             else:
                 # SJ nie eksportuje 'Concentric Peak Power / BM' — moc względna
                 # siedzi w 'Peak Power / BM [W/kg] ' (jak w CMJ).
@@ -5685,14 +5701,7 @@ def _render_overview_tab(
                 ("Contact Time", _fmt(ct, 0) + " ms"),
                 ("Jump Height", _fmt(_num_at(row, "Jump Height (Flight Time)"), 1) + " cm"),
             ]
-            if len(per_day) >= 2:
-                from vald import testy_pdf as _tp
-                # viewBox ≈ szerokość karty (~240 px) — napisy w skali 1:1
-                card["trend"] = "<div class='tpdf' style='margin-top:6px'>" + _tp.chart(
-                    list(per_day.index), [float(v) for v in per_day.values], 2, _tp._Ids(),
-                    w=240, h=106, pad_top=18, pad_bot=56, pad_x=22, delta_row=True,
-                    label_limit=4, date_limit=5,
-                ) + "</div>"
+            card["trend"] = _trend("RSI (Flight Time/Contact Time)", 2)
         elif tt == "IMTP":
             hit = _best("Peak Vertical Force")
             if not hit:
