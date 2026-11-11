@@ -27,6 +27,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 /* kółko, nazwa, dawka — rozmiary 1:1 z _PV_CSS (pilnuje test_kontrakt_ui) */
 .pvslot{width:32px;height:32px;border-radius:999px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .pvname{font-size:16px;font-weight:700;color:#1c1b18;overflow-wrap:anywhere}
+.dseg{white-space:nowrap}
 .pvdose{font-size:15px;font-weight:700;color:#1c1b18;font-variant-numeric:tabular-nums}
 .pvintent{white-space:nowrap;display:inline-block;font-size:12px;font-weight:600;color:oklch(.5 .13 60);background:oklch(.96 .04 75);border-radius:6px;padding:2px 8px;vertical-align:1px;margin-left:2px}
 .pvcol{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
@@ -42,6 +43,10 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .glowa{display:flex;gap:12px;align-items:flex-start}
 .ost{font-size:13px;color:#54514a;font-variant-numeric:tabular-nums}
 .det{font-size:12.5px;color:#8a867c}
+/* Rest / Tempo / Load jako plakietki (Filip 2026-11-11: szara linijka ginęła) */
+.chipy{display:flex;flex-wrap:wrap;gap:4px 6px;margin-top:3px;min-width:0}
+.chip{display:inline-flex;gap:5px;align-items:baseline;max-width:100%;background:#f4f2ec;border:1px solid #e8e5dc;border-radius:7px;padding:2px 8px;font-size:12.5px;line-height:1.35;color:#3b3934;font-weight:600;overflow-wrap:anywhere}
+.chip i{flex:none;font-style:normal;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#8a867c;font-weight:700}
 .kropka{font-size:11.5px;font-weight:600;color:#a09c92;white-space:nowrap;padding-top:3px}
 .kropka.ok{color:oklch(.5 .12 155)}
 .kropka:empty{display:none}
@@ -537,9 +542,18 @@ function podpowiedzi(k, si) {
     reps: repsDoWstawienia(k, si) || hintReps(karta, si), rpe: txt((karta.rpe_plan || [])[si]) };
 }
 // „1 × 5 @ RPE 8 + 2 × 7 @ RPE 8” — RPE jako żółta plakietka
-function htmlDawka(karta) {
-  const t = txt(karta.dawka_pelna) || [txt(karta.dawka), txt(karta.intent)].filter((x) => x && x !== "—").join(" · ");
-  return esc(t).replace(/@ RPE ([\d,.\-\/]+)/g, '<span class="pvintent">@ RPE $1</span>');
+function htmlDawka(karta, bezRpe) {
+  let t = txt(karta.dawka_pelna) || [txt(karta.dawka), txt(karta.intent)].filter((x) => x && x !== "—").join(" · ");
+  // link zawodnika: RPE nie na liście ani w nagłówku karty, tylko przy seriach
+  // po otwarciu ćwiczenia (Filip 2026-11-11: „za dużo nastukane tego RPE”)
+  if (bezRpe) t = t.replace(/\s*@ RPE [\d,.\-\/]+/g, "");
+  // „1 × 4 @ RPE 8 + 2 × 6 @ RPE 8”: plakietka RPE nie odrywa się od swojej
+  // dawki przy zawijaniu na wąskim telefonie (2026-11-11)
+  const czesci = t.split(" + ");
+  return czesci.map((cz) => {
+    const h = esc(cz).replace(/@ RPE ([\d,.\-\/]+)/g, '<span class="pvintent">@ RPE $1</span>');
+    return czesci.length > 1 && h !== esc(cz) && cz.length < 28 ? `<span class="dseg">${h}</span>` : h;
+  }).join(" + ");
 }
 function wpisy(n) {
   const d = n % 10, s = n % 100;
@@ -733,6 +747,14 @@ function htmlNazwaWpis(k) {
     + ` autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done"`
     + ` aria-label="Nazwa ćwiczenia" placeholder="Wpisz, jakie ćwiczenie" value="${esc(txt((S.stan[k] || {}).nazwa))}">`;
 }
+function htmlDet(det, tag, kl) {
+  if (!det) return "";
+  const chipy = String(det).split(" · ").map((x) => {
+    const m = /^(Load|Rest|Tempo) (.+)$/.exec(x);
+    return `<span class="chip">${m ? `<i>${m[1]}</i>${esc(m[2])}` : esc(x)}</span>`;
+  }).join("");
+  return `<${tag} class="${kl} chipy">${chipy}</${tag}>`;
+}
 function htmlKarta(k, sek, wZwinietej) {
   const karta = S.meta[k], st = S.stan[k], n = ileWierszy(k), dk = `data-k="${esc(k)}"`;
   // „‹ Wróć” zawsze na górze otwartego ćwiczenia (Filip 2026-09-30: „żeby
@@ -744,9 +766,9 @@ function htmlKarta(k, sek, wZwinietej) {
     + `<div class="glowa">${htmlSlot(k, sek)}`
     + `<div class="pvcol"><span class="pvname">${esc(karta.exercise)}</span>`
     + htmlNazwaWpis(k)
-    + `<span class="pvdose">${htmlDawka(karta)}</span>`
+    + `<span class="pvdose">${htmlDawka(karta, S.rola === "zawodnik")}</span>`
     + htmlOstatnio(k)
-    + (karta.det ? `<span class="det">${esc(karta.det)}</span>` : "")
+    + htmlDet(karta.det, "span", "det")
     + htmlUwagi(karta)
     + htmlFilm(karta)
     + `</div><span class="kropka" data-kropka="${esc(k)}"></span>`
@@ -794,7 +816,8 @@ function htmlOstatnio(k) {
   const karta = S.meta[k], hist = karta.historia || [], dk = `data-k="${esc(k)}"`;
   // zawodnik: sama linia „Ostatnio …” w otwartej karcie (Filip 2026-10-10: „żeby
   // zobrazować, ile zrobiłeś”), pełna historia pod ikonką wykresu (htmlHistIkona)
-  if (S.rola === "zawodnik") return karta.ostatnio ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "";
+  // zawodnik: „Week 1”, nie „W1” (Filip 2026-11-11)
+  if (S.rola === "zawodnik") return karta.ostatnio ? `<span class="ost">Ostatnio ${esc(karta.ostatnio.replace(/^W(\d+)/, "Week $1"))}</span>` : "";
   if (!hist.length) return karta.ostatnio ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "";
   const otw = !!S.histOtw[k];
   const tyt = karta.ostatnio ? `Ostatnio ${esc(karta.ostatnio)}` : "Historia";
@@ -923,8 +946,8 @@ function htmlMini(k, sek) {
     + (nw ? ` <span class="nazwaw">· ${esc(nw)}</span>` : "")
     + (uwagiPlanu(karta) ? ` <span class="uwznak" aria-label="są uwagi">ⓘ</span>` : "")
     + (txt((S.stan[k] || {}).notatka) ? `<span class="notznak" aria-label="jest notatka">✎</span>` : "") + `</span>`
-    + `<span class="mdose">${htmlDawka(karta)}</span>`
-    + (zaw && karta.det ? `<span class="mdet">${esc(karta.det)}</span>` : "")
+    + `<span class="mdose">${htmlDawka(karta, zaw)}</span>`
+    + (zaw ? htmlDet(karta.det, "span", "mdet") : "")
     + (karta.ostatnio && !sek.zwinieta && S.rola !== "zawodnik" ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "")
     + (S.odrz[k] ? `<span class="odrzmini">${esc(S.odrz[k])}</span>` : "")
     + `</span><span class="kropka" data-kropka="${esc(k)}"></span>`;
@@ -1170,7 +1193,7 @@ function htmlKrok(krok, nastepny) {
     + `<div class="knazwa">${esc(karta.exercise)}</div>`
     + htmlNazwaWpis(k)
     + `<div class="kdawka">${htmlDawka(karta)}</div>`
-    + (karta.det ? `<div class="det">${esc(karta.det)}</div>` : "")
+    + htmlDet(karta.det, "div", "det")
     + htmlUwagi(karta)
     + (karta.film || htmlHistIkona(k) ? `<div class="klinki">${htmlFilm(karta)}${htmlHistIkona(k)}</div>` : "")
     + pola

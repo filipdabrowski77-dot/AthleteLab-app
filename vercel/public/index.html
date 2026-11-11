@@ -142,7 +142,7 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
     let h = "";
     for (let t = 1; t <= n; t++) {
       const wsz = zCw.length && zCw.every((x) => x.done.includes(String(t)));
-      h += pill(`W${t}` + (wsz ? " ✓" : ""), t === S.wk, "wk", t);
+      h += pill(`Week ${t}` + (wsz ? " ✓" : ""), t === S.wk, "wk", t);
     }
     const tyg = $("tyg");
     tyg.hidden = false; tyg.innerHTML = h;

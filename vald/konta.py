@@ -56,6 +56,13 @@ CIASTKO_DNI = 30
 # 2026-10-03). Wylogowanie go nie kasuje; zmiana hasła unieważnia.
 URZADZENIE = "aph_urz"
 URZADZENIE_DNI = 365
+# Klucz w adresie ikonki trenera (`?mode=gym&k=…`): telefon gubił ciasteczko
+# i pytał o hasło przy każdym otwarciu (Filip 2026-11-11: „żeby już
+# automatycznie mnie logowało”). Ikonka na ekranie początkowym pamięta cały
+# adres, więc klucz w nim loguje bez ciasteczek. Podpis jak w ciasteczku, bez
+# terminu; zmiana hasła unieważnia. Apka jest publiczna — samego hasła nie
+# zdejmuję, bo adres bez klucza wpuszczałby każdego.
+KLUCZ_URL = "k"
 
 
 def _skrot(haslo: str, sol: str) -> str:
@@ -187,6 +194,28 @@ def znane_urzadzenie(kid: str) -> bool:
     k = _po_id(kid)
     return bool(k and k.get("skrot") and hmac.compare_digest(
         podpis, _podpis_urzadzenia(kid, k["skrot"])))
+
+
+def token_klucza(k: dict) -> str:
+    return f"{k['id']}.{_podpis(k['id'], 0, 'klucz|' + (k.get('skrot') or ''))}"
+
+
+def z_klucza(wartosc: str) -> dict | None:
+    """Wejście bez hasła z klucza w adresie ikonki (`?k=`)."""
+    if st.session_state.get(S_WYLOGOWANY):
+        return None
+    try:
+        kid, podpis = str(wartosc or "").rsplit(".", 1)
+    except ValueError:
+        return None
+    if not podpis.isascii():
+        return None
+    k = _po_id(kid)
+    if not k or not k.get("skrot") or not hmac.compare_digest(
+            podpis, token_klucza(k).rsplit(".", 1)[1]):
+        return None
+    wejdz(k)
+    return k
 
 
 def z_ciastka() -> dict | None:

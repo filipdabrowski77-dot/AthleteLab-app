@@ -89,7 +89,8 @@ def sprawdz_haslo() -> bool:
             return True
         if link:
             return True
-        k = konta.z_ciastka()
+        k = (konta.z_klucza(st.query_params.get(konta.KLUCZ_URL))
+             or konta.z_ciastka())
         if k:
             # Safari przycina ciasteczka zapisane z JS do 7 dni — wejście
             # z ciasteczka zapisuje je od nowa, okno się przesuwa (audyt 2026-10-04)
@@ -202,6 +203,14 @@ def zapamietaj_logowanie() -> None:
     urz = st.session_state.pop(_DO_URZADZENIA, None)
     if urz:
         _ciastko_js(urz, URZADZENIE_DNI * 86400, URZADZENIE)
+    # tryb trenera na telefonie: klucz w adresie, żeby ikonka dodana do ekranu
+    # początkowego logowała sama (konta.KLUCZ_URL)
+    from . import konta
+    k = konta.zalogowane()
+    if k and st.query_params.get("mode") == "gym":
+        tok = konta.token_klucza(k)
+        if st.query_params.get(konta.KLUCZ_URL) != tok:
+            st.query_params[konta.KLUCZ_URL] = tok
 
 
 def _ekran_kont() -> None:
@@ -209,6 +218,8 @@ def _ekran_kont() -> None:
     from . import konta
     if st.session_state.get(konta.S_WYLOGOWANY) and konta._ciastko():
         _ciastko_js("", 0)        # Wyloguj: nowa karta też ma pytać o hasło
+    if st.session_state.get(konta.S_WYLOGOWANY):
+        st.query_params.pop(konta.KLUCZ_URL, None)
     lista = [k for k in konta.wszystkie() if k.get("skrot")]
     st.markdown(
         "<div style='max-width:380px;margin:14vh auto 0;text-align:center;'>"

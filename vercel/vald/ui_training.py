@@ -983,14 +983,15 @@ def _render_plan_workout_body(plan: dict, sub: str,
         row_weeks = list(range(row_start + 1, min(row_start + 4, weeks_n) + 1))
         wk_cols = st.columns(len(row_weeks))
         for t, col in zip(row_weeks, wk_cols):
-            # zawodnik: samo „W1” (Filip 2026-09-30), trener z datą wykonania
+            # zawodnik: pełne „Week 1” (Filip 2026-11-11: „rozwiń skróty”),
+            # trener z datą wykonania zostaje przy „W1 · 12.09” (4 w rzędzie)
             _d = _trk_data(_sel_s, t) if trener else ""
-            lbl = f"W{t} · {_d}" if _d else (f"W{t}" if trener or prowadzony else f"Week {t}")
+            lbl = f"W{t} · {_d}" if _d else (f"W{t}" if trener else f"Week {t}")
             # zawodnik: ✓ przy tygodniu, w którym zrobił wszystkie treningi (2026-10-10)
             if prowadzony and not trener and all(
                     str(t) in (s_.get("done_weeks") or {}) for s_ in sessions if s_.get("items")) \
                     and any(s_.get("items") for s_ in sessions):
-                lbl = f"W{t} ✓"
+                lbl = f"Week {t} ✓"
             if col.button(lbl, key=f"gymwk_{plan['id']}_{t}",
                           use_container_width=True) and t != wk:
                 st.session_state[wkk] = t
@@ -2048,7 +2049,11 @@ def _plan_zawodnika(token: str) -> tuple:
     _today = pd.Timestamp.now().date()
     _end = plan_end(plan)
     if _end and _today > _end:
-        cand = [p for p in _plany_tej_osoby(plan) if p.get("id") != plan.get("id")]
+        # plan bez ćwiczeń = trener dopiero go rozpisuje; link nie przeskakuje
+        # na puste „Brak ćwiczeń” (Filip 2026-11-11, jego Gpp 1 z trzema pustymi
+        # treningami zasłaniał Plan testowy)
+        cand = [p for p in _plany_tej_osoby(plan) if p.get("id") != plan.get("id")
+                and any(s_.get("items") for s_ in (p.get("sessions") or []))]
         succ = next((p for p in cand if is_current(p)), None)
         if succ is None:
             later = sorted(
