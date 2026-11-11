@@ -137,7 +137,20 @@ def odpowiedz(h, kod: int, cialo: dict) -> None:
     h.wfile.write(dane)
 
 
+def _bez_bazy(h) -> bool:
+    """Brak kluczy bazy w środowisku = każdy link wyglądałby na nieaktywny
+    (tryb plikowy bez pliku). Mówię wprost, że to konfiguracja."""
+    from vald import store
+    if store.enabled() or not os.environ.get("VERCEL"):   # lokalnie i w testach: pliki
+        return False
+    odpowiedz(h, 503, {"blad": "Brak połączenia z bazą (konfiguracja serwera).",
+                       "ack": [], "odrzucone": []})
+    return True
+
+
 def obsluz_plan(h) -> None:
+    if _bez_bazy(h):
+        return
     q = _zapytanie(h.path)
     try:
         wynik = ladunek((q.get("plan") or "").strip(), q.get("ws") or "")
@@ -151,6 +164,8 @@ def obsluz_plan(h) -> None:
 
 
 def obsluz_zapisz(h) -> None:
+    if _bez_bazy(h):
+        return
     q = _zapytanie(h.path)
     try:
         n = int(h.headers.get("Content-Length") or 0)
