@@ -249,6 +249,7 @@ button{cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-se
 .atresc{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
 .agora{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:12px;color:#8a867c}
 .agora b{font-weight:700;color:#54514a;white-space:nowrap}
+.askad{margin-top:-4px;font-size:13px;font-weight:600;color:#1c1b18;line-height:1.3;overflow-wrap:anywhere}
 .aser{display:grid;grid-template-columns:54px minmax(0,1fr) auto;gap:8px;align-items:center;font-size:15px;font-variant-numeric:tabular-nums}
 .aser b{font-weight:750}
 .aser span{font-weight:600}
@@ -814,26 +815,26 @@ function htmlKarta(k, sek, wZwinietej) {
 // ćwiczenia (Filip 2026-09-30: „tydzień pierwszy ile, tydzień drugi ile”)
 function htmlOstatnio(k) {
   const karta = S.meta[k], hist = karta.historia || [], dk = `data-k="${esc(k)}"`;
-  // zawodnik: sama linia „Ostatnio …” w otwartej karcie (Filip 2026-10-10: „żeby
-  // zobrazować, ile zrobiłeś”), pełna historia pod ikonką wykresu (htmlHistIkona)
-  // zawodnik: „Week 1”, nie „W1” (Filip 2026-11-11)
-  if (S.rola === "zawodnik") return karta.ostatnio ? `<span class="ost">Ostatnio ${esc(karta.ostatnio.replace(/^W(\d+)/, "Week $1"))}</span>` : "";
+  // zawodnik: bez linii „Ostatnio …” — historia z datami tylko pod ikonką
+  // (htmlHistIkona; Filip 2026-11-11: „ostatnio jako taką ikonkę historia”)
+  if (S.rola === "zawodnik") return "";
   if (!hist.length) return karta.ostatnio ? `<span class="ost">Ostatnio ${esc(karta.ostatnio)}</span>` : "";
   const otw = !!S.histOtw[k];
   const tyt = karta.ostatnio ? `Ostatnio ${esc(karta.ostatnio)}` : "Historia";
   return `<button type="button" class="ost hist" data-act="historia" ${dk} aria-expanded="${otw}">${tyt} <b>${otw ? "▴" : "▾"}</b></button>`
     + (otw ? `<span class="histlista">${hist.map((h) => `<span>${esc(h)}</span>`).join("")}</span>` : "");
 }
-// Filip 2026-09-30: „Ostatnie treningi” pod ikonką wykresu w ćwiczeniu — na
-// liście nic; 4 ostatnie razy (także z poprzednich planów): data, serie ×
-// powtórzenia, ciężar, RPE
-const IKONA_WYKRES = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"`
+// Filip 2026-09-30: „Ostatnie treningi” pod ikonką w ćwiczeniu — na liście
+// nic; 4 ostatnie razy (także z poprzednich planów): data, trening, serie ×
+// powtórzenia, ciężar, RPE. Ikonka historii (zegar ze strzałką), nie wykres
+// (Filip 2026-11-11)
+const IKONA_HIST = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"`
   + ` stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">`
-  + `<path d="M4 4v16h16"/><path d="M7 15l4-4 3 3 5-6"/></svg>`;
+  + `<path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3.5 2"/></svg>`;
 function htmlHistIkona(k) {
   if (S.rola !== "zawodnik" || !(S.meta[k].ostatnie || []).length) return "";
   return `<button type="button" class="histbtn" data-act="historia" data-k="${esc(k)}"`
-    + ` aria-haspopup="dialog" aria-label="Ostatnie treningi" title="Ostatnie treningi">${IKONA_WYKRES}</button>`;
+    + ` aria-haspopup="dialog" aria-label="Ostatnie treningi" title="Ostatnie treningi">${IKONA_HIST}</button>`;
 }
 // okienko: data jak kartka z kalendarza, serie × powtórzenia, kg, RPE w pigułce;
 // najnowszy trening w kolorze sekcji
@@ -851,12 +852,13 @@ function renderArkusz() {
     const sek = S.sekcje.find((x) => x.key === karta.section) || { acc: "#1c1b18", tint: "#f1efe9" };
     el.innerHTML = `<div class="atlo" data-act="arkusz_zamknij"></div>`
       + `<div class="arkusz" role="dialog" aria-modal="true" aria-label="Ostatnie treningi" style="--acc:${esc(sek.acc)};--tint:${esc(sek.tint)}">`
-      + `<div class="ahead"><div><div class="aeyebrow">${IKONA_WYKRES.replace(/20/g, "14")} Ostatnie treningi</div>`
+      + `<div class="ahead"><div><div class="aeyebrow">${IKONA_HIST.replace(/"20"/g, '"14"')} Ostatnie treningi</div>`
       + `<div class="anazwa">${esc(karta.exercise)}</div></div>`
       + `<button type="button" class="azamknij" data-act="arkusz_zamknij" aria-label="Zamknij">✕</button></div>`
       + `<div class="alista">` + ost.map((o, i) => `<div class="awpis${i ? "" : " pierwszy"}">`
         + `<div class="adata"><small>${esc(o.dzien)}</small><b>${esc(o.dd)}</b><small>${esc(o.mies)}</small></div>`
         + `<div class="atresc"><div class="agora"><b>${esc(o.temu || o.data)}</b></div>`
+        + (o.opis ? `<div class="askad">${esc(o.opis)}</div>` : "")
         + (Array.isArray(o.serie) ? o.serie : []).map((x) => `<div class="aser"><b>${esc(x.sr)}</b>`
           + (x.kg ? `<span>${esc(x.kg)}</span>` : `<span class="brak">bez kg</span>`)
           + (x.rpe ? `<i>RPE ${esc(x.rpe)}</i>` : "<span></span>") + `</div>`).join("")

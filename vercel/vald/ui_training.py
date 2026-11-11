@@ -1575,6 +1575,7 @@ def _trk_ostatnie(plan: dict, it: dict, wk: int, sess: dict | None, plany=()) ->
     po nazwie ćwiczenia; najnowsze pierwsze.
     [{"data": „24.09”, "dd": „24”, "mies": „wrz”, "dzien": „czw”,
       "temu": „6 dni temu”, "skad": „Blok 2 · W4”,
+      "opis": „Blok 2 · Trening A · Week 4”,   # dla zawodnika (Filip 2026-11-11)
       "serie": [{"sr": „1 × 5”, "kg": „52,5 kg”, "rpe": „8”}, …]}]"""
     from datetime import date, timedelta
     from .training import SERIA_OK, stan_serii
@@ -1583,7 +1584,7 @@ def _trk_ostatnie(plan: dict, it: dict, wk: int, sess: dict | None, plany=()) ->
         return []
     kand = {}
 
-    def _dodaj(p_, s_, x, pref):
+    def _dodaj(p_, s_, x, pref, trening):
         for k, tyg in item_weeks(x).items():
             if not str(k).isdigit() or (p_ is plan and s_ is sess and int(k) == int(wk)):
                 continue
@@ -1615,15 +1616,19 @@ def _trk_ostatnie(plan: dict, it: dict, wk: int, sess: dict | None, plany=()) ->
                 kand[klucz][3].extend(_trk_serie_grupy(ok))
             else:
                 nw = str((tyg or {}).get("wpisana_nazwa") or "").strip()
-                kand[klucz] = (iso or przyb, data_, f"{pref}W{k}" + (f" · {nw}" if nw else ""),
+                # okienko zawodnika: przy dacie który trening i tydzień (Filip
+                # 2026-11-11: „po kliknięciu widać z datami serie i trening”)
+                opis = f"{pref}{trening} · Week {k}" + (f" · {nw}" if nw else "")
+                kand[klucz] = (iso or przyb, dict(data_, opis=opis), f"{pref}W{k}" + (f" · {nw}" if nw else ""),
                                _trk_serie_grupy(ok))
 
     for p_ in [plan] + [q for q in plany if q.get("id") != plan.get("id")]:
         pref = "" if p_ is plan else f"{p_.get('name', '')} · "
-        for s_ in ensure_sessions(p_):
+        for si_, s_ in enumerate(ensure_sessions(p_)):
+            trening = f"Trening {_tr_litera_treningu(s_, si_)}"
             for x in (s_.get("items") or []):
                 if (x.get("exercise") or "").strip().lower() == nazwa:
-                    _dodaj(p_, s_, x, pref)
+                    _dodaj(p_, s_, x, pref, trening)
     wpisy = sorted(kand.values(), key=lambda t: t[0], reverse=True)
     return [dict(d_, skad=k_, serie=s_) for _, d_, k_, s_ in wpisy[:4]]
 
