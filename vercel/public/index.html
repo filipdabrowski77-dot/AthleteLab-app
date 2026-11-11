@@ -29,12 +29,43 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
 .pill{min-height:44px;padding:6px 3px;border-radius:999px;border:1px solid #e6e3db;background:#fff;
   color:#6f6b61;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pill.akt{background:#1c1b18;border-color:#1c1b18;color:#fff}
+@media (max-width:340px){.pills{gap:6px}.pill{font-size:12px}}
 .pvhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:6px 0 2px}
 .pvtitle{font-size:21px;font-weight:800;line-height:1.15}
 .pvsub{font-size:13px;color:#8a867c;margin-top:2px}
 .pvbadge{font-size:12px;font-weight:600;color:#6f6b61;background:#f2f1ec;border-radius:999px;
   padding:5px 13px;white-space:nowrap}
 #panel{display:block;width:100%;border:0;height:320px;margin-top:6px;background:transparent}
+/* widok główny wg wzoru trener-app (Filip 2026-11-11): data, „Hej, imię”, pasek
+   postępu planu, tygodnie z ✓, karty dni z 3 pierwszymi ćwiczeniami i „Otwórz trening” */
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.data{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#8a867c;margin:14px 0 6px}
+.hej{font-size:40px;font-weight:800;line-height:1.05;letter-spacing:-.02em;margin:0 0 16px;overflow-wrap:anywhere}
+.planinfo{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:13px;color:#6f6b61}
+.planinfo .mono{flex:none;color:#8a867c}
+.postep{height:6px;border-radius:999px;background:#e6e3db;overflow:hidden;margin:8px 0 16px}
+.postep span{display:block;height:100%;width:0;background:#137a63;border-radius:999px;transition:width .4s ease}
+.dni{display:grid;gap:14px;margin-top:4px}
+.dzien{display:block;width:100%;text-align:left;padding:20px 20px 18px;border-radius:22px;border:1px solid #e6e3db;background:#fff}
+.dzien .gora{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.dzien .ds{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#8a867c;min-width:0}
+.dzien .ds.toku{color:#a8650b}
+.dzien.zrobiony .ds{color:#137a63}
+.dzien .ile{flex:none;font-size:13px;color:#8a867c;white-space:nowrap}
+.dzien .dt{display:block;font-size:34px;font-weight:800;line-height:1.1;letter-spacing:-.02em;margin:6px 0 8px;overflow-wrap:anywhere}
+.dzien .lista{display:block}
+.dzien .cw{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:11px 0;border-bottom:1px solid #eeebe4;font-size:16px;font-weight:600}
+.dzien .cw:last-child{border-bottom:0}
+.dzien .cw .n{min-width:0;overflow-wrap:anywhere}
+.dzien .cw .d{flex:0 1 auto;max-width:48%;text-align:right;font-size:13px;font-weight:400;color:#a9a59b;overflow-wrap:anywhere}
+.dzien .wiecej{display:block;font-size:14px;color:#8a867c;margin:4px 0 0}
+.dzien .cta{display:flex;align-items:center;justify-content:center;min-height:52px;margin-top:14px;border-radius:14px;
+  background:#137a63;color:#fff;font-size:17px;font-weight:700}
+.dzien.zrobiony .cta{background:#fff;color:#137a63;border:1.5px solid #137a63}
+.wroc{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid #e6e3db;background:#fff;
+  font-size:24px;line-height:1;display:grid;place-items:center;padding:0 0 2px}
+.pvhead .pvtxt{flex:1;min-width:0}
+#glowa{align-items:center}
 .zamek{max-width:420px;margin:80px auto;text-align:center;color:#6f6b61}
 .zamek .ico{font-size:40px}
 .zamek .tyt{font-size:17px;font-weight:700;color:#1c1b18;margin:8px 0 4px}
@@ -44,10 +75,17 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
 <body>
 <div id="app">
   <div id="baner" hidden></div>
-  <div id="tyg" class="pills" hidden></div>
-  <div id="tren" class="pills" hidden></div>
+  <section id="dom" hidden>
+    <div class="data" id="data"></div>
+    <div class="hej" id="hej"></div>
+    <div class="planinfo"><span id="dom_plan"></span><span class="mono" id="dom_tydz"></span></div>
+    <div class="postep" id="postep" role="progressbar" aria-label="Postęp planu" aria-valuemin="0" aria-valuemax="100"><span id="postep_pas"></span></div>
+    <div id="tyg" class="pills"></div>
+    <div id="dni" class="dni"></div>
+  </section>
   <div id="glowa" class="pvhead" hidden>
-    <div><div class="pvtitle" id="tyt"></div><div class="pvsub" id="sub"></div></div>
+    <button type="button" class="wroc" data-act="dom" aria-label="Wróć do treningów">‹</button>
+    <div class="pvtxt"><div class="pvtitle" id="tyt"></div><div class="pvsub" id="sub"></div></div>
     <span class="pvbadge" id="badge"></span>
   </div>
   <div id="zamek" class="zamek" hidden></div>
@@ -64,20 +102,28 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
   const frame = $("panel");
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const S = { d: null, sid: null, wk: null, gotowy: false, wynik: null, offline: false, blad: "" };
+  // widok: "dom" (powitanie, tygodnie, kafelki dni) albo "dzien" (plan jednego treningu)
+  const S = { d: null, sid: null, wk: null, widok: "dom", wkReczny: false, zapisano: false,
+              gotowy: false, wynik: null, offline: false, blad: "" };
   const api = (n) => `/api/${n}?plan=${encodeURIComponent(TOKEN)}` + (WS ? `&ws=${encodeURIComponent(WS)}` : "");
 
-  // ── wybór tygodnia i treningu: jak _render_plan_workout_body w apce ──
+  // ── tydzień i trening ──
+  // Bieżący tydzień = pierwszy, w którym nie wszystkie treningi są zrobione
+  // (Filip 2026-11-11: „zrobisz week 1, to się aktualizuje na week 2”), nie z dat.
+  const zCw = () => S.d.treningi.filter((t) => t.ma_cw);
+  function tydzienZrobiony(w) {
+    const z = zCw();
+    return z.length > 0 && z.every((t) => t.done.includes(String(w)));
+  }
+  function pierwszyOtwarty() {
+    const n = S.d.plan.tygodnie;
+    for (let w = 1; w <= n; w++) if (!tydzienZrobiony(w)) return w;
+    return n;
+  }
   function domyslny() {
     const d = S.d, n = d.plan.tygodnie;
-    if (!(S.wk >= 1 && S.wk <= n)) S.wk = d.biezacy_tydzien;
-    const ids = d.treningi.map((t) => t.id);
-    if (!ids.includes(S.sid)) {
-      const w = String(S.wk);
-      const otw = d.treningi.filter((t) => t.ma_cw && !t.done.includes(w));
-      const zacz = otw.find((t) => t.started.includes(w));
-      S.sid = (zacz || otw[0] || d.treningi[0] || {}).id || null;
-    }
+    if (!(S.wk >= 1 && S.wk <= n)) S.wk = pierwszyOtwarty();
+    if (S.sid && !d.treningi.some((t) => t.id === S.sid)) { S.sid = null; S.widok = "dom"; }
   }
   function ustawWybor(w) {
     const d = S.d;
@@ -106,6 +152,7 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
       S.offline = false; return;
     }
     S.wynik = { ack: j.ack || [], odrzucone: j.odrzucone || [], blad: j.blad || "" };
+    S.zapisano = true;
     if (j.dane) { S.d = j; S.blad = ""; domyslny(); }
     S.offline = false;
   }
@@ -119,7 +166,7 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
     const ban = $("baner"), zam = $("zamek");
     ban.hidden = true; zam.hidden = true;
     if (!d) {
-      $("tyg").hidden = $("tren").hidden = $("glowa").hidden = true;
+      $("dom").hidden = $("glowa").hidden = true;
       if (!TOKEN || S.blad === "nieaktywny") {
         zam.hidden = false;
         zam.innerHTML = `<div class="ico">🔒</div><div class="tyt">${!TOKEN ? "Brak dostępu" : "Ten link jest nieaktywny"}</div>`
@@ -137,31 +184,82 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
       ban.hidden = false; ban.className = "baner " + (d.baner.rodzaj || "info");
       ban.textContent = d.baner.tekst;
     }
-    const n = d.plan.tygodnie, w = String(S.wk);
-    const zCw = d.treningi.filter((t) => t.ma_cw);
-    let h = "";
-    for (let t = 1; t <= n; t++) {
-      const wsz = zCw.length && zCw.every((x) => x.done.includes(String(t)));
-      h += pill(`Week ${t}` + (wsz ? " ✓" : ""), t === S.wk, "wk", t);
-    }
-    const tyg = $("tyg");
-    tyg.hidden = false; tyg.innerHTML = h;
-    tyg.style.gridTemplateColumns = `repeat(${Math.min(n, 4)},minmax(0,1fr))`;
-    const tren = $("tren");
-    if (d.treningi.length > 1) {
-      tren.hidden = false;
-      tren.innerHTML = d.treningi.map((t) => pill(t.litera + (t.done.includes(w) ? " ✓" : ""), t.id === S.sid, "sid", t.id)).join("");
-      tren.style.gridTemplateColumns = `repeat(${Math.min(d.treningi.length, 5)},minmax(0,1fr))`;
-    } else tren.hidden = true;
+    if (S.widok === "dom") { rysujDom(); return; }
+    $("dom").hidden = true;
+    frame.hidden = false;
     const k = d.dane[`${S.sid}|${S.wk}`];
     if (k) {
       $("glowa").hidden = false;
       $("tyt").textContent = (k.status || {}).tytul || "";
-      $("sub").textContent = d.plan.nazwa || "";
+      $("sub").textContent = [d.plan.nazwa, `Week ${S.wk}`].filter(Boolean).join(" · ");
       $("badge").textContent = ((k.status || {}).stan || "") + ((k.status || {}).data ? " " + k.status.data : "");
     } else $("glowa").hidden = true;
     wyslijRender();
   }
+  // widok główny: „Hej, imię!”, pasek postępu planu (zrobione treningi / wszystkie),
+  // tygodnie z ✓ i kafelki dni treningowych wybranego tygodnia
+  function rysujDom() {
+    const d = S.d, n = d.plan.tygodnie, w = String(S.wk), z = zCw();
+    $("dom").hidden = false; $("glowa").hidden = true; frame.hidden = true;
+    const dzis = new Date(), dd = (x) => String(x).padStart(2, "0");
+    $("data").textContent = `${DNI[dzis.getDay()]} ${dd(dzis.getDate())}.${dd(dzis.getMonth() + 1)}`;
+    $("hej").textContent = d.plan.imie ? `Hej, ${d.plan.imie}` : "Hej";
+    $("dom_plan").textContent = d.plan.nazwa || "";
+    $("dom_tydz").textContent = `tydz. ${S.wk}/${n}`;
+    const wszystkie = z.length * n;
+    const zrobione = z.reduce((a, t) => a + t.done.filter((x) => +x >= 1 && +x <= n).length, 0);
+    const proc = wszystkie ? Math.round((100 * zrobione) / wszystkie) : 0;
+    $("postep_pas").style.width = proc + "%";
+    $("postep").setAttribute("aria-valuenow", String(proc));
+    let h = "";
+    for (let t = 1; t <= n; t++) h += pill(`Week ${t}` + (tydzienZrobiony(t) ? " ✓" : ""), t === S.wk, "wk", t);
+    const tyg = $("tyg");
+    tyg.innerHTML = h;
+    tyg.style.gridTemplateColumns = `repeat(${Math.min(n, 4)},minmax(0,1fr))`;
+    $("dni").innerHTML = z.map((t) => {
+      const k = d.dane[`${t.id}|${S.wk}`] || {}, st = k.status || {}, karty = k.karty || [];
+      const zrob = t.done.includes(w), toku = !zrob && t.started.includes(w);
+      const stan = (zrob ? "✓ " : "") + (st.stan || "") + (zrob && st.data ? " " + st.data : "");
+      const lista = karty.slice(0, 3).map((c) =>
+        `<span class="cw"><span class="n">${esc(c.exercise || "")}</span><span class="d mono">${esc(c.dawka || "")}</span></span>`).join("");
+      const reszta = karty.length - 3;
+      return `<button type="button" class="dzien${zrob ? " zrobiony" : ""}" data-act="dzien" data-v="${esc(t.id)}">`
+        + `<span class="gora"><span class="ds${toku ? " toku" : ""}">${esc(stan)}</span>`
+        + `<span class="ile mono">${karty.length} ${cwiczen(karty.length)}</span></span>`
+        + `<span class="dt">${esc(st.tytul || "Trening " + t.litera)}</span>`
+        + `<span class="lista">${lista}</span>`
+        + (reszta > 0 ? `<span class="wiecej">+ ${reszta} ${cwiczen(reszta)}</span>` : "")
+        + `<span class="cta">${zrob ? "Zobacz trening" : "Otwórz trening"}</span></button>`;
+    }).join("");
+  }
+  const DNI = ["Niedziela", "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota"];
+  function cwiczen(n) {
+    const j = n % 10, d = n % 100;
+    return n === 1 ? "ćwiczenie" : (j >= 2 && j <= 4 && !(d >= 12 && d <= 14)) ? "ćwiczenia" : "ćwiczeń";
+  }
+  // kafelek → plan dnia; „‹” albo gest Wstecz → widok główny. Po zapisie, który
+  // domknął tydzień, widok główny sam przechodzi na następny tydzień.
+  function otworzDzien(sid) {
+    S.sid = sid; S.widok = "dzien";
+    try { history.pushState({ aph: "dzien", sid, wk: S.wk }, ""); } catch (e) { /* bez historii */ }
+    rysuj(); window.scrollTo(0, 0);
+  }
+  function doDomu(zHistorii) {
+    if (!zHistorii && history.state && history.state.aph === "dzien") { history.back(); return; }
+    S.widok = "dom";
+    if (S.d && tydzienZrobiony(S.wk) && (S.zapisano || !S.wkReczny)) S.wk = pierwszyOtwarty();
+    S.zapisano = false;
+    rysuj(); window.scrollTo(0, 0);
+  }
+  function zHistorii() {
+    const st = history.state;
+    return S.d && st && st.aph === "dzien" && S.d.treningi.some((t) => t.id === st.sid) ? st : null;
+  }
+  window.addEventListener("popstate", () => {
+    const st = zHistorii();
+    if (st) { S.sid = st.sid; S.wk = st.wk || S.wk; S.widok = "dzien"; rysuj(); }
+    else if (S.widok === "dzien") doDomu(true);
+  });
   // host Streamlita dla komponentu: args jak _render_zawodnik_panel + ack z ostatniego zapisu
   function wyslijRender() {
     if (!S.gotowy || !frame.contentWindow) return;
@@ -178,9 +276,11 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
   document.addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-act]");
     if (!b) return;
-    if (b.dataset.act === "wk") { S.wk = +b.dataset.v; domyslny(); rysuj(); }
-    else if (b.dataset.act === "sid") { S.sid = b.dataset.v; rysuj(); }
-    else if (b.dataset.act === "ponow") start();
+    const a = b.dataset.act;
+    if (a === "wk") { S.wk = +b.dataset.v; S.wkReczny = true; rysuj(); }
+    else if (a === "dzien") otworzDzien(b.dataset.v);
+    else if (a === "dom") doDomu(false);
+    else if (a === "ponow") start();
   });
   let kolejkaOps = Promise.resolve();
   async function obsluz(v) {
@@ -203,6 +303,8 @@ button{font-family:inherit;color:inherit;margin:0;cursor:pointer;touch-action:ma
   async function start() {
     if (!TOKEN) { rysuj(); return; }
     try { await pobierz(); } catch (e) { S.blad = "siec"; S.offline = true; }
+    const st = zHistorii();   // przeładowanie w trakcie treningu: zostaje plan dnia
+    if (st) { S.sid = st.sid; S.wk = st.wk || S.wk; S.widok = "dzien"; }
     rysuj();
   }
   start();
