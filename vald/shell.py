@@ -242,8 +242,10 @@ def forget_recent(plan_id: str) -> None:
 
 
 _SHARE_BASE: list[str] = []
-# publiczna apka z samym planem (athlete_app.py z repo AthleteLab-app)
-LINK_CHMURA = "https://aph-trening.streamlit.app"
+# publiczna strona z samym planem: Vercel (folder vercel/ w repo AthleteLab-app).
+# Do 2026-11-11 był tu https://aph-trening.streamlit.app (athlete_app.py) —
+# stare linki działają dalej, te same tokeny i ta sama baza; Vercel nie zasypia.
+LINK_CHMURA = "https://athlete-lab-app.vercel.app"
 
 
 def _share_base() -> str:
