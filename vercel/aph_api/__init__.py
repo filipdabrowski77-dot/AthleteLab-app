@@ -143,7 +143,10 @@ def _bez_bazy(h) -> bool:
     from vald import store
     if store.enabled() or not os.environ.get("VERCEL"):   # lokalnie i w testach: pliki
         return False
+    # które zmienne środowisko widzi (same tak/nie, bez wartości)
     odpowiedz(h, 503, {"blad": "Brak połączenia z bazą (konfiguracja serwera).",
+                       "widzi": {n: bool((os.environ.get(n) or "").strip())
+                                 for n in ("SUPABASE_URL", "SUPABASE_KEY")},
                        "ack": [], "odrzucone": []})
     return True
 
