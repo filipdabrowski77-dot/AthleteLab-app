@@ -40,26 +40,6 @@ def _ws(ws: str) -> None:
     store.set_workspace(czysta)
 
 
-def _baner(plan: dict, info: str, wk: int) -> dict:
-    """Komunikaty nad tygodniami — 1:1 z _render_plan_workout_body."""
-    from vald.training import plan_end
-    dzis = date.today()
-    koniec = plan_end(plan)
-    start = str(plan.get("start_date") or "")
-    if koniec and dzis > koniec:
-        return {"rodzaj": "uwaga",
-                "tekst": f"Plan zakończył się {koniec:%d.%m.%Y}. Wpisy trafią do "
-                         f"Week {wk} — nowy plan = nowy link od trenera."}
-    try:
-        if date.fromisoformat(start) > dzis:
-            return {"rodzaj": "info", "tekst": f"Plan startuje {start[8:10]}.{start[5:7]}."}
-    except ValueError:
-        pass
-    if info:
-        return {"rodzaj": "info", "tekst": info}
-    return {}
-
-
 def ladunek(token: str, ws: str = "") -> dict | None:
     """Wszystko, czego strona zawodnika potrzebuje: plan, tygodnie, treningi
     i dane komponentu dla KAŻDEGO treningu × tygodnia (zmiana tygodnia na
@@ -95,7 +75,7 @@ def ladunek(token: str, ws: str = "") -> dict | None:
         "plan": {"id": plan.get("id", ""), "nazwa": plan.get("name", ""),
                  "imie": (plan.get("athlete") or "").split(" ")[0],
                  "tygodnie": n_tyg, "start": str(plan.get("start_date") or "")},
-        "baner": _baner(plan, info, cw),
+        "baner": {},   # bez komunikatów o datach planu (Filip 2026-11-11)
         "biezacy_tydzien": cw,
         "treningi": treningi,
         "kolejka": ut._klucz_kolejki(plan),

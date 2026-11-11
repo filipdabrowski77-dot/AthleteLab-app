@@ -933,11 +933,13 @@ def _render_plan_workout_body(plan: dict, sub: str,
             cw = int(_qw)
         st.session_state[wkk] = cw
     wk = int(st.session_state[wkk])
-    if _end and _today > _end:
+    # komunikaty o datach planu tylko trenerowi — zawodnik ich nie chce
+    # (Filip 2026-11-11: „nie dawaj takich wiadomości”)
+    if not trener:
+        pass
+    elif _end and _today > _end:
         st.warning(f"Plan zakończył się {_end:%d.%m.%Y}. Wpisy trafią "
-                   f"do Week {wk} — "
-                   + ("nowy plan wybierzesz wyżej." if trener else
-                      "nowy plan = nowy link od trenera."))
+                   f"do Week {wk} — nowy plan wybierzesz wyżej.")
     elif not _started:
         st.info(f"Plan startuje {plan.get('start_date', '')[8:10]}."
                 f"{plan.get('start_date', '')[5:7]}.")
@@ -2113,8 +2115,6 @@ def _render_athlete_mode(token: str) -> None:
             unsafe_allow_html=True,
         )
         return
-    if info:
-        st.info(info)
     first = (plan.get("athlete", "") or "").split(" ")[0]
     _render_plan_workout_body(
         plan, f"{plan.get('name', '')} · Twój plan",
